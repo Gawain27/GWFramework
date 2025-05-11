@@ -1,0 +1,14 @@
+{
+  "gameType": "needle-of-silver",
+  "projects": [
+    {
+      "name": "gwcore"
+    },
+    {
+      "name": "gw2d"
+    },
+    {
+      "name": "needle-of-silver"
+    }
+  ]
+}

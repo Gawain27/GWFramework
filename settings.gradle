@@ -1,0 +1,17 @@
+// ---------------------------------------------------------------------
+// settings.gradle : Defines the project name and submodules
+// ---------------------------------------------------------------------
+rootProject.name = "GWFramework"
+
+// Subprojects included:
+include(
+  // Starter projects
+  "gwstarter",
+
+  // Actual game projects
+  "needle-of-silver",
+
+  // Core features
+  "gw2d",
+  "gwcore"
+)

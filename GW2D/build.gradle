@@ -1,0 +1,18 @@
+// ---------------------------------------------------------------------
+// gw2d/build.gradle : Level 2 library, depends on gwcore
+// ---------------------------------------------------------------------
+
+ext.projectLevel = 2
+
+dependencies {
+  // Additional libraries for 2D engine, if any:
+  // e.g. api "com.badlogicgames.ashley:ashley:$ashleyVersion"
+}
+
+sourceSets {
+  main {
+    java.srcDirs = ['src']
+    resources.srcDirs = ['resources']
+  }
+}
+

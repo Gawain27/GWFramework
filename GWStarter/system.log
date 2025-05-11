@@ -1,0 +1,8 @@
+[2025-04-26 15:41:19.298 - 1 - com.gwngames.core.base.log.FileLogger:debug] [DEBUG] Seaching component: DIRECTOR
+[2025-04-26 15:47:43.173 - 1 - com.gwngames.core.base.log.FileLogger:debug] [DEBUG] Seaching component: DIRECTOR
+[2025-04-26 15:47:43.186 - 1 - com.gwngames.core.base.log.FileLogger:debug] [DEBUG] Components: []
+[2025-04-26 15:50:08.713 - 1 - com.gwngames.core.base.log.FileLogger:debug] [DEBUG] Seaching component: DIRECTOR
+[2025-04-26 15:50:08.720 - 1 - com.gwngames.core.base.log.FileLogger:debug] [DEBUG] Components: []
+[2025-04-26 15:58:29.770 - 1 - com.gwngames.core.base.cfg.ModuleClassLoader:findClass] [DEBUG] Components: []
+[2025-04-26 16:04:24.786 - 1 - app:ModuleClassLoader:getAnnotated] [DEBUG] loaders []
+[2025-04-26 16:04:24.793 - 1 - app:ModuleClassLoader:findClass] [DEBUG] Components: []

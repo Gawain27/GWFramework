@@ -1,0 +1,318 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+println "🔵 [ROOT] Starting root build.gradle ------------------------------------------------"
+
+/* =====================================================================
+ * 0.  READ configSet
+ * =================================================================== */
+def String configSet = project.findProperty('configSet')
+if (!configSet) {
+  def ini = file('config.ini')
+  if (ini.exists()) {
+    def p = new Properties(); ini.withReader { p.load(it) }
+    configSet = p.getProperty('config_set')
+  }
+}
+if (!configSet) throw new GradleException("❌ Pass -PconfigSet=<game> or define config.ini")
+
+println "ℹ️  projectVersion (root) = ${projectVersion}"
+
+println "🔍 Loading config file  configs/${configSet}.json"
+def cfgFile = file("configs/${configSet}.json")
+if (!cfgFile.exists()) throw new GradleException("❌ No such file $cfgFile")
+def parsedConfig = new JsonSlurper().parse(cfgFile)
+
+/* collect Gradle Project handles ----------------------------------- */
+def includedProjects = parsedConfig.projects.collect { project(":$it.name") }
+includedProjects.add project(":gwstarter")
+def includedProjectNames = includedProjects*.name as Set
+println "✅ configSet=$configSet – Included projects: $includedProjectNames"
+
+/* =====================================================================
+ * 1.  GLOBAL EXT & REPOS
+ * =================================================================== */
+ext.configSet = configSet
+subprojects { ext.configSet = rootProject.configSet }
+
+buildscript {
+  repositories {
+    mavenCentral(); gradlePluginPortal(); mavenLocal(); google()
+    maven { url 'https://oss.sonatype.org/content/repositories/snapshots/' }
+    maven { url 'https://s01.oss.sonatype.org/content/repositories/snapshots/' }
+  }
+}
+
+allprojects {
+  apply plugin: 'idea'; apply plugin: 'eclipse'
+  repositories {
+    mavenCentral(); mavenLocal()
+    maven { url 'https://oss.sonatype.org/content/repositories/snapshots/' }
+    maven { url 'https://s01.oss.sonatype.org/content/repositories/snapshots/' }
+    maven { url 'https://jitpack.io' }
+  }
+}
+
+/* =====================================================================
+ * 2.  BUMP buildVersion *before* jar tasks
+ * =================================================================== */
+def projectBuildVersions = [:]
+
+tasks.register('bumpBuildVersions') {
+  doLast {
+    println "🔼 bumpBuildVersions ------------------------------------------------"
+    includedProjects.each { prj ->
+      def propsFile = prj.file('gradle.properties')
+      def props = new Properties(); propsFile.withInputStream { props.load(it) }
+
+      def buildVer = props.getProperty('buildVersion')?.toInteger() ?: 0
+      def srcDir   = prj.file('src')
+      def latest   = srcDir.exists() ? prj.fileTree(srcDir).files.max { it.lastModified() }?.lastModified() : 0L
+
+      def stampF   = prj.file('.lastVersionCheck')
+      def previous = stampF.exists() ? stampF.text.toLong() : 0L
+
+      if (latest > previous) {
+        buildVer++
+        props.setProperty('buildVersion', buildVer.toString())
+        propsFile.withOutputStream { props.store(it, null) }
+        stampF.text = latest.toString()
+        println "   • ${prj.name} → buildVersion = $buildVer"
+      }
+      projectBuildVersions[prj.name] = buildVer
+    }
+  }
+}
+
+/* =====================================================================
+ * 3.  SUBPROJECT CONFIG
+ * =================================================================== */
+def projectLevels = [:]
+
+subprojects { subproj ->
+  if (!includedProjectNames.contains(subproj.name)) return
+
+  apply plugin: 'java-library'
+  sourceCompatibility = 21; targetCompatibility = 21
+  version = projectVersion
+
+  tasks.named('jar') {
+    dependsOn rootProject.tasks.named('bumpBuildVersions')
+    /* force rebuild every time  */
+    outputs.upToDateWhen { false }
+    doFirst {
+      def props = new Properties()
+      file("${projectDir}/gradle.properties").withInputStream { props.load(it) }
+      archiveFileName.set("${subproj.name}-${props.getProperty('buildVersion')}.jar")
+    }
+  }
+
+  tasks.register('generateAssetList') {
+    doFirst  { println "📝  ${subproj.name}: generating asset list ..." }
+    doLast   { println "✅  ${subproj.name}: asset list done." }
+    doLast {
+      def resDir = file("$projectDir/resources")
+      if (!resDir.exists()) return
+      def out = new File(resDir, 'assets.txt'); if (out.exists()) out.delete()
+      fileTree(resDir).matching { exclude 'assets.txt' }.collect { resDir.relativePath(it) }
+        .sort()
+        .each { rp -> if (!file("$resDir/$rp").directory) out << "$rp\n" }
+    }
+  }
+  tasks.named('processResources') { dependsOn 'generateAssetList' }
+
+  afterEvaluate {
+    projectLevels[subproj.name] = findProperty('projectLevel')?.toInteger() ?: 0
+  }
+}
+
+/* =====================================================================
+ * 4.  DEP GRAPH
+ * =================================================================== */
+gradle.projectsEvaluated {
+  subprojects { sp ->
+    if (!includedProjectNames.contains(sp.name)) return
+    def lvl = projectLevels[sp.name] ?: 0
+    includedProjectNames.each { other ->
+      if (other == sp.name) return
+      if (lvl >= (projectLevels[other] ?: 0)) {
+        sp.dependencies { implementation project(":$other") }
+      }
+    }
+  }
+}
+
+/* =====================================================================
+ * 5.  VERSION-JSON & unpack starter ZIP
+ * =================================================================== */
+tasks.register('injectProjectVersionIntoConfig') {
+  dependsOn includedProjects.collect { it.tasks.named('jar') }
+
+  doLast {
+    def genDir = file("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin")
+    genDir.mkdirs()
+    def jsonFile = new File(genDir, 'config.json')
+
+    def json = [
+      gameType: parsedConfig.gameType,
+      projects: parsedConfig.projects.collect { p ->
+        [
+          name : p.name,
+          level: projectLevels[p.name],
+          jar  : "lib/${p.name}-${projectBuildVersions[p.name]}.jar",
+          type : parsedConfig.gameType
+        ]
+      }
+    ]
+    jsonFile.text = JsonOutput.prettyPrint(JsonOutput.toJson(json))
+    println "📄  config.json written → $jsonFile"
+  }
+}
+
+def starterBuildVersion = project.provider {
+  projectBuildVersions['gwstarter'] ?: new Properties().tap {
+    file("${project(':gwstarter').projectDir}/gradle.properties").withInputStream { load(it) }
+  }.getProperty('buildVersion')
+}
+
+tasks.register('prepareDistribution', Copy) {
+  dependsOn project(':gwstarter').tasks.named('distZip')
+  dependsOn tasks.named('injectProjectVersionIntoConfig')
+
+  from zipTree(project(':gwstarter').layout.buildDirectory.file("distributions/gwstarter-${projectVersion}.zip"))
+  eachFile {
+    def rootOld = "gwstarter-${projectVersion}"
+    def rootNew = "${configSet}-${projectVersion}"
+    if (path.startsWith(rootOld)) path = path.replaceFirst(rootOld, rootNew)
+
+    if (path ==~ /.*\/lib\/gwstarter-\d+\.jar$/) {
+      path = path.replaceFirst(/gwstarter-\d+\.jar/, "${configSet}-${projectVersion}-${starterBuildVersion.get()}.jar")
+    }
+  }
+  includeEmptyDirs = false
+  into "$buildDir/generatedConfig"
+}
+
+/* =====================================================================
+ * 5c.  COPY ALL MODULE JARS INTO lib/
+ * =================================================================== */
+tasks.register('copyProjectJarsToDistribution', Copy) {
+  dependsOn tasks.named('prepareDistribution')
+  dependsOn includedProjects.collect { it.tasks.named('jar') }
+
+  doFirst { println "📥  Copying freshly-built jars into distribution …" }
+
+  /* ---------------  ONLY THE LINES BELOW ARE NEW / CHANGED --------------- */
+  includedProjects.findAll { it.name != 'gwstarter' }.each { prj ->
+    /* give the TaskProvider<Jar> directly to from() – Gradle will copy
+       whatever files the task produced, regardless of UP-TO-DATE status */
+    from prj.tasks.named('jar')
+  }
+  /* ----------------------------------------------------------------------- */
+
+  into "$buildDir/generatedConfig/${configSet}-${projectVersion}/lib"
+  duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+/* =====================================================================
+ * 5d.  PATHING-JAR & launch scripts   (unchanged)
+ * =================================================================== */
+project(':gwstarter').tasks.matching { it.name == 'run' }.configureEach { enabled = false }
+
+tasks.register('createPathingJar') {
+  dependsOn tasks.named('copyProjectJarsToDistribution')
+
+  doLast {
+    def distroDir = file("$buildDir/generatedConfig/${configSet}-${projectVersion}")
+    def binDir = new File(distroDir, 'bin'); binDir.mkdirs()
+    def libDir = new File(distroDir, 'lib')
+    def launcher = new File(binDir, 'launcher.jar')
+
+    def libs = libDir.listFiles().findAll { it.name.endsWith('.jar') }
+      .collect { "../lib/${it.name}" }
+      .sort()
+      .join(' ')
+
+    ant.jar(destfile: launcher) {
+      manifest {
+        attribute(name: 'Manifest-Version', value: '1.0')
+        attribute(name: 'Main-Class', value: 'com.gwngames.starter.Starter')
+        attribute(name: 'Class-Path', value: libs)
+      }
+    }
+    println "📦  Pathing JAR created → $launcher"
+  }
+}
+
+tasks.register('generateRunScripts') {
+  dependsOn tasks.named('createPathingJar')
+
+  doLast {
+    def binDir = file("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin")
+    new File(binDir, 'run.sh').text = """#!/usr/bin/env bash
+DIR="\$( cd "\${BASH_SOURCE%/*}" && pwd )"
+"\${JAVA_HOME:+\$JAVA_HOME/bin/}java" -jar "\$DIR/launcher.jar" "\$@"
+"""
+    new File(binDir, 'run.sh').setExecutable(true)
+    new File(binDir, 'run.bat').text = """@echo off
+set DIRNAME=%~dp0
+set JAVA=%JAVA_HOME%\\bin\\java.exe
+if not exist "%JAVA%" set JAVA=java.exe
+"%JAVA%" -jar "%DIRNAME%launcher.jar" %*
+"""
+    println "🚀  run.sh & run.bat written to $binDir"
+  }
+}
+
+/* =====================================================================
+ * 6.  DISTRO ARCHIVES
+ * =================================================================== */
+tasks.register('zipDistribution', Zip) {
+  dependsOn tasks.named('generateRunScripts')
+  archiveBaseName.set(configSet)
+  archiveVersion.set("${projectVersion}-${starterBuildVersion.get()}")
+  destinationDirectory.set(layout.buildDirectory.dir("distributions"))
+  from layout.buildDirectory.dir("generatedConfig")
+}
+
+tasks.register('tarDistribution', Tar) {
+  dependsOn tasks.named('generateRunScripts')
+  archiveBaseName.set(configSet)
+  archiveVersion.set("${projectVersion}-${starterBuildVersion.get()}")
+  compression = Compression.GZIP
+  destinationDirectory.set(layout.buildDirectory.dir("distributions"))
+  from.layout.buildDirectory.dir("generatedConfig")
+}
+
+/* =====================================================================
+ * 7.  ROOT build / run / clean
+ * =================================================================== */
+tasks.register('build') {
+  dependsOn includedProjects.collect { it.tasks.named('build') }
+  dependsOn tasks.named('generateRunScripts'), tasks.named('zipDistribution'), tasks.named('tarDistribution')
+}
+
+tasks.register('run') {
+  dependsOn tasks.named('generateRunScripts')
+  doLast {
+    def binDir = file("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin")
+    def launcher = org.gradle.internal.os.OperatingSystem.current().isWindows() ?
+      new File(binDir, 'run.bat') : new File(binDir, 'run.sh')
+    println "▶️  Launching via $launcher"
+    exec {
+      if (launcher.name.endsWith('.bat')) commandLine 'cmd', '/c', launcher
+      else commandLine 'bash', launcher
+    }
+  }
+}
+
+tasks.register('clean', Delete) {
+  delete layout.buildDirectory
+  dependsOn includedProjects.collect { it.tasks.named('clean') }
+}
+
+/* =====================================================================
+ * 8.  MISC
+ * =================================================================== */
+eclipse.project.name = 'GWFramework'
+println "🔚 root build.gradle configured -----------------------------------------------------"

@@ -41,14 +41,12 @@ public class ModuleClassLoader extends ClassLoader {
      * =================================================================*/
     private ModuleClassLoader() throws ErrorPopupException {
         super(ModuleClassLoader.class.getClassLoader());
-        log.debug("ModuleClassLoader <init>");
         initLoaders();
         initJars();
     }
 
     public static synchronized ModuleClassLoader getInstance() {
         if (instance == null) {
-            log.debug("Creating singleton ModuleClassLoader");
             try { instance = new ModuleClassLoader(); }
             catch (ErrorPopupException e) { throw new RuntimeException(e); }
         }
@@ -60,7 +58,7 @@ public class ModuleClassLoader extends ClassLoader {
      * =================================================================*/
     @SuppressWarnings("unchecked")
     private void initLoaders() throws ErrorPopupException {
-        log.debug("initLoaders() — locating bins & reading config …");
+        log.debug("initLoaders() - locating bins & reading config...");
 
         /* 1) Where are we running from? -------------------------------- */
         File whereAmI;
@@ -68,7 +66,7 @@ public class ModuleClassLoader extends ClassLoader {
             URL src = getClass().getProtectionDomain().getCodeSource().getLocation();
             whereAmI = new File(src.toURI());
             if (whereAmI.isFile()) whereAmI = whereAmI.getParentFile();
-            log.debug("Executable dir  = {}", whereAmI);
+            log.debug("Executable dir: {}", whereAmI);
         } catch (Exception ex) {
             log.error("Error getting executable", ex);
             throw new ErrorPopupException("Cannot determine executable location");
@@ -85,7 +83,7 @@ public class ModuleClassLoader extends ClassLoader {
         } else {
             throw new ErrorPopupException("Cannot locate bin directory (looked in " + whereAmI + ")");
         }
-        log.debug("binDir           = {}", binDir);
+        log.debug("binDir: {}", binDir);
 
         /* 3) Parse config.json ----------------------------------------- */
         File cfgFile = new File(binDir, "config.json");
@@ -103,7 +101,7 @@ public class ModuleClassLoader extends ClassLoader {
         List<Map<String,Object>> projects = (List<Map<String,Object>>) cfg.get("projects");
         if (projects == null || projects.isEmpty())
             throw new ErrorPopupException("No projects defined in config.json!");
-        log.log("gameType = {}, projects = {}", gameType, projects.size());
+        log.log("gameType: {}, projects: {}", gameType, projects.size());
 
         /* 4) Build classloaders --------------------------------------- */
         File rootDir = binDir.getParentFile();   // parent of bin & lib
@@ -114,10 +112,10 @@ public class ModuleClassLoader extends ClassLoader {
             Number lvl    = (Number) p.get("level");
             String type   = (String) p.get("type");
 
-            log.debug("→ candidate  jar={} level={} type={}", jarRel, lvl, type);
+            log.debug("candidate  jar:{} level:{} type:{}", jarRel, lvl, type);
 
             if (!gameType.equals(type) || jarRel == null || lvl == null) {
-                log.debug("  • skipped");
+                log.debug("skipped");
                 continue;
             }
 
@@ -128,7 +126,7 @@ public class ModuleClassLoader extends ClassLoader {
                 throw new ErrorPopupException("Could not lookup jar: " + jarRel);
             }
             if (!jarFile.exists()) {
-                log.error("  • JAR not found: {}", jarFile);
+                log.error("JAR not found: {}", jarFile);
                 continue;
             }
 
@@ -139,7 +137,7 @@ public class ModuleClassLoader extends ClassLoader {
                 throw new ErrorPopupException("Cannot create class loader: " + jarFile.getName());
             }
             tmp.add(new ProjectLoader(cl, lvl.intValue()));
-            log.log("  • loader '{}' (level {})", cl.getName(), lvl);
+            log.log("loader '{}' (level {})", cl.getName(), lvl);
         }
 
         tmp.sort(Comparator.comparingInt(pl -> -pl.level));
@@ -147,7 +145,7 @@ public class ModuleClassLoader extends ClassLoader {
 
         log.log("Loader order:");
         for (URLClassLoader l : orderedLoaders)
-            log.log("   {}  URLs={}", l.getName(), Arrays.toString(l.getURLs()));
+            log.log("{}  URLs:{}", l.getName(), Arrays.toString(l.getURLs()));
     }
 
     /** Create a URLClassLoader whose {@code getName()} is the jar file name. */
@@ -157,10 +155,10 @@ public class ModuleClassLoader extends ClassLoader {
             // Java 9+ constructor with name
             return URLClassLoader.class
                 .getConstructor(String.class, URL[].class, ClassLoader.class)
-                .newInstance(jarFile.getName(), new URL[]{url}, null);
+                .newInstance(jarFile.getName(), new URL[]{url}, ModuleClassLoader.this);
         } catch (ReflectiveOperationException ignored) {
             // Java 8 fallback
-            URLClassLoader cl = new URLClassLoader(new URL[]{url}, null);
+            URLClassLoader cl = new URLClassLoader(new URL[]{url}, ModuleClassLoader.this);
             log.debug("Unnamed loader created for {}", jarFile.getName());
             return cl;
         }
@@ -170,7 +168,7 @@ public class ModuleClassLoader extends ClassLoader {
      *  initJars
      * =================================================================*/
     private void initJars() {
-        log.debug("initJars() — scanning loaders for .jar files …");
+        log.debug("initJars() - scanning loaders for .jar files...");
         orderedLoaders.forEach(loader -> {
             for (URL url : loader.getURLs()) {
                 File f = new File(url.getFile());
@@ -178,7 +176,7 @@ public class ModuleClassLoader extends ClassLoader {
                 try {
                     JarFile jar = new JarFile(f);
                     orderedJars.put(loader, jar);
-                    log.debug("   + {}  (loader '{}')", jar.getName(), loader.getName());
+                    log.debug("{}  (loader '{}')", jar.getName(), loader.getName());
                 } catch (IOException e) {
                     log.error("Error opening {}", f, e);
                 }
@@ -226,7 +224,9 @@ public class ModuleClassLoader extends ClassLoader {
 
     protected Class<?> findClass(ComponentNames name) throws ClassNotFoundException {
         log.debug("findClass({})", name);
-        Class<?> found = null; int priority = 0;
+        Class<?> found = null;
+        int priority = 0;
+        ComponentNames foundComponent = null;
         if (buildComponents.isEmpty()) buildComponents.addAll(getAnnotated(Init.class));
 
         for (Class<?> c : buildComponents) {
@@ -235,11 +235,13 @@ public class ModuleClassLoader extends ClassLoader {
             if (ann.component()==ComponentNames.NONE || ann.module()==ModuleNames.UNIMPLEMENTED)
                 throw new IllegalStateException("Component not configured: " + c.getName());
 
-            if (ann.module().modulePriority==priority && !ann.allowMultiple())
+            if (ann.module().modulePriority==priority && !ann.allowMultiple()
+                    && foundComponent != null && foundComponent.name().equals(ann.component().name()))
                 throw new IllegalStateException("Multiple components configured: "+c.getName());
 
-            if (ann.component().equals(name) && ann.module().modulePriority > priority) {
+            if (ann.component().name().equals(name.name()) && ann.module().modulePriority > priority) {
                 found = c;
+                foundComponent = ann.component();
                 priority = ann.module().modulePriority;
             }
         }
@@ -255,7 +257,8 @@ public class ModuleClassLoader extends ClassLoader {
         List<Class<?>> out = new ArrayList<>();
         orderedLoaders.forEach(loader -> {
             JarFile jar = orderedJars.get(loader);
-            if (jar == null) return;
+            if (jar == null)
+                throw new IllegalStateException("Null jar: " + loader.getName());
             Enumeration<JarEntry> e = jar.entries();
             while (e.hasMoreElements()) {
                 JarEntry entry = e.nextElement();
@@ -263,44 +266,61 @@ public class ModuleClassLoader extends ClassLoader {
                 String cls = entry.getName().replace('/', '.').replace(".class", "");
                 try {
                     Class<?> c = loader.loadClass(cls);
-                    if (c.isAnnotationPresent(anno)) out.add(c);
+                    if (c.getAnnotation(anno) != null){
+                        out.add(c);
+                    };
                 } catch (Throwable ignored) { }
             }
         });
-        log.debug("  → found {} classes", out.size());
+        log.debug("found {} classes", out.size());
         return out;
     }
 
     public Object createInstance(Class<?> clazz, Object... params) {
         log.debug("createInstance({})", clazz.getSimpleName());
         try {
-            Constructor<?> ctor = clazz.getDeclaredConstructor();
+            Constructor<?> ctor;
+
+            if (params.length == 0) {
+                ctor = clazz.getDeclaredConstructor();
+            } else {
+                try {
+                    Class<?>[] types = Arrays.stream(params)
+                        .map(Object::getClass)
+                        .toArray(Class<?>[]::new);
+                    ctor = clazz.getDeclaredConstructor(types);
+                } catch (NoSuchMethodException e) {
+                    ctor = clazz.getDeclaredConstructor();
+                    params = new Object[0];
+                }
+            }
+
             ctor.setAccessible(true);
             return ctor.newInstance(params);
+
         } catch (Exception e) {
-            log.error("Failed to create instance of {}", clazz.getName(), e);
-            return null;
+            throw new IllegalStateException("Failed to create instance of " + clazz.getName(), e);
         }
     }
 
     @SuppressWarnings("unchecked")
     public <T> T tryCreate(ComponentNames name, Object... params) {
-        log.debug("tryCreate({}, …)", name);
+        log.debug("tryCreate({}, ...)", name);
         try { return (T) createInstance(findClass(name), params); }
         catch (ClassNotFoundException e) { return null; }
     }
 
     @SuppressWarnings("unchecked")
     public <T> T tryCreate(ComponentNames name, PlatformNames platform, Object... params) {
-        log.debug("tryCreate({}, {}, …)", name, platform);
+        log.debug("tryCreate({}, {}, ...)", name, platform);
         try {
             for (Class<?> c : findClasses(name)) {
                 Init ann = c.getAnnotation(Init.class);
-                if (ann.allowMultiple() && ann.platform()==platform)
+                if (ann.platform().equals(platform))
                     return (T) createInstance(c, params);
             }
         } catch (ClassNotFoundException ignored) { }
-        return null;
+        throw new IllegalStateException("Cannot create component: " + name.name() + " - " + platform.name());
     }
 
     /* ================================================================== */

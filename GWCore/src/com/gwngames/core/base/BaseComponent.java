@@ -8,6 +8,8 @@ import com.gwngames.core.util.ClassUtils;
 
 import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Contains basic functionalities for a game component
@@ -15,42 +17,44 @@ import java.util.List;
  * @author samlam
  * */
 public abstract class BaseComponent {
-    static BaseComponent instance;
+    // one singleton per component class
+    private static final Map<Class<? extends BaseComponent>, BaseComponent> INSTANCES
+        = new ConcurrentHashMap<>();
 
     @SuppressWarnings("unchecked")
-    public static <T extends BaseComponent> T getInstance(Class<T> classType){
-        if (instance == null) {
-            Init init = classType.getAnnotation(Init.class);
-            if (init == null)
-                throw new IllegalStateException("Malformed component: " + classType.getSimpleName());
-            instance = ModuleClassLoader.getInstance().tryCreate(init.component());
-
-            if (instance == null)
-                throw new IllegalStateException("No component found of class: " + classType.getSimpleName());
-
-            List<Field> injectableFields = ClassUtils.getAnnotatedFields(classType, Inject.class);
-            for(Field componentField : injectableFields){
-                try {
-                    Inject typeInject = componentField.getAnnotation(Inject.class);
-                    Init typeInit = componentField.getType().getAnnotation(Init.class);
-
-                    componentField.setAccessible(true);
-                    if (typeInject.createNew()){
-                        componentField.set(instance,
-                            ModuleClassLoader.getInstance().tryCreate(
-                                typeInit.component(), componentField.getType()));
-                    } else {
-                        componentField.set(instance, getInstance((Class<T>) componentField.getType()));
-                    }
-                    componentField.setAccessible(false);
-
-                } catch (IllegalAccessException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        }
-        return (T) instance;
+    public static <T extends BaseComponent> T getInstance(Class<T> classType) {
+        return (T) INSTANCES.computeIfAbsent(classType, BaseComponent::createAndInject);
     }
 
+    @SuppressWarnings("unchecked")
+    private static <T extends BaseComponent> T createAndInject(Class<T> classType) {
+        Init init = classType.getAnnotation(Init.class);
+        if (init == null)
+            throw new IllegalStateException("Malformed component: " + classType.getSimpleName());
 
+        T instance = ModuleClassLoader.getInstance().tryCreate(init.component(), classType);
+        if (instance == null)
+            throw new IllegalStateException("No component found of class: " + classType.getSimpleName());
+
+        List<Field> injectableFields = ClassUtils.getAnnotatedFields(classType, Inject.class);
+        for (Field field : injectableFields) {
+            try {
+                field.setAccessible(true);
+                Inject inject = field.getAnnotation(Inject.class);
+
+                if (inject.createNew()) {
+                    Init fieldInit = field.getType().getAnnotation(Init.class);
+                    field.set(instance, ModuleClassLoader.getInstance()
+                        .tryCreate(fieldInit.component(), field.getType()));
+                } else {
+                    field.set(instance, getInstance((Class<? extends BaseComponent>) field.getType()));
+                }
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            } finally {
+                field.setAccessible(false);
+            }
+        }
+        return instance;
+    }
 }

@@ -44,6 +44,7 @@ public class FileApplicationLogger implements ApplicationLogger {
                 // Log the exception stack trace if provided
                 if (exception != null) {
                     exception.printStackTrace(writer);
+                    exception.printStackTrace(System.out);
                 }
             }
         } catch (IOException e) {

@@ -5,6 +5,7 @@ package com.gwngames.core.data;
  * */
 public enum ModuleNames {
     UNIMPLEMENTED("Unimplemented", 0),
+    INTERFACE("Interface", 1),
     CORE("Core", 5),
     GAME2D("2DGame", 15),
 

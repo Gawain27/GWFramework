@@ -1,6 +1,8 @@
 package com.gwngames.core.api.base;
 
-import com.badlogic.gdx.Application;
+import com.gwngames.core.api.build.Init;
+import com.gwngames.core.data.ComponentNames;
+import com.gwngames.core.data.ModuleNames;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -14,6 +16,7 @@ import java.util.Map;
  *
  * @author samlam
  * */
+@Init(component = ComponentNames.CONTEXT, module = ModuleNames.INTERFACE)
 public interface IContext {
     // do not mess with these objects or you will break game startup
     String _DIRECTOR = "_DIRECTOR";

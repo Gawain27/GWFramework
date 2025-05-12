@@ -1,7 +1,6 @@
 package com.gwngames.starter.launcher;
 
 import com.badlogic.gdx.Application;
-import com.badlogic.gdx.Gdx;
 import com.gwngames.core.api.base.IContext;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
@@ -17,6 +16,7 @@ import com.gwngames.starter.build.ILauncher;
 
 @Init(module = ModuleNames.GW_STARTER, component = ComponentNames.DIRECTOR)
 public class LauncherDirector extends BaseComponent {
+    private static final Application.ApplicationType platformDetected = LauncherDirector.detectPlatform();
     @Inject
     IContext context;
     private static final FileLogger log = FileLogger.get(LogFiles.SYSTEM);
@@ -42,14 +42,52 @@ public class LauncherDirector extends BaseComponent {
     }
 
     public static ILauncher getNewLauncher(){
-        Application.ApplicationType type = Gdx.app.getType();
-
-        return switch (type) {
+        return switch (platformDetected) {
             case Android -> loader.tryCreate(ComponentNames.LAUNCHER, PlatformNames.ANDROID);
             case iOS -> loader.tryCreate(ComponentNames.LAUNCHER, PlatformNames.IOS);
             case Desktop -> loader.tryCreate(ComponentNames.LAUNCHER, PlatformNames.DESKTOP);
             case WebGL -> loader.tryCreate(ComponentNames.LAUNCHER, PlatformNames.WEB);
             default -> throw new IllegalStateException("Unknown platform detected");
         };
+    }
+
+    private static Application.ApplicationType detectPlatform () {
+        // Android: android.os.Build is part of every Dalvik/ART device
+        if (isPresent("android.os.Build"))
+            return Application.ApplicationType.Android;
+
+        // iOS (RoboVM): UIKit is always on the classpath there
+        if (isPresent("org.robovm.apple.uikit.UIApplication"))
+            return Application.ApplicationType.iOS;
+
+        // GWT / WebGL: GWT replaces this whole method at compile time, so use a constant
+        if (isWeb())
+            return Application.ApplicationType.WebGL;
+
+        // Otherwise we’re running on a desktop JVM
+        return Application.ApplicationType.Desktop;
+    }
+
+    private static boolean isPresent (String fqcn) {
+        try {
+            Class.forName(fqcn, false, LauncherDirector.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+
+    /**
+     * GWT strips `Class.forName`, so we call its own helper via reflection.
+     * Wrapped in a try-catch so the JVM build doesn’t need GWT on the
+     * class-path.
+     */
+    private static boolean isWeb() {
+        try {
+            Class<?> gwt = Class.forName("com.google.gwt.core.client.GWT");
+            return (Boolean) gwt.getMethod("isClient").invoke(null);
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 }

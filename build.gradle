@@ -98,8 +98,7 @@ subprojects { subproj ->
 
   tasks.named('jar') {
     dependsOn rootProject.tasks.named('bumpBuildVersions')
-    /* force rebuild every time  */
-    outputs.upToDateWhen { false }
+    outputs.upToDateWhen { false }                   // always rebuild jars
     doFirst {
       def props = new Properties()
       file("${projectDir}/gradle.properties").withInputStream { props.load(it) }
@@ -153,17 +152,29 @@ tasks.register('injectProjectVersionIntoConfig') {
     genDir.mkdirs()
     def jsonFile = new File(genDir, 'config.json')
 
+    /* ---- project list ------------------------------------------------ */
+    def projectsJson = parsedConfig.projects.collect { p ->
+      [
+        name : p.name,
+        level: projectLevels[p.name],
+        jar  : "lib/${p.name}-${projectBuildVersions[p.name]}.jar",
+        type : parsedConfig.gameType
+      ]
+    }
+
+    /* add gwstarter entry (renamed jar living in lib/) ----------------- */
+    projectsJson << [
+      name : 'gwstarter',
+      level: projectLevels['gwstarter'] ?: 99,
+      jar  : "lib/${configSet}-${projectVersion}-${projectBuildVersions['gwstarter']}.jar",
+      type : parsedConfig.gameType
+    ]
+
     def json = [
       gameType: parsedConfig.gameType,
-      projects: parsedConfig.projects.collect { p ->
-        [
-          name : p.name,
-          level: projectLevels[p.name],
-          jar  : "lib/${p.name}-${projectBuildVersions[p.name]}.jar",
-          type : parsedConfig.gameType
-        ]
-      }
+      projects: projectsJson
     ]
+
     jsonFile.text = JsonOutput.prettyPrint(JsonOutput.toJson(json))
     println "📄  config.json written → $jsonFile"
   }
@@ -202,20 +213,16 @@ tasks.register('copyProjectJarsToDistribution', Copy) {
 
   doFirst { println "📥  Copying freshly-built jars into distribution …" }
 
-  /* ---------------  ONLY THE LINES BELOW ARE NEW / CHANGED --------------- */
   includedProjects.findAll { it.name != 'gwstarter' }.each { prj ->
-    /* give the TaskProvider<Jar> directly to from() – Gradle will copy
-       whatever files the task produced, regardless of UP-TO-DATE status */
-    from prj.tasks.named('jar')
+    from prj.tasks.named('jar')                     // copy outputs of each jar task
   }
-  /* ----------------------------------------------------------------------- */
 
   into "$buildDir/generatedConfig/${configSet}-${projectVersion}/lib"
   duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 /* =====================================================================
- * 5d.  PATHING-JAR & launch scripts   (unchanged)
+ * 5d.  PATHING-JAR & launch scripts
  * =================================================================== */
 project(':gwstarter').tasks.matching { it.name == 'run' }.configureEach { enabled = false }
 
@@ -281,7 +288,7 @@ tasks.register('tarDistribution', Tar) {
   archiveVersion.set("${projectVersion}-${starterBuildVersion.get()}")
   compression = Compression.GZIP
   destinationDirectory.set(layout.buildDirectory.dir("distributions"))
-  from.layout.buildDirectory.dir("generatedConfig")
+  from layout.buildDirectory.dir("generatedConfig")
 }
 
 /* =====================================================================

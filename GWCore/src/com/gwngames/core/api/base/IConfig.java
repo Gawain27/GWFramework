@@ -1,12 +1,15 @@
 package com.gwngames.core.api.base;
 
+import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
 import com.gwngames.core.data.ComponentNames;
+import com.gwngames.core.data.ModuleNames;
 
 import java.util.HashMap;
 import java.util.Map;
 
-public interface IConfig {
+@Init(component = ComponentNames.CONFIGURATION, module = ModuleNames.INTERFACE)
+public interface IConfig extends IBaseComp {
     Map<String, Object> paramMap = new HashMap<>();
     void registerParameters();
 

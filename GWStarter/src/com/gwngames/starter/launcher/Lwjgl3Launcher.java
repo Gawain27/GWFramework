@@ -3,6 +3,7 @@ package com.gwngames.starter.launcher;
 import com.badlogic.gdx.ApplicationListener;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
+import com.gwngames.core.api.build.IGameLauncher;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
 import com.gwngames.core.data.ComponentNames;
@@ -12,12 +13,12 @@ import com.gwngames.starter.Starter;
 import com.gwngames.starter.build.ILauncher;
 
 /** Launches the desktop (LWJGL3) application. */
-@Init(module = ModuleNames.GW_STARTER, component = ComponentNames.LAUNCHER, platform = PlatformNames.DESKTOP)
+@Init(module = ModuleNames.GW_STARTER, platform = PlatformNames.DESKTOP)
 public class Lwjgl3Launcher implements ILauncher {
     private final ModuleClassLoader loader = ModuleClassLoader.getInstance();
     @Override
     public Lwjgl3Application createApplication() {
-        ApplicationListener gameLauncher = loader.tryCreate(ComponentNames.GAME);
+        IGameLauncher gameLauncher = loader.tryCreate(ComponentNames.GAME);
         return new Lwjgl3Application(gameLauncher, getDefaultConfiguration());
     }
 

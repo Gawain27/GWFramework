@@ -8,7 +8,7 @@ import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
 
-@Init(module = ModuleNames.CORE, component = ComponentNames.SYSTEM)
+@Init(module = ModuleNames.CORE)
 public class CoreSystem extends BaseComponent implements ISystem {
     @Inject
     IConfig config;

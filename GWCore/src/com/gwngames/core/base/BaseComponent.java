@@ -1,6 +1,7 @@
 package com.gwngames.core.base;
 
 
+import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
@@ -16,18 +17,18 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @author samlam
  * */
-public abstract class BaseComponent {
+public abstract class BaseComponent implements IBaseComp{
     // one singleton per component class
-    private static final Map<Class<? extends BaseComponent>, BaseComponent> INSTANCES
+    private static final Map<Class<? extends IBaseComp>, IBaseComp> INSTANCES
         = new ConcurrentHashMap<>();
 
     @SuppressWarnings("unchecked")
-    public static <T extends BaseComponent> T getInstance(Class<T> classType) {
+    public static <T extends IBaseComp> T getInstance(Class<T> classType) {
         return (T) INSTANCES.computeIfAbsent(classType, BaseComponent::createAndInject);
     }
 
     @SuppressWarnings("unchecked")
-    private static <T extends BaseComponent> T createAndInject(Class<T> classType) {
+    private static <T extends IBaseComp> T createAndInject(Class<T> classType) {
         Init init = classType.getAnnotation(Init.class);
         if (init == null)
             throw new IllegalStateException("Malformed component: " + classType.getSimpleName());
@@ -36,7 +37,7 @@ public abstract class BaseComponent {
         if (instance == null)
             throw new IllegalStateException("No component found of class: " + classType.getSimpleName());
 
-        List<Field> injectableFields = ClassUtils.getAnnotatedFields(classType, Inject.class);
+        List<Field> injectableFields = ClassUtils.getAnnotatedFields(instance.getClass(), Inject.class);
         for (Field field : injectableFields) {
             try {
                 field.setAccessible(true);

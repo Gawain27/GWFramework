@@ -5,14 +5,18 @@
 ext.projectLevel = 2
 
 dependencies {
-  // Additional libraries for 2D engine, if any:
-  // e.g. api "com.badlogicgames.ashley:ashley:$ashleyVersion"
 }
 
 sourceSets {
   main {
     java.srcDirs = ['src']
     resources.srcDirs = ['resources']
+  }
+  test {
+    java.srcDirs      = ['test']
+    resources.srcDirs = ['test-resources']
+    compileClasspath += sourceSets.main.output
+    runtimeClasspath += output + compileClasspath
   }
 }
 

@@ -17,9 +17,9 @@ import java.util.Map;
  * @author samlam
  * */
 @Init(component = ComponentNames.CONTEXT, module = ModuleNames.INTERFACE)
-public interface IContext {
+public interface IContext extends IBaseComp{
     // do not mess with these objects or you will break game startup
-    String _DIRECTOR = "_DIRECTOR";
+    String _LAUNCHER_MASTER = "_DIRECTOR";
     String _LAUNCHER = "_LAUNCHER";
     // These below may be used
     String APPLICATION = "APPLICATION";

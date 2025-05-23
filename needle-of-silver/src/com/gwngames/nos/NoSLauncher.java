@@ -23,6 +23,7 @@ import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.Pool;
 import com.badlogic.gdx.utils.ScreenUtils;
+import com.gwngames.core.api.build.IGameLauncher;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
@@ -32,8 +33,8 @@ import com.gwngames.core.data.ModuleNames;
  *
  * Shows simple platformer collision detection as well as on-the-fly map modifications through destructible blocks!
  * @author mzechner */
-@Init(module = ModuleNames.NEEDLE_OF_SILVER, component = ComponentNames.GAME)
-public class NoSLauncher extends InputAdapter implements ApplicationListener {
+@Init(module = ModuleNames.NEEDLE_OF_SILVER)
+public class NoSLauncher extends InputAdapter implements IGameLauncher {
     /** The player character, has state and state time, */
     static class Koala {
         static float WIDTH;

@@ -87,6 +87,7 @@ tasks.register('bumpBuildVersions') {
 /* =====================================================================
  * 3.  SUBPROJECT CONFIG
  * =================================================================== */
+
 def projectLevels = [:]
 
 subprojects { subproj ->
@@ -96,6 +97,9 @@ subprojects { subproj ->
   sourceCompatibility = 21; targetCompatibility = 21
   version = projectVersion
 
+  /* --------------------------------------------------------------
+   * Jar naming & asset‑list
+   * ----------------------------------------------------------- */
   tasks.named('jar') {
     dependsOn rootProject.tasks.named('bumpBuildVersions')
     outputs.upToDateWhen { false }                   // always rebuild jars
@@ -120,6 +124,23 @@ subprojects { subproj ->
   }
   tasks.named('processResources') { dependsOn 'generateAssetList' }
 
+  /* --------------------------------------------------------------
+   *  Test support – run any class extending TestCase
+   * ----------------------------------------------------------- */
+  dependencies {
+    testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
+  }
+
+  tasks.named('test', Test) {
+    // pick up subclasses of a cust TestCase (compiled class files)
+    include '**/*TestCase.class'
+    useJUnitPlatform()
+    testLogging { events "passed", "skipped", "failed" }
+  }
+
+  /* --------------------------------------------------------------
+   *  Remember each sub‑project's level, after it’s been evaluated
+   * ----------------------------------------------------------- */
   afterEvaluate {
     projectLevels[subproj.name] = findProperty('projectLevel')?.toInteger() ?: 0
   }
@@ -128,6 +149,7 @@ subprojects { subproj ->
 /* =====================================================================
  * 4.  DEP GRAPH
  * =================================================================== */
+
 gradle.projectsEvaluated {
   subprojects { sp ->
     if (!includedProjectNames.contains(sp.name)) return
@@ -144,6 +166,7 @@ gradle.projectsEvaluated {
 /* =====================================================================
  * 5.  VERSION-JSON & unpack starter ZIP
  * =================================================================== */
+
 tasks.register('injectProjectVersionIntoConfig') {
   dependsOn includedProjects.collect { it.tasks.named('jar') }
 
@@ -207,6 +230,7 @@ tasks.register('prepareDistribution', Copy) {
 /* =====================================================================
  * 5c.  COPY ALL MODULE JARS INTO lib/
  * =================================================================== */
+
 tasks.register('copyProjectJarsToDistribution', Copy) {
   dependsOn tasks.named('prepareDistribution')
   dependsOn includedProjects.collect { it.tasks.named('jar') }
@@ -224,6 +248,7 @@ tasks.register('copyProjectJarsToDistribution', Copy) {
 /* =====================================================================
  * 5d.  PATHING-JAR & launch scripts
  * =================================================================== */
+
 project(':gwstarter').tasks.matching { it.name == 'run' }.configureEach { enabled = false }
 
 tasks.register('createPathingJar') {
@@ -274,6 +299,7 @@ if not exist "%JAVA%" set JAVA=java.exe
 /* =====================================================================
  * 6.  DISTRO ARCHIVES
  * =================================================================== */
+
 tasks.register('zipDistribution', Zip) {
   dependsOn tasks.named('generateRunScripts')
   archiveBaseName.set(configSet)
@@ -294,13 +320,24 @@ tasks.register('tarDistribution', Tar) {
 /* =====================================================================
  * 7.  ROOT build / run / clean
  * =================================================================== */
+
+// -- BUILD remains a full CI pipeline ---------------------------------------------------
 tasks.register('build') {
   dependsOn includedProjects.collect { it.tasks.named('build') }
   dependsOn tasks.named('generateRunScripts'), tasks.named('zipDistribution'), tasks.named('tarDistribution')
 }
 
+// -- RUN is now a *fast* local launch ----------------------------------------------------
 tasks.register('run') {
+  // compile classes quickly across modules
+  dependsOn includedProjects.collect { it.tasks.named('classes') }
+  // still need launcher + scripts
   dependsOn tasks.named('generateRunScripts')
+
+  // ensure we don't block on shipping artefacts
+  mustRunAfter tasks.named('zipDistribution')
+  mustRunAfter tasks.named('tarDistribution')
+
   doLast {
     def binDir = file("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin")
     def launcher = org.gradle.internal.os.OperatingSystem.current().isWindows() ?
@@ -313,6 +350,13 @@ tasks.register('run') {
   }
 }
 
+// -- DELIVERY builds distributable archives only ----------------------------------------
+tasks.register('delivery') {
+  group = 'distribution'
+  description = 'Assemble distributable archives (zip & tar) without running the game.'
+  dependsOn tasks.named('zipDistribution'), tasks.named('tarDistribution')
+}
+
 tasks.register('clean', Delete) {
   delete layout.buildDirectory
   dependsOn includedProjects.collect { it.tasks.named('clean') }
@@ -321,5 +365,6 @@ tasks.register('clean', Delete) {
 /* =====================================================================
  * 8.  MISC
  * =================================================================== */
+
 eclipse.project.name = 'GWFramework'
 println "🔚 root build.gradle configured -----------------------------------------------------"

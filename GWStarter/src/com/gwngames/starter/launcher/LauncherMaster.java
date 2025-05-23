@@ -13,10 +13,11 @@ import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.PlatformNames;
 import com.gwngames.starter.StartupHelper;
 import com.gwngames.starter.build.ILauncher;
+import com.gwngames.starter.build.ILauncherMaster;
 
-@Init(module = ModuleNames.GW_STARTER, component = ComponentNames.DIRECTOR)
-public class LauncherDirector extends BaseComponent {
-    private static final Application.ApplicationType platformDetected = LauncherDirector.detectPlatform();
+@Init(module = ModuleNames.GW_STARTER)
+public class LauncherMaster extends BaseComponent implements ILauncherMaster {
+    private static final Application.ApplicationType platformDetected = LauncherMaster.detectPlatform();
     @Inject
     IContext context;
     private static final FileLogger log = FileLogger.get(LogFiles.SYSTEM);
@@ -33,7 +34,7 @@ public class LauncherDirector extends BaseComponent {
         context.setContextObject(IContext._LAUNCHER, launcher);
 
         log.log("Preparing launcher: {}", launcher.getVersion());
-        context.setContextObject(IContext._DIRECTOR, this);
+        context.setContextObject(IContext._LAUNCHER_MASTER, this);
         Application game = launcher.createApplication();
         context.setContextObject(IContext.APPLICATION, game);
         log.log("Created application: {}", game.getVersion());
@@ -70,7 +71,7 @@ public class LauncherDirector extends BaseComponent {
 
     private static boolean isPresent (String fqcn) {
         try {
-            Class.forName(fqcn, false, LauncherDirector.class.getClassLoader());
+            Class.forName(fqcn, false, LauncherMaster.class.getClassLoader());
             return true;
         } catch (ClassNotFoundException e) {
             return false;

@@ -8,5 +8,5 @@ public enum ComponentNames {
     LAUNCHER,
     SYSTEM,
     GAME,
-    DIRECTOR;
+    LAUNCHER_MASTER;
 }

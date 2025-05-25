@@ -21,41 +21,10 @@ public interface ISystem extends IBaseComp {
     FileLogger log = FileLogger.get(LogFiles.SYSTEM);
 
     static List<StartupCheckImpl> getAllStartupChecks() {
-        List<StartupCheckImpl> checks = new ArrayList<>();
+        List<StartupCheckImpl> checks;
         ModuleClassLoader classLoader = ModuleClassLoader.getInstance();
-        List<Class<?>> startupCheckClasses = classLoader.getAnnotated(StartupCheck.class);
 
-        // Filter: valid subclasses of StartupCheckImpl (excluding base class itself)
-        List<Class<?>> validSubclasses = new ArrayList<>();
-        for (Class<?> clazz : startupCheckClasses) {
-            if (StartupCheckImpl.class.isAssignableFrom(clazz) && !clazz.equals(StartupCheckImpl.class)) {
-                validSubclasses.add(clazz);
-            }
-        }
-
-        // Identify leaf subclasses (no other discovered class extends them)
-        List<Class<?>> leafSubclasses = new ArrayList<>();
-        for (Class<?> candidate : validSubclasses) {
-            boolean isExtended = false;
-            for (Class<?> other : validSubclasses) {
-                if (candidate != other && candidate.isAssignableFrom(other)) {
-                    isExtended = true;
-                    break;
-                }
-            }
-            if (!isExtended) {
-                leafSubclasses.add(candidate);
-            }
-        }
-
-        // Instantiate only the leaf subclasses
-        for (Class<?> leafClass : leafSubclasses) {
-            try {
-                checks.add((StartupCheckImpl) classLoader.createInstance(leafClass));
-            } catch (Exception e) {
-                log.error("Failed to instantiate {}: {}", leafClass.getSimpleName(), e.getMessage());
-            }
-        }
+        checks = classLoader.tryCreateAll(ComponentNames.STARTUP_CHECK);
 
         return checks;
     }

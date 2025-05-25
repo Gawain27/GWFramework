@@ -4,9 +4,13 @@ public enum ComponentNames {
     NONE,
     CONFIGURATION,
     CONTEXT,
-    CHECK,
     LAUNCHER,
     SYSTEM,
     GAME,
-    LAUNCHER_MASTER;
+    LAUNCHER_MASTER,
+
+    //
+    // THESE ARE MULTIPLE COMPONENTS
+    //
+    STARTUP_CHECK;
 }

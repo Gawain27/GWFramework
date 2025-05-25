@@ -6,6 +6,8 @@ import com.gwngames.core.util.ClassUtils;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+// TODO: this is trash, replace with defined values.
 public class ExceptionCode {
     static Integer DECA = 0; // critical exception
     static Integer HUNDRED = 1; // core exception

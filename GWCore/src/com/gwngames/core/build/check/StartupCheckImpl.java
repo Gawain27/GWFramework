@@ -1,10 +1,12 @@
 package com.gwngames.core.build.check;
 
+import com.gwngames.core.api.base.check.IStartupCheck;
 import com.gwngames.core.api.ex.BaseException;
+import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.LogFiles;
 
-public abstract class StartupCheckImpl{
+public abstract class StartupCheckImpl extends BaseComponent implements IStartupCheck {
     FileLogger log = FileLogger.get(LogFiles.SYSTEM);
     /** By using the required flag, you may skip or force the success of a check<p> Default true. */
     public abstract boolean isCheckRequired();
@@ -15,7 +17,7 @@ public abstract class StartupCheckImpl{
     public boolean execute() throws BaseException {
         if(isCheckRequired()){
             try {
-                log.debug("Ran check: {}", this.getClass().getSimpleName());
+                log.log("Ran check: {}", this.getClass().getSimpleName());
                 return executeCheck();
             } catch (BaseException e){
                 if(canCheckRaiseException()){
@@ -26,7 +28,7 @@ public abstract class StartupCheckImpl{
                 }
             }
         }
-        log.debug("Skipping non-required check: {}", this.getClass().getSimpleName());
+        log.log("Skipping non-required check: {}", this.getClass().getSimpleName());
         return true;
     }
 

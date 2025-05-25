@@ -6,7 +6,7 @@ println "🔵 [ROOT] Starting root build.gradle --------------------------------
 /* =====================================================================
  * 0.  READ configSet
  * =================================================================== */
-def String configSet = project.findProperty('configSet')
+String configSet = project.findProperty('configSet')
 if (!configSet) {
   def ini = file('config.ini')
   if (ini.exists()) {
@@ -56,6 +56,12 @@ allprojects {
 /* =====================================================================
  * 2.  BUMP buildVersion *before* jar tasks
  * =================================================================== */
+
+// ★ A helper flag to know if the current invocation is a shipping build
+boolean isShippingBuild = gradle.startParameter.taskNames.any {
+  it.equalsIgnoreCase('build') || it.equalsIgnoreCase('delivery')
+}
+
 def projectBuildVersions = [:]
 
 tasks.register('bumpBuildVersions') {
@@ -98,11 +104,17 @@ subprojects { subproj ->
   version = projectVersion
 
   /* --------------------------------------------------------------
-   * Jar naming & asset‑list
+   * Jar naming & asset-list
    * ----------------------------------------------------------- */
   tasks.named('jar') {
-    dependsOn rootProject.tasks.named('bumpBuildVersions')
-    outputs.upToDateWhen { false }                   // always rebuild jars
+    // ★ bump version numbers only for shipping builds
+    if (isShippingBuild) {
+      dependsOn rootProject.tasks.named('bumpBuildVersions')
+    }
+    // Only force rebuilds for *shipping* tasks
+    if (isShippingBuild) {
+      outputs.upToDateWhen { false }
+    }
     doFirst {
       def props = new Properties()
       file("${projectDir}/gradle.properties").withInputStream { props.load(it) }
@@ -125,21 +137,30 @@ subprojects { subproj ->
   tasks.named('processResources') { dependsOn 'generateAssetList' }
 
   /* --------------------------------------------------------------
-   *  Test support – run any class extending TestCase
+   *  Test support – run any class extending BaseTest
    * ----------------------------------------------------------- */
   dependencies {
     testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
   }
 
   tasks.named('test', Test) {
-    // pick up subclasses of a cust TestCase (compiled class files)
-    include '**/*TestCase.class'
+    // Tests need the fully-generated runtime folder --------------------
+    dependsOn rootProject.tasks.named('assembleTestRuntime')
+
+    // Pass the bin directory location to ModuleClassLoader
+    def binDir = rootProject.layout.buildDirectory
+      .dir("generatedConfig/${configSet}-${projectVersion}/bin")
+      .get().asFile
+    systemProperty 'gw.bin.dir', binDir.absolutePath
+    // run the JVM from inside <bin> so relative paths match 1:1
+    workingDir binDir
+    // Let JUnit-5 discover everything, no filters
     useJUnitPlatform()
     testLogging { events "passed", "skipped", "failed" }
   }
 
   /* --------------------------------------------------------------
-   *  Remember each sub‑project's level, after it’s been evaluated
+   *  Remember each sub-project's level, after it’s been evaluated
    * ----------------------------------------------------------- */
   afterEvaluate {
     projectLevels[subproj.name] = findProperty('projectLevel')?.toInteger() ?: 0
@@ -186,12 +207,12 @@ tasks.register('injectProjectVersionIntoConfig') {
     }
 
     /* add gwstarter entry (renamed jar living in lib/) ----------------- */
-    projectsJson << [
+    projectsJson << ([
       name : 'gwstarter',
       level: projectLevels['gwstarter'] ?: 99,
       jar  : "lib/${configSet}-${projectVersion}-${projectBuildVersions['gwstarter']}.jar",
       type : parsedConfig.gameType
-    ]
+    ] as LinkedHashMap<String, GString>)
 
     def json = [
       gameType: parsedConfig.gameType,
@@ -296,6 +317,14 @@ if not exist "%JAVA%" set JAVA=java.exe
   }
 }
 
+// --- One-time assembly used by every sub-project’s tests -------------
+tasks.register('assembleTestRuntime') {
+  dependsOn tasks.named('generateRunScripts')
+  // Declare the directory as the output so the task is skipped if it exists
+  outputs.dir("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin")
+}
+
+
 /* =====================================================================
  * 6.  DISTRO ARCHIVES
  * =================================================================== */
@@ -321,20 +350,19 @@ tasks.register('tarDistribution', Tar) {
  * 7.  ROOT build / run / clean
  * =================================================================== */
 
-// -- BUILD remains a full CI pipeline ---------------------------------------------------
+// -- BUILD remains a full CI pipeline ---------------------------------
 tasks.register('build') {
   dependsOn includedProjects.collect { it.tasks.named('build') }
-  dependsOn tasks.named('generateRunScripts'), tasks.named('zipDistribution'), tasks.named('tarDistribution')
+  dependsOn tasks.named('generateRunScripts'),
+    tasks.named('zipDistribution'),
+    tasks.named('tarDistribution')
 }
 
-// -- RUN is now a *fast* local launch ----------------------------------------------------
+// -- RUN is a *fast* local launch (no tests, no version bump) ---------
 tasks.register('run') {
-  // compile classes quickly across modules
   dependsOn includedProjects.collect { it.tasks.named('classes') }
-  // still need launcher + scripts
   dependsOn tasks.named('generateRunScripts')
 
-  // ensure we don't block on shipping artefacts
   mustRunAfter tasks.named('zipDistribution')
   mustRunAfter tasks.named('tarDistribution')
 
@@ -350,11 +378,13 @@ tasks.register('run') {
   }
 }
 
-// -- DELIVERY builds distributable archives only ----------------------------------------
+// -- DELIVERY assembles artefacts and now runs tests too --------------
 tasks.register('delivery') {
   group = 'distribution'
   description = 'Assemble distributable archives (zip & tar) without running the game.'
-  dependsOn tasks.named('zipDistribution'), tasks.named('tarDistribution')
+  dependsOn includedProjects.collect { it.tasks.named('test') }   // ★ run tests
+  dependsOn tasks.named('zipDistribution'),
+    tasks.named('tarDistribution')
 }
 
 tasks.register('clean', Delete) {

@@ -3,6 +3,7 @@ package com.gwngames.core.api.build;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.PlatformNames;
+import com.gwngames.core.data.SubComponentNames;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -23,4 +24,7 @@ public @interface Init {
     ComponentNames component() default ComponentNames.NONE;
     PlatformNames platform() default PlatformNames.ALL;
     boolean allowMultiple() default false;
+    SubComponentNames subComp() default SubComponentNames.NONE;
 }
+
+

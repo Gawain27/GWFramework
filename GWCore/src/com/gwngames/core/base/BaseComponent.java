@@ -33,7 +33,7 @@ public abstract class BaseComponent implements IBaseComp{
         if (init == null)
             throw new IllegalStateException("Malformed component: " + classType.getSimpleName());
 
-        T instance = ModuleClassLoader.getInstance().tryCreate(init.component(), classType);
+        T instance = ModuleClassLoader.getInstance().tryCreate(init.component());
         if (instance == null)
             throw new IllegalStateException("No component found of class: " + classType.getSimpleName());
 

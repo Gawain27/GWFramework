@@ -90,6 +90,15 @@ tasks.register('bumpBuildVersions') {
   }
 }
 
+/* ---------- Helper: return buildVersion even when bump task not run - */
+ext.buildVerOf = { String prjName ->
+  projectBuildVersions[prjName] ?: new Properties().with {
+    file("${project(":$prjName").projectDir}/gradle.properties")
+      .withInputStream { load(it) }
+    getProperty('buildVersion')
+  }
+}
+
 /* =====================================================================
  * 3.  SUBPROJECT CONFIG
  * =================================================================== */
@@ -107,13 +116,10 @@ subprojects { subproj ->
    * Jar naming & asset-list
    * ----------------------------------------------------------- */
   tasks.named('jar') {
-    // ★ bump version numbers only for shipping builds
+    // bump version numbers only for shipping builds
     if (isShippingBuild) {
       dependsOn rootProject.tasks.named('bumpBuildVersions')
-    }
-    // Only force rebuilds for *shipping* tasks
-    if (isShippingBuild) {
-      outputs.upToDateWhen { false }
+      outputs.upToDateWhen { false }          // force rebuild
     }
     doFirst {
       def props = new Properties()
@@ -139,29 +145,19 @@ subprojects { subproj ->
   /* --------------------------------------------------------------
    *  Test support – run any class extending BaseTest
    * ----------------------------------------------------------- */
-  dependencies {
-    testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
-  }
+  dependencies { testImplementation "org.junit.jupiter:junit-jupiter:5.10.2" }
 
   tasks.named('test', Test) {
-    // Tests need the fully-generated runtime folder --------------------
     dependsOn rootProject.tasks.named('assembleTestRuntime')
-
-    // Pass the bin directory location to ModuleClassLoader
     def binDir = rootProject.layout.buildDirectory
       .dir("generatedConfig/${configSet}-${projectVersion}/bin")
       .get().asFile
     systemProperty 'gw.bin.dir', binDir.absolutePath
-    // run the JVM from inside <bin> so relative paths match 1:1
     workingDir binDir
-    // Let JUnit-5 discover everything, no filters
     useJUnitPlatform()
     testLogging { events "passed", "skipped", "failed" }
   }
 
-  /* --------------------------------------------------------------
-   *  Remember each sub-project's level, after it’s been evaluated
-   * ----------------------------------------------------------- */
   afterEvaluate {
     projectLevels[subproj.name] = findProperty('projectLevel')?.toInteger() ?: 0
   }
@@ -201,34 +197,28 @@ tasks.register('injectProjectVersionIntoConfig') {
       [
         name : p.name,
         level: projectLevels[p.name],
-        jar  : "lib/${p.name}-${projectBuildVersions[p.name]}.jar",
+        jar  : "lib/${p.name}-${buildVerOf(p.name)}.jar",    // ★ helper in use
         type : parsedConfig.gameType
       ]
     }
 
-    /* add gwstarter entry (renamed jar living in lib/) ----------------- */
-    projectsJson << ([
+    /* add gwstarter entry --------------------------------------------- */
+    projectsJson << [
       name : 'gwstarter',
       level: projectLevels['gwstarter'] ?: 99,
-      jar  : "lib/${configSet}-${projectVersion}-${projectBuildVersions['gwstarter']}.jar",
+      jar  : "lib/${configSet}-${projectVersion}-${buildVerOf('gwstarter')}.jar",
       type : parsedConfig.gameType
-    ] as LinkedHashMap<String, GString>)
-
-    def json = [
-      gameType: parsedConfig.gameType,
-      projects: projectsJson
     ]
 
+    def json = [ gameType: parsedConfig.gameType, projects: projectsJson ]
     jsonFile.text = JsonOutput.prettyPrint(JsonOutput.toJson(json))
     println "📄  config.json written → $jsonFile"
   }
 }
 
-def starterBuildVersion = project.provider {
-  projectBuildVersions['gwstarter'] ?: new Properties().tap {
-    file("${project(':gwstarter').projectDir}/gradle.properties").withInputStream { load(it) }
-  }.getProperty('buildVersion')
-}
+/* ------------------------------------------------------------------ */
+def starterBuildVersion = project.provider { buildVerOf('gwstarter') }
+/* ------------------------------------------------------------------ */
 
 tasks.register('prepareDistribution', Copy) {
   dependsOn project(':gwstarter').tasks.named('distZip')
@@ -239,9 +229,9 @@ tasks.register('prepareDistribution', Copy) {
     def rootOld = "gwstarter-${projectVersion}"
     def rootNew = "${configSet}-${projectVersion}"
     if (path.startsWith(rootOld)) path = path.replaceFirst(rootOld, rootNew)
-
     if (path ==~ /.*\/lib\/gwstarter-\d+\.jar$/) {
-      path = path.replaceFirst(/gwstarter-\d+\.jar/, "${configSet}-${projectVersion}-${starterBuildVersion.get()}.jar")
+      path = path.replaceFirst(/gwstarter-\d+\.jar/,
+        "${configSet}-${projectVersion}-${starterBuildVersion.get()}.jar")
     }
   }
   includeEmptyDirs = false
@@ -259,9 +249,8 @@ tasks.register('copyProjectJarsToDistribution', Copy) {
   doFirst { println "📥  Copying freshly-built jars into distribution …" }
 
   includedProjects.findAll { it.name != 'gwstarter' }.each { prj ->
-    from prj.tasks.named('jar')                     // copy outputs of each jar task
+    from prj.tasks.named('jar')
   }
-
   into "$buildDir/generatedConfig/${configSet}-${projectVersion}/lib"
   duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
@@ -317,13 +306,11 @@ if not exist "%JAVA%" set JAVA=java.exe
   }
 }
 
-// --- One-time assembly used by every sub-project’s tests -------------
+/* ---------------- one-time assembly used by every test task ---------- */
 tasks.register('assembleTestRuntime') {
   dependsOn tasks.named('generateRunScripts')
-  // Declare the directory as the output so the task is skipped if it exists
   outputs.dir("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin")
 }
-
 
 /* =====================================================================
  * 6.  DISTRO ARCHIVES
@@ -350,7 +337,7 @@ tasks.register('tarDistribution', Tar) {
  * 7.  ROOT build / run / clean
  * =================================================================== */
 
-// -- BUILD remains a full CI pipeline ---------------------------------
+// BUILD – full CI pipeline --------------------------------------------
 tasks.register('build') {
   dependsOn includedProjects.collect { it.tasks.named('build') }
   dependsOn tasks.named('generateRunScripts'),
@@ -358,11 +345,10 @@ tasks.register('build') {
     tasks.named('tarDistribution')
 }
 
-// -- RUN is a *fast* local launch (no tests, no version bump) ---------
+// RUN – fast local launch ---------------------------------------------
 tasks.register('run') {
   dependsOn includedProjects.collect { it.tasks.named('classes') }
   dependsOn tasks.named('generateRunScripts')
-
   mustRunAfter tasks.named('zipDistribution')
   mustRunAfter tasks.named('tarDistribution')
 
@@ -378,11 +364,11 @@ tasks.register('run') {
   }
 }
 
-// -- DELIVERY assembles artefacts and now runs tests too --------------
+// DELIVERY – artefacts + tests ----------------------------------------
 tasks.register('delivery') {
   group = 'distribution'
-  description = 'Assemble distributable archives (zip & tar) without running the game.'
-  dependsOn includedProjects.collect { it.tasks.named('test') }   // ★ run tests
+  description = 'Assemble distributable archives (zip & tar) and run tests.'
+  dependsOn includedProjects.collect { it.tasks.named('test') }
   dependsOn tasks.named('zipDistribution'),
     tasks.named('tarDistribution')
 }

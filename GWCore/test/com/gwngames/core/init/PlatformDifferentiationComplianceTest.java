@@ -2,11 +2,9 @@ package com.gwngames.core.init;
 
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseTest;
-import com.gwngames.core.base.cfg.ModuleClassLoader;
-import com.gwngames.core.base.log.FileLogger;
-import com.gwngames.core.data.LogFiles;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.PlatformNames;
+import com.gwngames.core.util.ClassUtils;
 import org.junit.jupiter.api.Assertions;
 
 import java.util.*;
@@ -21,10 +19,7 @@ public class PlatformDifferentiationComplianceTest extends BaseTest {
 
     @Override
     protected void runTest() {
-        ModuleClassLoader loader = ModuleClassLoader.getInstance();
-
-        // Collect every class annotated with @Init
-        List<Class<?>> annotated = loader.getAnnotated(Init.class);
+        List<Class<?>> annotated = ClassUtils.getAnnotatedClasses(Init.class);
 
         // Build mapping: <Interface, Module> -> List of concrete impl classes
         Map<Class<?>, Map<ModuleNames, List<Class<?>>>> index = new HashMap<>();

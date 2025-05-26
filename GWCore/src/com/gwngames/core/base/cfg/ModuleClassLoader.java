@@ -1,6 +1,7 @@
 package com.gwngames.core.base.cfg;
 
 import com.google.gson.*;
+import com.google.gson.reflect.TypeToken;
 import com.google.gson.stream.JsonReader;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
@@ -8,65 +9,49 @@ import com.gwngames.core.api.ex.ErrorPopupException;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.*;
 
-import java.io.File;
-import java.io.FileReader;
+import java.io.*;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.net.URLClassLoader;
+import java.net.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.jar.JarFile;
 
 /**
- * Central class-loader for the GW Framework runtime.
+ * Dynamic class-loader for GW Framework modules.
  *
- * <p>The loader is created once per process and is responsible for</p>
- * <ol>
- *   <li>reading <kbd>bin/config.json</kbd> produced by the Gradle build,</li>
- *   <li>creating a dedicated {@link URLClassLoader} for each module JAR,</li>
- *   <li>exposing type-lookup helpers that respect the framework’s
- *       component / sub-component / priority rules.</li>
- * </ol>
- *
- * <p>Both the legacy <em>single-implementation</em> path and the new
- * <em>multi-sub-component</em> path are supported; the caller decides which
- * helper to use.</p>
+ * <p>Supports three resolution modes:</p>
+ * <ul>
+ *   <li>Single component – highest-priority impl per {@link ComponentNames}.</li>
+ *   <li>Multi sub-components – distinct impls per
+ *       {@code (Component, SubComponent)}.</li>
+ *   <li>Platform variants – filter an implementation list by platform.</li>
+ * </ul>
  */
 public final class ModuleClassLoader extends ClassLoader {
 
-    /* -------------------------------------------------------------------- *
-     * constants & singletons                                               *
-     * -------------------------------------------------------------------- */
-    private static final FileLogger LOG = FileLogger.get(LogFiles.SYSTEM);
-    private static final List<Class<?>> COMPONENTS = new ArrayList<>();
+    /* ───────────────────────── static members ───────────────────────── */
+    private static final FileLogger log = FileLogger.get(LogFiles.SYSTEM);
+
+    /** All interfaces annotated with <code>@Init(module = INTERFACE)</code>. */
+    private static final List<Class<?>> interfaceTypes = new ArrayList<>();
+    /** Concrete classes kept after duplicate-pruning. */
+    private static final List<Class<?>> concreteTypes  = new ArrayList<>();
+
     private static ModuleClassLoader INSTANCE;
 
-    /* -------------------------------------------------------------------- *
-     * per-instance state                                                   *
-     * -------------------------------------------------------------------- */
+    /* positive / negative lookup caches */
+    private final Map<String, Class<?>> resolved = new ConcurrentHashMap<>();
+    private final Set<String>           misses   = ConcurrentHashMap.newKeySet();
+
+    /* per-instance state */
     private final List<URLClassLoader> loaders = new ArrayList<>();
     private final Map<URLClassLoader, JarFile> jars = new LinkedHashMap<>();
+    private final List<ProjectLoader> classLoaders = new ArrayList<>();
 
-    /* positive / negative caches for single-class look-up */
-    private final Map<String, Class<?>> resolved = new ConcurrentHashMap<>();
-    private final Set<String> notFound = ConcurrentHashMap.newKeySet();
-
-    /* caches for class lists (per component) */
-    private final Map<ComponentNames, List<Class<?>>> classLists = new ConcurrentHashMap<>();
-    private final Set<ComponentNames> listMisses = ConcurrentHashMap.newKeySet();
-
-    /* -------------------------------------------------------------------- *
-     * construction                                                         *
-     * -------------------------------------------------------------------- */
-    private ModuleClassLoader() throws ErrorPopupException {
-        super(ModuleClassLoader.class.getClassLoader());
-        initLoaders();
-        initJars();
-    }
-
-    /** Thread-safe singleton accessor. */
+    /* ======================================================================== */
+    /*  Singleton                                                               */
+    /* ======================================================================== */
     public static synchronized ModuleClassLoader getInstance() {
         if (INSTANCE == null) {
             try {
@@ -78,314 +63,318 @@ public final class ModuleClassLoader extends ClassLoader {
         return INSTANCE;
     }
 
-    /* -------------------------------------------------------------------- *
-     * loader & JAR discovery                                               *
-     * -------------------------------------------------------------------- */
+    private ModuleClassLoader() throws ErrorPopupException {
+        super(ModuleClassLoader.class.getClassLoader());
+        initLoaders();
+        initJars();
+    }
+
+    /* ======================================================================== */
+    /*  Loader / JAR discovery                                                  */
+    /* ======================================================================== */
+
     private void initLoaders() throws ErrorPopupException {
+        /* test override ------------------------------------------------------ */
         String forcedBin = System.getProperty("gw.bin.dir");
         if (forcedBin != null) {
-            buildLoadersFromBin(new File(forcedBin));
+            useBinDir(new File(forcedBin));
             return;
         }
 
-        File exec = locateExecutableDir();
-        File bin  = locateBinDir(exec);
-        buildLoadersFromBin(bin);
-    }
-
-    private File locateExecutableDir() throws ErrorPopupException {
+        /* normal runtime ----------------------------------------------------- */
+        File whereAmI;
         try {
             URL src = getClass().getProtectionDomain().getCodeSource().getLocation();
-            File where = new File(src.toURI());
-            return where.isFile() ? where.getParentFile() : where;
+            whereAmI = new File(src.toURI());
+            if (whereAmI.isFile()) whereAmI = whereAmI.getParentFile();
         } catch (Exception e) {
-            LOG.error(e.getMessage(), e);
             throw new ErrorPopupException("Cannot determine executable location");
         }
-    }
 
-    private File locateBinDir(File exec) throws ErrorPopupException {
-        if (new File(exec, "config.json").isFile()) return exec;
-        if ("lib".equals(exec.getName())) {
-            File bin = new File(exec.getParentFile(), "bin");
-            if (new File(bin, "config.json").isFile()) return bin;
+        File binDir;
+        if (new File(whereAmI, "config.json").isFile()) {
+            binDir = whereAmI;
+        } else if ("lib".equals(whereAmI.getName())) {
+            binDir = new File(whereAmI.getParentFile(), "bin");
+        } else {
+            throw new ErrorPopupException("Cannot locate bin directory (looked in " + whereAmI + ")");
         }
-        throw new ErrorPopupException("Unable to locate <bin> directory near " + exec);
+        useBinDir(binDir);
     }
 
     @SuppressWarnings("unchecked")
-    private void buildLoadersFromBin(File bin) throws ErrorPopupException {
-        LOG.debug("Initialising loaders from {}", bin);
-
-        /* parse config --------------------------------------------------- */
-        Map<String,Object> cfg;
-        try (JsonReader r = new JsonReader(new FileReader(new File(bin, "config.json")))) {
-            cfg = new Gson().fromJson(r, Map.class);
+    private void useBinDir(File binDir) throws ErrorPopupException {
+        /* parse config ------------------------------------------------------- */
+        Map<String, Object> cfg;
+        try (JsonReader r = new JsonReader(new FileReader(new File(binDir, "config.json")))) {
+            cfg = new Gson().fromJson(r, new TypeToken<Map<String,Object>>(){}.getType());
         } catch (Exception e) {
-            LOG.error(e.getMessage(), e);
             throw new ErrorPopupException("Cannot read config.json");
         }
 
         String gameType = (String) cfg.get("gameType");
         List<Map<String,Object>> projects = (List<Map<String,Object>>) cfg.get("projects");
         if (projects == null || projects.isEmpty())
-            throw new ErrorPopupException("config.json lists no projects");
+            throw new ErrorPopupException("No projects defined in config.json");
 
-        File root = bin.getParentFile();            // parent of bin & lib
-        List<ProjectLoader> tmp = new ArrayList<>();
-
+        File root = binDir.getParentFile();
         for (Map<String,Object> p : projects) {
-            String jarRel = (String) p.get("jar");
-            Number lvl    = (Number) p.get("level");
-            String type   = (String) p.get("type");
-            if (!gameType.equals(type) || jarRel == null) continue;
-
-            File jar = new File(root, jarRel);
-            if (!jar.exists()) {
-                LOG.error("JAR not found: {}", jar);
-                continue;
+            if (!gameType.equals(p.get("type"))) continue;
+            File jar = new File(root, (String) p.get("jar"));
+            if (!jar.exists()) continue;
+            try {
+                URLClassLoader cl = createNamedLoader(jar);
+                loaders.add(cl);
+                log.debug("loader '{}' (level {})", cl.getName(), p.get("level"));
+                classLoaders.add(new ProjectLoader(cl, (int) Double.parseDouble(String.valueOf(p.get("level")))));
+            } catch (MalformedURLException e) {
+                throw new ErrorPopupException("Bad jar URL: " + jar);
             }
-            URLClassLoader cl = createNamedLoader(jar);
-            tmp.add(new ProjectLoader(cl, lvl.intValue()));
-            LOG.debug("Loader '{}' level {}", cl.getName(), lvl);
         }
-
-        tmp.sort(Comparator.comparingInt(pl -> -pl.level));
-        tmp.forEach(pl -> loaders.add(pl.loader));
+        loaders.sort(Comparator.comparing(ClassLoader::getName)); // already ordered by filename/level
     }
 
-    private URLClassLoader createNamedLoader(File jar) throws ErrorPopupException {
-        try {
+    private URLClassLoader createNamedLoader(File jar) throws MalformedURLException {
+        URL url = jar.toURI().toURL();
+        try {   // Java 9+
             return URLClassLoader.class
                 .getConstructor(String.class, URL[].class, ClassLoader.class)
-                .newInstance(jar.getName(), new URL[]{jar.toURI().toURL()}, this);
-        } catch (ReflectiveOperationException | MalformedURLException e) {
-            LOG.error(e.getMessage(), e);
-            throw new ErrorPopupException("Cannot create class loader for " + jar.getName());
+                .newInstance(jar.getName(), new URL[]{url}, this);
+        } catch (ReflectiveOperationException ignored) {
+            return new URLClassLoader(new URL[]{url}, this);
         }
     }
 
     private void initJars() {
-        loaders.forEach(l -> Arrays.stream(l.getURLs())
-            .filter(u -> u.getFile().endsWith(".jar"))
-            .forEach(u -> {
-                try {
-                    jars.put(l, new JarFile(new File(u.getFile())));
-                } catch (Exception ex) {
-                    LOG.error("Could not open {}", u, ex);
-                }
-            }));
+        loaders.forEach(l -> {
+            for (URL u : l.getURLs()) {
+                File f = new File(u.getFile());
+                if (!f.getName().endsWith(".jar")) continue;
+                try { jars.put(l, new JarFile(f)); }
+                catch (IOException e) { log.error("Error opening {}", f, e); }
+            }
+        });
     }
 
-    /* -------------------------------------------------------------------- *
-     * core ClassLoader override                                            *
-     * -------------------------------------------------------------------- */
-    @Override
-    protected Class<?> findClass(String name) throws ClassNotFoundException {
+    /* ======================================================================== */
+    /*  Class-loading override – child-first with caches                        */
+    /* ======================================================================== */
+
+    @Override protected Class<?> findClass(String name) throws ClassNotFoundException {
         Class<?> hit = resolved.get(name);
         if (hit != null) return hit;
-        if (notFound.contains(name)) throw new ClassNotFoundException(name);
+        if (misses.contains(name)) throw new ClassNotFoundException(name);
 
         for (URLClassLoader l : loaders) {
             try {
-                Class<?> c = Class.forName(name, false, l);
-                resolved.put(name, c);
-                return c;
+                hit = Class.forName(name, false, l);
+                resolved.put(name, hit);
+                return hit;
             } catch (ClassNotFoundException ignored) { }
         }
-        notFound.add(name);
+        misses.add(name);
         throw new ClassNotFoundException(name);
     }
 
-    /* -------------------------------------------------------------------- *
-     * public factory helpers                                               *
-     * -------------------------------------------------------------------- */
+    /* ======================================================================== */
+    /*  Annotation scanning & de-duplication                                    */
+    /* ======================================================================== */
 
-    public <T extends IBaseComp> T tryCreate(ComponentNames comp, Object... args) {
-        try { return createInstance(findClass(comp), args); }
-        catch (ClassNotFoundException e) { return null; }
-    }
+    private synchronized void ensureTypesLoaded() {
+        if (!interfaceTypes.isEmpty() || !concreteTypes.isEmpty()) return;
 
-    public <T extends IBaseComp> T tryCreate(ComponentNames comp, SubComponentNames sub,
-                                             Object... args) {
-        try { return createInstance(findSubComponent(comp, sub), args); }
-        catch (ClassNotFoundException e) { return null; }
-    }
+        List<Class<?>> found = scanForAnnotated(Init.class);
 
-    public <T extends IBaseComp> List<T> tryCreateAll(ComponentNames comp,
-                                                      Object... args) {
-        try {
-            List<Class<?>> impls = findSubComponents(comp);
-            List<T> list = new ArrayList<>(impls.size());
-            for (Class<?> c : impls) list.add(createInstance(c, args));
-            return list;
-        } catch (ClassNotFoundException e) {
-            return Collections.emptyList();
+        Map<String, Class<?>> bestMulti = new HashMap<>();
+
+        for (Class<?> c : found) {
+            Init an = c.getAnnotation(Init.class);
+            if (c.isInterface()) {
+                interfaceTypes.add(c);
+                continue;
+            }
+
+            if (an.subComp() == SubComponentNames.NONE) {
+                concreteTypes.add(c);             // singles kept verbatim
+                continue;
+            }
+
+            String key = an.component().name() + "#" + an.subComp().name();
+            Class<?> incumbent = bestMulti.get(key);
+            if (incumbent == null ||
+                an.module().modulePriority >
+                    incumbent.getAnnotation(Init.class).module().modulePriority) {
+                bestMulti.put(key, c);
+            }
         }
+        concreteTypes.addAll(bestMulti.values());
+
+        bestMulti.forEach((k, cls) -> {
+            Init an = cls.getAnnotation(Init.class);
+            log.log("Multi-component [{}] → {} (prio {})",
+                k, cls.getSimpleName(), an.module().modulePriority);
+        });
     }
 
-    /* -------------------------------------------------------------------- *
-     * component / sub-component resolution                                 *
-     * -------------------------------------------------------------------- */
+    private List<Class<?>> scanForAnnotated(Class<? extends Annotation> ann) {
+        List<Class<?>> out = new ArrayList<>();
+        jars.forEach((loader, jar) -> jar.entries().asIterator().forEachRemaining(e -> {
+            if (!e.getName().endsWith(".class")) return;
+            String cn = e.getName().replace('/', '.').replace(".class", "");
+            try {
+                Class<?> c = loader.loadClass(cn);
+                if (c.getAnnotation(ann) != null) out.add(c);
+            } catch (Throwable ignored) { }
+        }));
+        return out;
+    }
 
+    /* ======================================================================== */
+    /*  Lookup helpers                                                          */
+    /* ======================================================================== */
+
+    private Class<?> interfaceOf(ComponentNames comp) throws ClassNotFoundException {
+        ensureTypesLoaded();
+        for (Class<?> i : interfaceTypes) {
+            Init an = i.getAnnotation(Init.class);
+            if (an.component() == comp) return i;
+        }
+        throw new ClassNotFoundException("No interface for component " + comp);
+    }
+
+    /* single-component (allowMultiple = false) ------------------------------- */
     private Class<?> findClass(ComponentNames comp) throws ClassNotFoundException {
-        ensureComponentsLoaded();
-        return pickHighestPrio(new HashMap<>(), comp.name(), locateInterface(comp));
-    }
-
-    public List<Class<?>> findClasses(ComponentNames comp) throws ClassNotFoundException {
-        List<Class<?>> cached = classLists.get(comp);
-        if (cached != null) return cached;
-        if (listMisses.contains(comp))
-            throw new ClassNotFoundException("No interface for " + comp);
-
-        ensureComponentsLoaded();
-        List<Class<?>> list = collectConcrete(locateInterface(comp));
-        classLists.put(comp, list);
-        return list;
-    }
-
-    private Class<?> findSubComponent(ComponentNames comp, SubComponentNames sub)
-        throws ClassNotFoundException {
-        ensureComponentsLoaded();
-        Class<?> iface = locateInterface(comp, true);
-        Map<String,Class<?>> bucket = new HashMap<>();
-        String key = comp.name() + "#" + sub.name();
-        for (Class<?> c : collectConcrete(iface)) {
-            if (c.getAnnotation(Init.class).subComp() == sub)
-                pickHighestPrio(bucket, key, c);
+        Class<?> iface = interfaceOf(comp);
+        Class<?> best  = null; int prio = Integer.MIN_VALUE;
+        for (Class<?> c : concreteTypes) {
+            if (!iface.isAssignableFrom(c)) continue;
+            Init an = c.getAnnotation(Init.class);
+            if (an.subComp() != SubComponentNames.NONE) continue;
+            if (an.module().modulePriority > prio) { best = c; prio = an.module().modulePriority; }
         }
-        Class<?> best = bucket.get(key);
-        if (best == null)
-            throw new ClassNotFoundException("No implementation of " + key);
+        if (best == null) throw new ClassNotFoundException("No impl of " + comp);
+        return best;
+    }
+
+    private List<Class<?>> findClasses(ComponentNames comp) throws ClassNotFoundException {
+        Class<?> iface = interfaceOf(comp);
+        List<Class<?>> out = new ArrayList<>();
+        for (Class<?> c : concreteTypes)
+            if (iface.isAssignableFrom(c) && c.getAnnotation(Init.class).subComp()==SubComponentNames.NONE)
+                out.add(c);
+        if (out.isEmpty()) throw new ClassNotFoundException("No impl of " + comp);
+        out.sort(Comparator.comparingInt(
+            (Class<?> cl) -> cl.getAnnotation(Init.class).module().modulePriority).reversed());
+        return out;
+    }
+
+    /* multi sub-components (allowMultiple = true) --------------------------- */
+    private Class<?> findSubComponent(ComponentNames comp, SubComponentNames sub) throws ClassNotFoundException {
+        if (sub == SubComponentNames.NONE) throw new IllegalArgumentException("subComp NONE");
+        Class<?> iface = interfaceOf(comp);
+        Init ifaceAnn  = iface.getAnnotation(Init.class);
+        if (!ifaceAnn.allowMultiple())
+            throw new IllegalStateException(iface.getSimpleName()+" does not allow multiple");
+
+        Class<?> best = null; int prio = Integer.MIN_VALUE;
+        for (Class<?> c : concreteTypes) {
+            Init an = c.getAnnotation(Init.class);
+            if (an.subComp()!=sub) continue;
+            if (!iface.isAssignableFrom(c)) continue;
+            if (an.module().modulePriority > prio) { best = c; prio = an.module().modulePriority; }
+        }
+        if (best == null) throw new ClassNotFoundException("No "+comp+"/"+sub);
         return best;
     }
 
     private List<Class<?>> findSubComponents(ComponentNames comp) throws ClassNotFoundException {
-        ensureComponentsLoaded();
-        Class<?> iface = locateInterface(comp, true);
-        List<Class<?>> list = collectConcrete(iface);
-        list.sort(PRIO_DESC);
-        return list;
-    }
-
-    /* -------------------------------------------------------------------- *
-     * helpers                                                              *
-     * -------------------------------------------------------------------- */
-
-    private static final Comparator<Class<?>> PRIO_DESC =
-        Comparator.<Class<?>>comparingInt(c -> c.getAnnotation(Init.class)
-                .module().modulePriority)
-            .reversed();
-
-    private Class<?> locateInterface(ComponentNames comp) throws ClassNotFoundException {
-        return locateInterface(comp, false);
-    }
-
-    private Class<?> locateInterface(ComponentNames comp, boolean requireMulti)
-        throws ClassNotFoundException {
-
-        for (Class<?> c : COMPONENTS) {
-            Init a = c.getAnnotation(Init.class);
-            if (c.isInterface() && a != null
-                && a.module() == ModuleNames.INTERFACE
-                && a.component() == comp) {
-                if (requireMulti && !a.allowMultiple())
-                    throw new IllegalStateException(
-                        "Interface " + c.getSimpleName() + " does not allow multiple sub-components");
-                return c;
-            }
-        }
-        throw new ClassNotFoundException("No interface annotated for " + comp);
-    }
-
-    private List<Class<?>> collectConcrete(Class<?> iface) {
-        List<Class<?>> list = new ArrayList<>();
-        for (Class<?> c : COMPONENTS)
-            if (!c.isInterface() && iface.isAssignableFrom(c))
-                list.add(c);
-        return list;
-    }
-
-    private Class<?> pickHighestPrio(Map<String,Class<?>> map,
-                                     String key, Class<?> candidate) {
-        Class<?> incumbent = map.get(key);
-        if (incumbent == null) {
-            map.put(key, candidate);
-            return candidate;
-        }
-        int oldP = incumbent.getAnnotation(Init.class).module().modulePriority;
-        int newP = candidate.getAnnotation(Init.class).module().modulePriority;
-        if (newP > oldP) map.put(key, candidate);
-        return map.get(key);
-    }
-
-    private <T> T createInstance(Class<?> cls, Object... args) {
-        try {
-            Constructor<?> ctor = args.length == 0
-                ? cls.getDeclaredConstructor()
-                : cls.getDeclaredConstructor(Arrays.stream(args)
-                .map(Object::getClass)
-                .toArray(Class<?>[]::new));
-            ctor.setAccessible(true);
-            @SuppressWarnings("unchecked") T obj = (T) ctor.newInstance(args);
-            if (obj instanceof IBaseComp comp) comp.getMultId();   // register ID if needed
-            return obj;
-        } catch (Exception e) {
-            throw new IllegalStateException("Cannot instantiate " + cls.getName(), e);
-        }
-    }
-
-    /* -------------------------------------------------------------------- *
-     * annotation scan & de-duplication                                     *
-     * -------------------------------------------------------------------- */
-
-    public List<Class<?>> getAnnotated(Class<? extends Annotation> anno) {
+        Class<?> iface = interfaceOf(comp);
+        if (!iface.getAnnotation(Init.class).allowMultiple())
+            throw new IllegalStateException(iface.getSimpleName()+" does not allow multiple");
         List<Class<?>> out = new ArrayList<>();
-        jars.forEach((ldr, jar) -> jar.stream()
-            .filter(e -> e.getName().endsWith(".class"))
-            .forEach(e -> {
-                String name = e.getName().replace('/', '.')
-                    .replace(".class", "");
-                try {
-                    Class<?> c = Class.forName(name, false, ldr);
-                    if (c.getAnnotation(anno) != null) out.add(c);
-                } catch (Throwable ignored) { }
-            }));
+        for (Class<?> c : concreteTypes)
+            if (iface.isAssignableFrom(c) &&
+                c.getAnnotation(Init.class).subComp()!=SubComponentNames.NONE)
+                out.add(c);
+        if (out.isEmpty()) throw new ClassNotFoundException("No sub-components for "+comp);
+        out.sort(Comparator.comparingInt(
+            (Class<?> cl) -> cl.getAnnotation(Init.class).module().modulePriority).reversed());
         return out;
     }
 
-    private void ensureComponentsLoaded() {
-        if (!COMPONENTS.isEmpty()) return;
-        COMPONENTS.addAll(getAnnotated(Init.class));
-        filterDuplicates();
-    }
+    /* ======================================================================== */
+    /*  Factory helpers                                                         */
+    /* ======================================================================== */
 
-    /** keep only highest-priority implementation per (component, subComp). */
-    private void filterDuplicates() {
-        Map<String, Class<?>> best = new HashMap<>();
-        Iterator<Class<?>> it = COMPONENTS.iterator();
-
-        while (it.hasNext()) {
-            Class<?> c = it.next();
-            Init a = c.getAnnotation(Init.class);
-            if (c.isInterface() || a.subComp() == SubComponentNames.NONE) continue;
-
-            String key = a.component().name() + "#" + a.subComp().name();
-            Class<?> incumbent = best.get(key);
-            if (incumbent == null
-                || a.module().modulePriority >
-                incumbent.getAnnotation(Init.class).module().modulePriority) {
-                best.put(key, c);
-            }
-            it.remove();                         // remove for now
+    @SuppressWarnings("unchecked")
+    public <T extends IBaseComp> T tryCreate(ComponentNames comp, Object... args) {
+        try { return (T) createInstance(findClass(comp), args); }
+        catch (ClassNotFoundException e) {
+            log.error(e.getMessage());
+            return null;
         }
-        COMPONENTS.addAll(best.values());        // re-insert winners
-        LOG.debug("After de-duplication we have {} component classes", COMPONENTS.size());
     }
 
-    /* -------------------------------------------------------------------- *
-     * simple DTO                                                            *
-     * -------------------------------------------------------------------- */
-    private record ProjectLoader(URLClassLoader loader, int level) { }
+    @SuppressWarnings("unchecked")
+    public <T extends IBaseComp> T tryCreate(ComponentNames comp, SubComponentNames sub, Object... args) {
+        try {
+            T obj = (T) createInstance(findSubComponent(comp, sub), args);
+            log.debug("Created {} id={}", obj.getClass().getSimpleName(), obj.getMultId());
+            return obj;
+        } catch (ClassNotFoundException e) { return null; }
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T extends IBaseComp> List<T> tryCreateAll(ComponentNames comp, Object... args) {
+        try {
+            List<Class<?>> clz = findSubComponents(comp);
+            List<T> out = new ArrayList<>(clz.size());
+            for (Class<?> c : clz) {
+                T obj = (T) createInstance(c, args);
+                log.debug("Created {} id={}", obj.getClass().getSimpleName(), obj.getMultId());
+                out.add(obj);
+            }
+            return out;
+        } catch (ClassNotFoundException e) { return Collections.emptyList(); }
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> T tryCreate(ComponentNames comp, PlatformNames platform, Object... args) {
+        try {
+            for (Class<?> c : findClasses(comp)) {
+                if (c.getAnnotation(Init.class).platform() == platform)
+                    return (T) createInstance(c, args);
+            }
+        } catch (ClassNotFoundException ignored) { }
+        throw new IllegalStateException("No "+comp+" for "+platform);
+    }
+
+    /* ======================================================================== */
+    /*  Reflection convenience                                                  */
+    /* ======================================================================== */
+
+    public Object createInstance(Class<?> clazz, Object... params) {
+        try {
+            Constructor<?> ctor;
+            if (params.length==0) ctor = clazz.getDeclaredConstructor();
+            else try {
+                Class<?>[] sig = Arrays.stream(params).map(Object::getClass).toArray(Class<?>[]::new);
+                ctor = clazz.getDeclaredConstructor(sig);
+            } catch (NoSuchMethodException e) {
+                ctor = clazz.getDeclaredConstructor(); params = new Object[0];
+            }
+            ctor.setAccessible(true);
+            return ctor.newInstance(params);
+        } catch (Exception e) {
+            throw new IllegalStateException("Cannot instantiate "+clazz.getName(), e);
+        }
+    }
+
+    /* ======================================================================== */
+    /*  Helper DTO                                                              */
+    /* ======================================================================== */
+    public record ProjectLoader(URLClassLoader cl, int level) {}
+    public List<ProjectLoader> getClassLoaders() {
+        return classLoaders;
+    }
 }

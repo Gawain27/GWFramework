@@ -2,8 +2,8 @@ package com.gwngames.core.init;
 
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseTest;
-import com.gwngames.core.base.cfg.ModuleClassLoader;
 import com.gwngames.core.data.SubComponentNames;
+import com.gwngames.core.util.ClassUtils;
 import org.junit.jupiter.api.Assertions;
 
 /**
@@ -15,10 +15,7 @@ final class SubComponentInterfaceAllowMultipleComplianceTest extends BaseTest {
 
     @Override
     protected void runTest() {
-
-        ModuleClassLoader loader = ModuleClassLoader.getInstance();
-
-        loader.getAnnotated(Init.class).forEach(concrete -> {
+        ClassUtils.getAnnotatedClasses(Init.class).forEach(concrete -> {
             Init ann = concrete.getAnnotation(Init.class);
 
             /* only interested in multi-sub-component concretes */

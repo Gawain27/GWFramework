@@ -3,10 +3,10 @@ package com.gwngames.core.init;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseTest;
-import com.gwngames.core.base.cfg.ModuleClassLoader;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.PlatformNames;
+import com.gwngames.core.util.ClassUtils;
 import org.junit.jupiter.api.Assertions;
 
 import java.util.List;
@@ -23,8 +23,7 @@ public class InterfaceInitAnnotationComplianceTest extends BaseTest {
 
     @Override
     protected void runTest() {
-        ModuleClassLoader cl = ModuleClassLoader.getInstance();
-        List<Class<?>> annotated = cl.getAnnotated(Init.class);
+        List<Class<?>> annotated = ClassUtils.getAnnotatedClasses(Init.class);
 
         int checked = 0;
         for (Class<?> c : annotated) {

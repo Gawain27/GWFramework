@@ -11,6 +11,7 @@ import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.PlatformNames;
 import com.gwngames.starter.Starter;
 import com.gwngames.starter.build.ILauncher;
+import com.gwngames.starter.build.LauncherVersion;
 
 /** Launches the desktop (LWJGL3) application. */
 @Init(module = ModuleNames.GW_STARTER, platform = PlatformNames.DESKTOP)
@@ -24,7 +25,7 @@ public class Lwjgl3Launcher implements ILauncher {
 
     @Override
     public String getVersion() {
-        return "0.0.1a";
+        return LauncherVersion.DESKTOP.getVersion();
     }
 
     private Lwjgl3ApplicationConfiguration getDefaultConfiguration() {

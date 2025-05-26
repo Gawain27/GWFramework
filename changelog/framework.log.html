@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>GWFramework – Changelog</title>
+
+    <!-- ==========  Minimal look-and-feel (1 file, no external deps) ========== -->
+    <style>
+        /* ── palette ── */
+        :root{
+            --bg:#0f0f10;          --panel:#1c1c1f;
+            --text:#e6e6e6;        --muted:#9e9e9e;
+            --link:#41b883;
+            --v2:#7aa2f7;          /* 0.0.2a */
+            --v1:#9ece6a;          /* 0.0.1Init */
+            --code:#c0caf5;
+            --mono:"Fira Code","Consolas",monospace;
+        }
+        /* ── layout ── */
+        body{margin:0;padding:2rem;background:var(--bg);color:var(--text);
+             font:15px/1.55 "Inter", system-ui, sans-serif;}
+        h1{margin:0 0 1.8rem;font-size:1.9rem;font-weight:600}
+        a{color:var(--link)}
+        /* ── summary table ── */
+        table{width:100%;border-collapse:collapse;margin:1.5rem 0}
+        th,td{padding:.55rem .9rem;border:1px solid #2a2a2d;vertical-align:top}
+        th{background:#26262b;font-weight:600;text-align:left}
+        tr:nth-child(even){background:var(--panel)}
+        .tag{display:inline-block;font:12px var(--mono);padding:2px 7px;
+             border-radius:4px;background:#26262b;margin-right:6px}
+        /* ── collapsible entries ── */
+        details{margin:1.6rem 0;border:1px solid #28282c;border-radius:5px;
+                background:var(--panel)}
+        summary{cursor:pointer;user-select:none;padding:.9rem .95rem;
+                font-weight:600;display:flex;align-items:center;
+                list-style:none}
+        summary::-webkit-details-marker{display:none}
+        details[open] summary{border-bottom:1px solid #28282c}
+        .entry-body{padding:1.1rem 1.4rem}
+        code{color:var(--code);font-family:var(--mono)}
+    </style>
+</head>
+<body>
+
+<h1>GWFramework – Changelog</h1>
+
+<!-- ==========  Quick summary table (latest on top)  ========== -->
+<table>
+    <tr><th style="width:110px">Version</th><th style="width:160px">Date</th><th>Highlights</th></tr>
+    <tr><td><span class="tag" style="color:var(--v2)">0.0.2 a</span></td>
+        <td>26 May 2025</td>
+        <td>Multi-sub-component system, big `ModuleClassLoader` refactor, new Gradle pipeline.</td></tr>
+    <tr><td><span class="tag" style="color:var(--v1)">0.0.1 Init</span></td>
+        <td>24 May 2025</td>
+        <td>First public “starter” release.</td></tr>
+</table>
+
+<!-- =======================================================================
+    A modular accordion: add a new <details> section per version.
+    Only the <summary> line & the block in .entry-body need editing.
+======================================================================= -->
+
+<!-- ---------- 0.0.2a ---------------------------------------------------- -->
+<details open>
+    <summary style="color:var(--v2)">
+        <span class="tag" style="color:var(--v2)">0.0.2 a</span>
+        <em style="flex:1">“Modular Momentum” – released&nbsp;26 May 2025</em>
+    </summary>
+    <div class="entry-body">
+        <h3>Core runtime</h3>
+        <ul>
+            <li><strong>Refactored <code>ModuleClassLoader</code></strong>
+                <ul>
+                    <li>Child-first lookup with positive &amp; negative caches.</li>
+                    <li>Separate containers for <code>interfaceTypes</code> vs <code>concreteTypes</code>.</li>
+                    <li>New APIs: <code>findSubComponent</code>, <code>findSubComponents</code>,
+                        <code>tryCreate(comp, sub)</code>, <code>tryCreateAll(comp)</code>.</li>
+                    <li>Duplicate eliminator keeps top priority per <code>(component, subComp)</code>.</li>
+                </ul>
+            </li>
+            <li>Added <code>ClassUtils.getAnnotatedClasses(anno,[level])</code>.</li>
+        </ul>
+
+        <h3>Testing</h3>
+        <ul>
+            <li>Introduced abstract <code>BaseTest</code> (override <code>runTest()</code>).</li>
+            <li>Compliance test suite for interface rules, platform variants, and sub-component logic.</li>
+        </ul>
+
+        <h3>Gradle&nbsp;build</h3>
+        <ul>
+            <li><code>isShippingBuild</code> flag – version bumps only on <code>build</code>/<code>delivery</code>.</li>
+            <li>Helper <code>buildVerOf()</code> guarantees correct JAR names in <code>config.json</code>.</li>
+            <li><code>assembleTestRuntime</code> produces reusable runtime for tests (<code>gw.bin.dir</code>).</li>
+            <li><code>delivery</code> now executes all JUnit tests before packaging.</li>
+        </ul>
+
+        <h3>Misc</h3>
+        <ul>
+            <li>One-off pathing-JAR &amp; launch-script reuse.</li>
+            <li>Cleaner logging – one DEBUG per resolved class or multi-component.</li>
+        </ul>
+    </div>
+</details>
+
+<!-- ---------- 0.0.1Init ------------------------------------------------- -->
+<details>
+    <summary style="color:var(--v1)">
+        <span class="tag" style="color:var(--v1)">0.0.1 Init</span>
+        <em style="flex:1">“First Light” – released&nbsp;24 May 2025</em>
+    </summary>
+    <div class="entry-body">
+        <ul>
+            <li>First public drop of the GWFramework desktop stack.</li>
+            <li>Modules: <code>gwcore</code>, <code>gw2d</code>, sample game <code>needle-of-silver</code>,
+                bootstrapper <code>gwstarter</code>.</li>
+            <li>Baseline Gradle multi-project build (asset list, per-module <code>buildVersion</code>, dependency graph).</li>
+            <li>Initial <code>ModuleClassLoader</code> with level-based ordering.</li>
+            <li>Prototype testing framework (<code>TestCase</code>, later evolved to <code>BaseTest</code>).</li>
+        </ul>
+    </div>
+</details>
+
+<!-- ========== Footer ==================================================== -->
+<p style="margin-top:3rem;font-size:13px;color:var(--muted)">
+    © 2025 GW Games – thank you for helping GWFramework evolve!<br>
+    Yes, I've asked AI to make this template
+</p>
+
+</body>
+</html>

@@ -3,9 +3,9 @@ package com.gwngames.core.init;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseTest;
-import com.gwngames.core.base.cfg.ModuleClassLoader;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
+import com.gwngames.core.util.ClassUtils;
 import org.junit.jupiter.api.Assertions;
 
 import java.lang.reflect.Modifier;
@@ -24,8 +24,7 @@ public class ConcreteImplementationAnnotationComplianceTest extends BaseTest {
 
     @Override
     protected void runTest() {
-        ModuleClassLoader loader = ModuleClassLoader.getInstance();
-        List<Class<?>> annotated = loader.getAnnotated(Init.class);
+        List<Class<?>> annotated = ClassUtils.getAnnotatedClasses(Init.class);
 
         // Build a map: interface -> concrete implementations
         Map<Class<?>, List<Class<?>>> ifaceImpls = new HashMap<>();

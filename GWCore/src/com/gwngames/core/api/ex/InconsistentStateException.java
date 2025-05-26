@@ -5,7 +5,6 @@ import java.util.List;
 public class InconsistentStateException extends BaseException{
 
     public InconsistentStateException(String state) {
-        super(ExceptionCode.generate(InconsistentStateException.class,
-            List.of(ExceptionCode.THOUSAND, ExceptionCode.DECA)), state);
+        super(ExceptionCode.INCONSISTENT_STATE, state);
     }
 }

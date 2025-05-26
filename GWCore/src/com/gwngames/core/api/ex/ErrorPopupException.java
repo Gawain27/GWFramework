@@ -18,7 +18,7 @@ import java.util.List;
 public class ErrorPopupException extends BaseException {
 
     public ErrorPopupException(String message) {
-        super(ExceptionCode.generate(ErrorPopupException.class, List.of(ExceptionCode.DECA)), message);
+        super(ExceptionCode.SYSTEM_FAULT, message);
         showErrorDialog(message);
     }
 

@@ -13,15 +13,15 @@ import java.util.regex.Pattern;
  */
 public class BaseException extends Exception {
     protected static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\$(\\d+)");
-    private final int errorCode;
+    private final ExceptionCode errorCode;
     protected final String[] params;
 
-    public BaseException(int code, String ...params){
+    public BaseException(ExceptionCode code, String ...params){
         this.errorCode = code;
         this.params = params;
     }
 
-    public int getErrorCode(){
+    public ExceptionCode getErrorCode(){
         return errorCode;
     }
 

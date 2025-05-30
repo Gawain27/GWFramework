@@ -1,0 +1,27 @@
+plugins {
+  id 'application'
+  id 'org.openjfx.javafxplugin' version '0.0.14'   // lightweight OpenJFX loader
+}
+
+repositories { mavenCentral() }
+
+javafx {
+  version = '21'                                   // use same JDK major
+  modules = ['javafx.controls']                    // we only need TableView
+}
+
+application {
+  mainClass = 'com.gw.editor.EditorApp'
+}
+
+// fat-jar for distribution ----------------------------------------------------
+tasks.named('jar') {
+  manifest { attributes 'Main-Class': application.mainClass.get() }
+  from {
+    configurations.runtimeClasspath.get()
+      .filter { it.name.endsWith('jar') }
+      .collect { zipTree(it) }
+  }
+  archiveBaseName = 'translation-editor'
+  duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}

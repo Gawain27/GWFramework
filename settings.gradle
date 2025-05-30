@@ -6,6 +6,7 @@ rootProject.name = "GWFramework"
 // Subprojects included:
 include(
   // Starter projects
+  'tools:translation-editor',
   "gwstarter",
 
   // Actual game projects

@@ -512,6 +512,25 @@ tasks.register('clean', Delete) {
 }
 
 /* =====================================================================
+ *  ✨  LOCAL I18N DESKTOP EDITOR
+ * =================================================================== */
+tasks.register('translationEditor', JavaExec) {
+  group       = 'i18n'
+  description = 'Run the desktop Translation Editor (Java FX)'
+
+  // 1) make sure the editor is compiled
+  dependsOn project(':tools:translation-editor').tasks.named('run')
+
+  // 2) configure the task *after* the sub-project is evaluated
+  doFirst {
+    def ed = project(':tools:translation-editor')
+    mainClass.set('com.gw.editor.EditorApp')
+    classpath = ed.sourceSets.main.runtimeClasspath          // safe access
+    workingDir = rootDir
+  }
+}
+
+/* =====================================================================
  * 8.  MISC
  * =================================================================== */
 

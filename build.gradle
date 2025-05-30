@@ -33,6 +33,11 @@ println "✅ configSet=$configSet – Included projects: $includedProjectNames"
  * 1.  GLOBAL EXT & REPOS
  * =================================================================== */
 ext.configSet = configSet
+ext.translationKeysGlobal = [:]        // key -> module:enum for dup-check
+
+def supportedLocales = (rootProject.findProperty('supportedLocales') ?: 'en_US')
+  .split(',')*.trim()
+println "🌐 Supported locales: $supportedLocales"
 subprojects { ext.configSet = rootProject.configSet }
 
 buildscript {
@@ -41,7 +46,15 @@ buildscript {
     maven { url 'https://oss.sonatype.org/content/repositories/snapshots/' }
     maven { url 'https://s01.oss.sonatype.org/content/repositories/snapshots/' }
   }
+  dependencies {
+    classpath "org.ow2.asm:asm:9.7"
+  }
 }
+
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.ClassVisitor
+import org.objectweb.asm.Opcodes
+import org.objectweb.asm.AnnotationVisitor
 
 allprojects {
   apply plugin: 'idea'; apply plugin: 'eclipse'
@@ -105,6 +118,23 @@ ext.buildVerOf = { String prjName ->
 
 def projectLevels = [:]
 
+/* Helper that inspects the class *without* loading it */
+boolean isTranslationsEnum(File classFile) {
+  def cr = new ClassReader(classFile.bytes)
+  def isEnum = (cr.access & Opcodes.ACC_ENUM) != 0
+  if (!isEnum) return false
+  def found = false
+  cr.accept(new ClassVisitor(Opcodes.ASM9) {
+    @Override
+    AnnotationVisitor visitAnnotation(String desc, boolean v) {
+      if (desc == 'Lcom/gwngames/core/api/build/Translations;')
+        found = true
+      return null
+    }
+  }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES)
+  return found
+}
+
 subprojects { subproj ->
   if (!includedProjectNames.contains(subproj.name)) return
 
@@ -161,6 +191,109 @@ subprojects { subproj ->
   afterEvaluate {
     projectLevels[subproj.name] = findProperty('projectLevel')?.toInteger() ?: 0
   }
+
+  /* --------------------------------------------------------------------
+ *  I18N – harvest enums annotated with @Translations and
+ *         (re)generate messages.csv per module
+ * ------------------------------------------------------------------ */
+  subproj.tasks.register('updateTranslationsCsv') {
+    group = 'i18n'
+    description = 'Scan enums annotated with @Translations and update messages.csv'
+
+    dependsOn subproj.tasks.named('compileJava')   // only needs byte-code
+    mustRunAfter subproj.tasks.named('compileJava')
+
+    doLast {
+      println "🔍  ${subproj.path}: scanning for @Translations..."
+
+      /* -----------------------------------------------------------
+       * 1) Collect the class-files we *will* need to load
+       * --------------------------------------------------------- */
+      def toLoad = []
+      def outputDirs = subproj.sourceSets.main.output.classesDirs
+      outputDirs.files.each { dir ->
+        if (!dir.exists()) return
+        dir.eachFileRecurse { f ->
+          if (f.name.endsWith('.class') && isTranslationsEnum(f))
+            toLoad << [root: dir, file: f]
+        }
+      }
+
+      if (toLoad.empty) {
+        println "ℹ️   no @Translations enums found - nothing to do."
+        return
+      }
+
+      /* -----------------------------------------------------------
+       * 2) Load *only those* enums with a minimal class-loader
+       * --------------------------------------------------------- */
+      def loader = new URLClassLoader(
+        outputDirs.files.collect { it.toURI().toURL() } as URL[],
+        (ClassLoader) null)          // still nothing from LibGDX, etc.
+
+      def moduleKeys = [:]
+
+      toLoad.each { map ->
+        def rel = map.file.path - map.root.path - File.separator
+        def className = rel.replace(File.separatorChar as char, '.' as char)
+          .replaceAll(/\.class$/, '')
+        Class<?> cls = loader.loadClass(className)
+
+        cls.enumConstants.each { constant ->
+          def key     = constant.getKey()
+          def caption = constant.getDefaultCaption()
+          /* -------- global duplicate check -------------- */
+          def where = "${subproj.path}:${cls.simpleName}"
+          def prev = rootProject.translationKeysGlobal.putIfAbsent(key, where)
+          if (prev) throw new GradleException(
+            "Duplicate translation key '$key': declared in $where, already in $prev")
+          moduleKeys[key] = caption
+        }
+      }
+
+      /* -----------------------------------------------------------
+       * 3) Merge into messages.csv  (unchanged from before)
+       * --------------------------------------------------------- */
+      def csvFile = subproj.file('resources/translation/messages.csv')
+      csvFile.parentFile.mkdirs()
+
+      def header = (['key'] + supportedLocales) as List
+      def rows   = [:]
+
+      if (csvFile.exists()) {
+        csvFile.readLines('UTF-8').withIndex { line, idx ->
+          def cols = line.split(',', -1) as List
+          if (idx == 0)      header = (['key'] + (cols - 'key' + supportedLocales)).unique()
+          else               rows[cols[0]] = (cols + [''] * header.size()).take(header.size())
+        }
+      }
+
+      moduleKeys.each { k, caption ->
+        if (!rows.containsKey(k)) {
+          def blank = [''] * header.size(); blank[0] = k
+          def defCol = header.indexOf(supportedLocales[0])
+          if (defCol >= 0) blank[defCol] = caption
+          rows[k] = blank
+        }
+      }
+
+      csvFile.withWriter('UTF-8') { w ->
+        w.println header.join(',')
+        rows.keySet().sort().each { k -> w.println rows[k].join(',') }
+      }
+      println "✅  ${csvFile} updated with ${moduleKeys.size()} keys"
+    }
+  }
+
+  /* ensure it runs before resources are packed ------------------------ */
+  subproj.tasks.named('processResources') { dependsOn 'updateTranslationsCsv' }
+}
+
+/* optional convenience umbrella task (root) --------------------------- */
+tasks.register('updateAllTranslations') {
+  group = 'i18n'
+  description = 'Update messages.csv in every module'
+  dependsOn subprojects.collect { it.tasks.matching { it.name == 'updateTranslationsCsv' } }
 }
 
 /* =====================================================================
@@ -203,12 +336,12 @@ tasks.register('injectProjectVersionIntoConfig') {
     }
 
     /* add gwstarter entry --------------------------------------------- */
-    projectsJson << [
+    projectsJson << ([
       name : 'gwstarter',
       level: projectLevels['gwstarter'] ?: 99,
       jar  : "lib/${configSet}-${projectVersion}-${buildVerOf('gwstarter')}.jar",
       type : parsedConfig.gameType
-    ]
+    ] as LinkedHashMap<String, GString>)
 
     def json = [ gameType: parsedConfig.gameType, projects: projectsJson ]
     jsonFile.text = JsonOutput.prettyPrint(JsonOutput.toJson(json))

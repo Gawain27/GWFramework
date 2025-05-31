@@ -17,7 +17,7 @@ public abstract class StartupCheckImpl extends BaseComponent implements IStartup
     public boolean execute() throws BaseException {
         if(isCheckRequired()){
             try {
-                log.log("Ran check: {}", this.getClass().getSimpleName());
+                log.info("Ran check: {}", this.getClass().getSimpleName());
                 return executeCheck();
             } catch (BaseException e){
                 if(canCheckRaiseException()){
@@ -28,7 +28,7 @@ public abstract class StartupCheckImpl extends BaseComponent implements IStartup
                 }
             }
         }
-        log.log("Skipping non-required check: {}", this.getClass().getSimpleName());
+        log.info("Skipping non-required check: {}", this.getClass().getSimpleName());
         return true;
     }
 

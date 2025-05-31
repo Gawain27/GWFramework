@@ -262,10 +262,15 @@ subprojects { subproj ->
       def rows   = [:]
 
       if (csvFile.exists()) {
-        csvFile.readLines('UTF-8').withIndex { line, idx ->
+        csvFile.readLines('UTF-8').withIndex().each { entry ->
+          def line = entry[0]
+          def idx  = entry[1]
           def cols = line.split(',', -1) as List
-          if (idx == 0)      header = (['key'] + (cols - 'key' + supportedLocales)).unique()
-          else               rows[cols[0]] = (cols + [''] * header.size()).take(header.size())
+          if (idx == 0) {
+            header = (['key'] + ((cols - 'key') + supportedLocales)).unique()
+          } else {
+            rows[cols[0]] = (cols + [''] * header.size()).take(header.size())
+          }
         }
       }
 

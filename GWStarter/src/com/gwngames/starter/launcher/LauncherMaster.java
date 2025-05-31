@@ -24,20 +24,20 @@ public class LauncherMaster extends BaseComponent implements ILauncherMaster {
     private static final ModuleClassLoader loader = ModuleClassLoader.getInstance();
 
     public void start(String[] args) {
-        log.log("Starting up GWFrameWork");
+        log.info("Starting up GWFrameWork");
         if (StartupHelper.startNewJvmIfRequired()) return; // This handles macOS support and helps on Windows.
 
-        log.log("Looking up operating system type...");
+        log.info("Looking up operating system type...");
         ILauncher launcher = getNewLauncher();
         if (launcher == null)
             throw new IllegalStateException("Null launcher configured");
         context.setContextObject(IContext._LAUNCHER, launcher);
 
-        log.log("Preparing launcher: {}", launcher.getVersion());
+        log.info("Preparing launcher: {}", launcher.getVersion());
         context.setContextObject(IContext._LAUNCHER_MASTER, this);
         Application game = launcher.createApplication();
         context.setContextObject(IContext.APPLICATION, game);
-        log.log("Created application: {}", game.getVersion());
+        log.info("Created application: {}", game.getVersion());
 
         // todo logic for queue, listeners, udp etc.
     }

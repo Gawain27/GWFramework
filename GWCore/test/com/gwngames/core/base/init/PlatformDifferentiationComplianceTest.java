@@ -1,4 +1,4 @@
-package com.gwngames.core.init;
+package com.gwngames.core.base.init;
 
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseTest;

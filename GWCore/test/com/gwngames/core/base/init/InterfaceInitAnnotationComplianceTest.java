@@ -1,4 +1,4 @@
-package com.gwngames.core.init;
+package com.gwngames.core.base.init;
 
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
@@ -38,6 +38,6 @@ public class InterfaceInitAnnotationComplianceTest extends BaseTest {
             checked++;
         }
 
-        log.log("Interface annotation compliance – checked {} interfaces", checked);
+        log.info("Interface annotation compliance – checked {} interfaces", checked);
     }
 }

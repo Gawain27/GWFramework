@@ -1,4 +1,4 @@
-package com.gwngames.core.init;
+package com.gwngames.core.base.init;
 
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
@@ -24,7 +24,7 @@ public class InitAnnotationSubclassComplianceTest extends BaseTest {
                 () -> "@Init‑annotated class " + c.getName() + " does not implement IBaseComp")
         );
 
-        log.log("Validated {} @Init‑annotated classes implement IBaseComp", annotated.size());
+        log.info("Validated {} @Init‑annotated classes implement IBaseComp", annotated.size());
     }
 }
 

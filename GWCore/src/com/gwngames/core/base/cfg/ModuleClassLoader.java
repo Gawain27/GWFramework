@@ -211,7 +211,7 @@ public final class ModuleClassLoader extends ClassLoader {
 
         bestMulti.forEach((k, cls) -> {
             Init an = cls.getAnnotation(Init.class);
-            log.log("Multi-component [{}] → {} (prio {})",
+            log.info("Multi-component [{}] → {} (prio {})",
                 k, cls.getSimpleName(), an.module().modulePriority);
         });
     }

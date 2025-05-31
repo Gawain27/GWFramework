@@ -1,4 +1,4 @@
-package com.gwngames.core.init;
+package com.gwngames.core.base.init;
 
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseTest;
@@ -29,7 +29,7 @@ final class SubComponentInterfaceAllowMultipleComplianceTest extends BaseTest {
                 + " but has no interface in its type hierarchy "
                 + "annotated with @Init(allowMultiple = true)";
 
-            log.log("Compliance - {}  → {}", concrete.getSimpleName(), ok ? "OK" : "FAIL");
+            log.info("Compliance - {}  → {}", concrete.getSimpleName(), ok ? "OK" : "FAIL");
             Assertions.assertTrue(ok, msg);
         });
     }

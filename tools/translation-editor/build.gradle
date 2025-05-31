@@ -16,11 +16,13 @@ application {
   mainClass = 'com.gw.editor.EditorApp'
 }
 
-// fat-jar for distribution ----------------------------------------------------
+// fat-jar for pipelining ----------------------------------------------------
 tasks.named('jar') {
-  manifest { attributes 'Main-Class': application.mainClass.get() }
+  manifest {
+    attributes 'Main-Class': application.mainClass.get()
+  }
   from {
-    configurations.runtimeClasspath.get()
+    configurations.runtimeClasspath
       .filter { it.name.endsWith('jar') }
       .collect { zipTree(it) }
   }

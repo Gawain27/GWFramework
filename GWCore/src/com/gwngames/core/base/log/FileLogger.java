@@ -23,12 +23,12 @@ public class FileLogger {
         enabled_level = level;
     }
 
-    public void log(String message, Object... args) {
+    public void info(String message, Object... args) {
         if (enabled_level >= INFO_LEVEL)
             logger.log(logFilePath, message, args);
     }
 
-    public void log(String message, Throwable exception, Object... args) {
+    public void info(String message, Throwable exception, Object... args) {
         if (enabled_level >= INFO_LEVEL)
             logger.log(logFilePath, message, exception, args);
     }

@@ -117,6 +117,18 @@ public class EditorApp extends Application {
             }
             /* make the popup list cells white text too */
             .combo-box .list-cell { -fx-text-fill:white; }
+            /* combo-box popup palette */
+            .combo-box-popup .list-view{
+              -fx-background-color:#000000;
+            }
+            .combo-box-popup .list-cell{
+              -fx-background-color:#000000;
+              -fx-text-fill:white;
+            }
+            .combo-box-popup .list-cell:hover{
+              -fx-background-color:#3d3f43;
+            }
+
             /* table */
             .table-view{
               -fx-background-color:#3c3f41;
@@ -230,52 +242,61 @@ public class EditorApp extends Application {
 
     /* ───── translation via DeepL ───── */
     private void autoTranslate(){
-        String target = localeBox.getValue();
-        if(target==null){ alert("Pick locale"); return;}
-        log(Lv.INFO,"Auto-translate → "+target);
+        String locale = localeBox.getValue();                 // e.g. de_DE
+        if(locale == null){ alert("Choose a locale"); return; }
+        String deeplTarget = locale.contains("_")
+            ? locale.substring(0, locale.indexOf('_')).toUpperCase()   // de_DE → DE
+            : locale.toUpperCase();                                    // de → DE
+        log(Lv.DEBUG,"DeepL target code = "+deeplTarget);
 
-        int tgtIdx = header.indexOf(target);
+        int tgtIdx = header.indexOf(locale);
         int srcIdx = header.indexOf("en_US");
-        if(srcIdx<0||tgtIdx<0){ alert("Missing en_US or target col"); return;}
+        if(srcIdx<0||tgtIdx<0){ alert("Missing en_US or target column"); return;}
 
         String apiKey = readProp("deeplApiKey");
         if(apiKey==null||apiKey.isBlank()){ alert("Add deeplApiKey to gradle.properties"); return;}
 
         int filled=0;
-        for(var row:table.getItems()){
-            String src=row.get(srcIdx);
-            if(src==null||src.isBlank()) continue;
-            if(row.get(tgtIdx)==null||row.get(tgtIdx).isBlank()){
-                String trans = callDeepL(apiKey, src, target);
-                row.set(tgtIdx, trans!=null?trans:"");
-                filled++;
+        for(int r=0;r<table.getItems().size();r++){
+            var row = table.getItems().get(r);
+            String src=row.get(srcIdx), cur=row.get(tgtIdx);
+            if(cur==null||cur.isBlank()){
+                log(Lv.TRACE,"Row "+r+" src=\""+src+"\"");
+                String trans = callDeepL(apiKey, src, deeplTarget);
+                log(Lv.TRACE,"Row "+r+" trans=\""+trans+"\"");
+                if(trans!=null){ row.set(tgtIdx, trans); filled++; }
             }
         }
+
         table.refresh();
         log(Lv.INFO,"Auto-translate inserted "+filled+" cells");
         alert(filled==0 ? "All cells were already filled." :
             "Inserted "+filled+" translation"+(filled==1?"":"s")+".");
     }
-    private String callDeepL(String key,String text,String tgt){
+
+    /* -------- callDeepL (replace the old method completely) ------------ */
+    private String callDeepL(String key, String text, String tgt){
         try{
-            String data="auth_key="+URLEncoder.encode(key,"UTF-8")+
+            String payload = "auth_key="+URLEncoder.encode(key,"UTF-8")+
                 "&text="+URLEncoder.encode(text,"UTF-8")+
                 "&target_lang="+URLEncoder.encode(tgt.replace('_','-'),"UTF-8");
-            var url=URI.create("https://api-free.deepl.com/v2/translate").toURL();
-            HttpURLConnection con=(HttpURLConnection)url.openConnection();
-            con.setDoOutput(true); con.setRequestMethod("POST");
+            log(Lv.DEBUG,"DeepL payload → "+payload.substring(0,Math.min(120,payload.length())));
+            var url = URI.create("https://api-free.deepl.com/v2/translate").toURL();
+            HttpURLConnection con = (HttpURLConnection) url.openConnection();
+            con.setDoOutput(true);  con.setRequestMethod("POST");
             con.setRequestProperty("Content-Type","application/x-www-form-urlencoded");
-            try(var out=new DataOutputStream(con.getOutputStream())){ out.writeBytes(data);}
-            int code=con.getResponseCode();
-            log(Lv.DEBUG,"DeepL HTTP "+code);
-            if(code==200){
-                var json=new String(con.getInputStream().readAllBytes(),StandardCharsets.UTF_8);
-                int i=json.indexOf("\"text\":\"");
-                if(i>0){
-                    int j=json.indexOf('"',i+8);
-                    String result=json.substring(i+8,j).replace("\\n","\n").replace("\\\"","\"");
-                    log(Lv.TRACE,"DeepL raw ⇒ "+result);
-                    return result;
+            try (var out = new DataOutputStream(con.getOutputStream())) { out.writeBytes(payload); }
+            int code = con.getResponseCode();
+            log(Lv.DEBUG,"DeepL HTTP "+code+" ("+con.getResponseMessage()+')');
+            try (InputStream is = code==200 ? con.getInputStream() : con.getErrorStream()) {
+                String body = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                log(Lv.TRACE,"DeepL body ⇐ "+body);
+                if(code==200){
+                    int i=body.indexOf("\"text\":\"");
+                    if(i>0){
+                        int j=body.indexOf('"',i+8);
+                        return body.substring(i+8,j).replace("\\n","\n").replace("\\\"","\"");
+                    }
                 }
             }
         }catch(Exception e){ log(Lv.WARN,"DeepL error "+e); }

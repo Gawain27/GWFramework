@@ -136,6 +136,60 @@ static boolean isTranslationsEnum(File classFile) {
   return found
 }
 
+/**
+ * Alphabetises @Translations enums in-place.
+ * – Finds the constant list (between '{' and first ';').
+ * – Sorts the constants by name.
+ * – Rewrites the block so *only* the final constant ends with ';'.
+ * Fully diagnostic.
+ */
+static void ensureAlphabeticOrder(Class<?> enumCls, Project prj) {
+  /* 1️⃣ locate java source ........................................... */
+  def rel = enumCls.name.replace('.','/') + '.java'
+  File src = null
+  prj.fileTree("${prj.projectDir}/src").matching { include "**/${rel}" }
+    .visit { d -> if (!d.directory) src = d.file }
+
+  if (!src?.exists()) { println "   🔸 source not found for ${enumCls.name}"; return }
+
+  println "   🔸 inspecting ${prj.projectDir.toPath().relativize(src.toPath())}"
+  def lines = src.readLines('UTF-8')
+
+  /* 2️⃣ locate braces & terminator ................................... */
+  int decl = lines.findIndexOf { it.contains("enum ${enumCls.simpleName}") }
+  int brace = (decl..<(lines.size())).find { lines[it].contains('{') } ?: -1
+  int term  = (brace..<(lines.size())).find { lines[it].contains(';') } ?: -1
+  if (decl==-1 || brace==-1 || term==-1) { println "      ⚠ could not parse enum"; return }
+
+  /* 3️⃣ grab constant lines .......................................... */
+  def rawBlock = lines[(brace+1)..term]
+  def constLines = rawBlock.findAll{ !it.trim().isEmpty() && !it.trim().startsWith('//') }
+
+  /* split name = text map */
+  def entryMap = [:]
+  constLines.each { l ->
+    def n = l.split(/[,(;]/)[0].trim()
+    entryMap[n] = l.trim().replaceAll(/[;,]\s*$/, '') // strip ending comma/semicolon
+  }
+  def names = entryMap.keySet().toList()
+  def sorted = names.sort(false)
+
+  println "      • constants detected : ${names}"
+  if (names == sorted) { println "      ✓ already alphabetical"; return }
+  println "      • re-ordering to     : ${sorted}"
+
+  /* 4️⃣ rebuild block: each constant ends with ',', last with ';' ..... */
+  def newBlock = sorted.collect { '\t' + entryMap[it] + ',' }
+  newBlock[-1] = newBlock[-1].replaceFirst(/,$/, ';')
+
+  /* 5️⃣ replace and write back ....................................... */
+  lines.subList(brace+1, term+1).clear()
+  lines.addAll(brace+1, newBlock)
+
+  src.withWriter('UTF-8'){ w -> lines.each{ w.println(it) } }
+  println "   🔄 rewrote enum → ${enumCls.simpleName} (alphabetised OK)"
+}
+
 subprojects { subproj ->
   if (!includedProjectNames.contains(subproj.name)) return
 
@@ -239,6 +293,8 @@ subprojects { subproj ->
         def className = rel.replace(File.separatorChar as char, '.' as char)
           .replaceAll(/\.class$/, '')
         Class<?> cls = loader.loadClass(className)
+
+        ensureAlphabeticOrder(cls, subproj)
 
         cls.enumConstants.each { constant ->
           def key     = constant.getKey()
@@ -533,6 +589,39 @@ tasks.register('translationEditor', JavaExec) {
     mainClass.set('com.gw.editor.EditorApp')
     classpath = ed.sourceSets.main.runtimeClasspath          // safe access
     workingDir = rootDir
+  }
+}
+
+/* =====================================================================
+ * 📖  CHANGELOG VIEWER TASKS
+ * =================================================================== */
+import java.awt.Desktop
+
+/**
+ * Helper – open a file/URI in the system default browser (cross-platform).
+ */
+def openInBrowser = { File html ->
+  if (!html.exists()) throw new GradleException("❌ File not found: ${html}")
+  if (!Desktop.isDesktopSupported()) throw new GradleException("Desktop API not supported on this JVM")
+  println "🌐 Opening ${html}"
+  Desktop.desktop.browse(html.toURI())
+}
+
+/* -- 1) Framework-wide changelog ------------------------------------- */
+tasks.register('viewFrameworkChangelog') {
+  group       = 'documentation'
+  description = 'Open changelog/framework.log.html in default browser'
+  doLast {
+    openInBrowser(file('changelog/framework.log.html'))
+  }
+}
+
+/* -- 2) Game-specific changelog -------------------------------------- */
+tasks.register('viewGameChangelog') {
+  group       = 'documentation'
+  description = "Open changelog/games/${configSet}.log.html for current config"
+  doLast {
+    openInBrowser(file("changelog/games/${configSet}.log.html"))
   }
 }
 

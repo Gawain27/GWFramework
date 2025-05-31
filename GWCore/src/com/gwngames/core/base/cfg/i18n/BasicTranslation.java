@@ -4,7 +4,8 @@ import com.gwngames.core.api.build.Translations;
 
 @Translations
 public enum BasicTranslation {
-    ERROR("Error");
+	ERROR("Error"),
+	WARNING("Warning");
     final String defaultCaption;
     final String key;
     BasicTranslation(String defaultCaption){

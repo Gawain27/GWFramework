@@ -11,6 +11,7 @@
             --bg:#0f0f10;          --panel:#1c1c1f;
             --text:#e6e6e6;        --muted:#9e9e9e;
             --link:#41b883;
+            --v3:#f7768e;          /* 0.0.3b */
             --v2:#7aa2f7;          /* 0.0.2a */
             --v1:#9ece6a;          /* 0.0.1Init */
             --code:#c0caf5;
@@ -47,26 +48,90 @@
 <!-- ==========  Quick summary table (latest on top)  ========== -->
 <table>
     <tr><th style="width:110px">Version</th><th style="width:160px">Date</th><th>Highlights</th></tr>
+    <tr><td><span class="tag" style="color:var(--v3)">0.0.3 b</span></td>
+        <td>31&nbsp;May&nbsp;2025</td>
+        <td>Full i18n tool-chain, DeepL auto-translation, enum auto-sort, rich Gradle UX.</td></tr>
     <tr><td><span class="tag" style="color:var(--v2)">0.0.2 a</span></td>
-        <td>26 May 2025</td>
-        <td>Multi-sub-component system, big `ModuleClassLoader` refactor, new Gradle pipeline.</td></tr>
+        <td>26&nbsp;May&nbsp;2025</td>
+        <td>Multi-sub-component system, big <code>ModuleClassLoader</code> refactor.</td></tr>
     <tr><td><span class="tag" style="color:var(--v1)">0.0.1 Init</span></td>
-        <td>24 May 2025</td>
+        <td>24&nbsp;May&nbsp;2025</td>
         <td>First public “starter” release.</td></tr>
 </table>
 
 <!-- =======================================================================
-    A modular accordion: add a new <details> section per version.
-    Only the <summary> line & the block in .entry-body need editing.
-======================================================================= -->
+     Modular accordion – newest entry open by default
+========================================================================= -->
 
-<!-- ---------- 0.0.2a ---------------------------------------------------- -->
+<!-- ---------- 0.0.3b ---------------------------------------------------- -->
 <details open>
-    <summary style="color:var(--v2)">
-        <span class="tag" style="color:var(--v2)">0.0.2 a</span>
-        <em style="flex:1">“Modular Momentum” – released&nbsp;26 May 2025</em>
+    <summary style="color:var(--v3)">
+        <span class="tag" style="color:var(--v3)">0.0.3 b</span>
+        <em style="flex:1">“Localization&nbsp;Overdrive” – released&nbsp;31&nbsp;May&nbsp;2025</em>
     </summary>
     <div class="entry-body">
+
+        <h3>🈳  Internationalisation</h3>
+        <ul>
+            <li>New <strong>language-support module</strong>:
+                <ul>
+                    <li>Per-module <code>messages.csv</code> files in <code>resources/translation</code>.</li>
+                    <li><code>CSVTranslationLoader</code> now merges <em>all</em> module CSVs via <code>ModuleClassLoader</code>.</li>
+                    <li><code>TranslationService.tr()</code> adds locale+language fallback and hot-reload.</li>
+                </ul>
+            </li>
+            <li><strong>Gradle task <code>updateTranslationsCsv</code></strong>:
+                <ul>
+                    <li>Harvests every enum annotated with <code>@Translations</code>.</li>
+                    <li>Auto-creates or merges the module’s <code>messages.csv</code>.</li>
+                    <li>Detects duplicate keys across modules.</li>
+                    <li>🆕 Also rewrites the enum source to keep constants <em>alphabetical</em> (tab-indented).</li>
+                </ul>
+            </li>
+            <li>JUnit test <code>TranslationServiceTest</code> ensures lookups, fallback and reload.</li>
+        </ul>
+
+        <h3>🛠  Translation Editor</h3>
+        <ul>
+            <li>Standalone JavaFX desktop app (<code>tools:translation-editor</code> fat-jar).</li>
+            <li>Modern dark “Darcula” skin with toolbar, locale combo and auto-save.</li>
+            <li>DeepL integration:
+                <ul>
+                    <li>Select a target locale → click <strong>🌍 Translate</strong> to back-fill empty cells.</li>
+                    <li>API key read from <code>gradle.properties</code>.</li>
+                </ul>
+            </li>
+            <li>Verbose logging levels <code>TRACE&nbsp;/ DEBUG&nbsp;/ INFO</code> via <code>-Dgwlog</code>.</li>
+        </ul>
+
+        <h3>📦  Build / Gradle</h3>
+        <ul>
+            <li>Helper tasks
+                <ul>
+                    <li><code>viewFrameworkChangelog</code> – open root <code>framework.log.html</code> in default browser.</li>
+                    <li><code>viewGameChangelog</code> – open <code>changelog/games/&lt;configSet&gt;.log.html</code>.</li>
+                </ul>
+            </li>
+            <li><code>translationEditor</code> task wires editor runtime to Desktop API.</li>
+            <li>Fixed Groovy <code>withIndex()</code>&nbsp;ambiguity, improved enum rewrite slice logic.</li>
+        </ul>
+
+        <h3>🔧  Misc &amp; Tooling</h3>
+        <ul>
+            <li>ASM-based byte-code scanner now parent-less to avoid LibGDX interference.</li>
+            <li>Automatic asset-list and version files remain untouched and compatible.</li>
+        </ul>
+    </div>
+</details>
+
+<!-- ---------- 0.0.2a ---------------------------------------------------- -->
+<details>
+    <summary style="color:var(--v2)">
+        <span class="tag" style="color:var(--v2)">0.0.2 a</span>
+        <em style="flex:1">“Modular Momentum” – released&nbsp;26&nbsp;May&nbsp;2025</em>
+    </summary>
+    <div class="entry-body">
+        <!-- unchanged content -->
         <h3>Core runtime</h3>
         <ul>
             <li><strong>Refactored <code>ModuleClassLoader</code></strong>
@@ -107,9 +172,10 @@
 <details>
     <summary style="color:var(--v1)">
         <span class="tag" style="color:var(--v1)">0.0.1 Init</span>
-        <em style="flex:1">“First Light” – released&nbsp;24 May 2025</em>
+        <em style="flex:1">“First Light” – released&nbsp;24&nbsp;May&nbsp;2025</em>
     </summary>
     <div class="entry-body">
+        <!-- unchanged -->
         <ul>
             <li>First public drop of the GWFramework desktop stack.</li>
             <li>Modules: <code>gwcore</code>, <code>gw2d</code>, sample game <code>needle-of-silver</code>,
@@ -123,8 +189,7 @@
 
 <!-- ========== Footer ==================================================== -->
 <p style="margin-top:3rem;font-size:13px;color:var(--muted)">
-    © 2025 GW Games – thank you for helping GWFramework evolve!<br>
-    Yes, I've asked AI to make this template
+    © 2025 GW Games – thank you for helping GWFramework evolve!
 </p>
 
 </body>

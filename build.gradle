@@ -119,7 +119,8 @@ ext.buildVerOf = { String prjName ->
 def projectLevels = [:]
 
 /* Helper that inspects the class *without* loading it */
-boolean isTranslationsEnum(File classFile) {
+
+static boolean isTranslationsEnum(File classFile) {
   def cr = new ClassReader(classFile.bytes)
   def isEnum = (cr.access & Opcodes.ACC_ENUM) != 0
   if (!isEnum) return false

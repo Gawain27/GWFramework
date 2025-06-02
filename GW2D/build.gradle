@@ -5,6 +5,7 @@
 ext.projectLevel = 2
 
 dependencies {
+  implementation project(path: ':gwcore', configuration: 'testOutput')
 }
 
 sourceSets {

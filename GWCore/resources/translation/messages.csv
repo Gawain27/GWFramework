@@ -1,0 +1,10 @@
+key,en_US,de_DE,fr_FR,es_ES,en_US,de_DE,fr_FR,es_ES
+BIN.NOT.FOUND,Cannot locate bin directory (looked in $1),Bin-Verzeichnis kann nicht gefunden werden (gesucht in $1),,,
+CONFIG.NOT.FOUND,Cannot read config.json,Kann config.json nicht lesen,,,
+ERROR,Error,Fehler,,,
+EXE.NOT.FOUND,Cannot determine executable location,Speicherort der ausführbaren Datei kann nicht ermittelt werden,,,
+INCONSISTENT.ERROR,System was found in an inconsistent state: $1,Das System wurde in einem inkonsistenten Zustand vorgefunden: $1,,,
+JAR.NOT.FOUND,Bad JAR-URL: $1,Schlechte JAR-URL: $1,,,
+PROJECTS.NOT.FOUND,No projects defined in config.json,Keine Projekte in config.json definiert,,,
+STARTUP.ERROR,A system check has failed: $1,Eine Systemprüfung ist fehlgeschlagen: $1,,,
+WARNING,Warning,Warnung,,,

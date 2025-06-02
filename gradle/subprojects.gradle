@@ -4,6 +4,7 @@
 subprojects { Project subproj ->
   if (!includedProjectNames.contains(subproj.name)) return
 
+  apply plugin: 'java'
   apply plugin: 'java-library'
   apply plugin: 'idea'
   apply plugin: 'eclipse'
@@ -12,6 +13,21 @@ subprojects { Project subproj ->
   targetCompatibility = JavaVersion.VERSION_21
   version = projectVersion                         // from gradle.properties
 
+  plugins.withType(JavaPlugin).configureEach {
+    // 1) Add a new configuration to hold test‐classes
+    configurations {
+      testOutput
+    }
+    // 2) Create the JAR task from the test source set
+    tasks.register('testJar', Jar) {
+      archiveClassifier.set('tests')
+      from sourceSets.test.output
+    }
+    // 3) Publish it on testOutput
+    artifacts {
+      testOutput testJar
+    }
+  }
   /* -------------------------------------------------------------- */
   // JAR naming and buildVersion bump on shipping builds
   /* -------------------------------------------------------------- */

@@ -48,6 +48,9 @@
 <!-- ==========  Quick summary table (latest on top)  ========== -->
 <table>
     <tr><th style="width:110px">Version</th><th style="width:160px">Date</th><th>Highlights</th></tr>
+    <tr><td><span class="tag" style="color:var(--v3)">0.0.4 c</span></td>
+        <td>2&nbsp;June&nbsp;2025</td>
+        <td>Core exception translation, CDI injection, CSV defaults &amp; connectivity test.</td></tr>
     <tr><td><span class="tag" style="color:var(--v3)">0.0.3 b</span></td>
         <td>31&nbsp;May&nbsp;2025</td>
         <td>Full i18n tool-chain, DeepL auto-translation, enum auto-sort, rich Gradle UX.</td></tr>
@@ -63,8 +66,51 @@
      Modular accordion – newest entry open by default
 ========================================================================= -->
 
-<!-- ---------- 0.0.3b ---------------------------------------------------- -->
+<!-- ---------- 0.0.4c ---------------------------------------------------- -->
 <details open>
+    <summary style="color:var(--v3)">
+        <span class="tag" style="color:var(--v3)">0.0.4 c</span>
+        <em style="flex:1">“Connectivity &amp; Translation&nbsp;Boost” – released&nbsp;2&nbsp;June&nbsp;2025</em>
+    </summary>
+    <div class="entry-body">
+
+        <h3>⚙️  Core enhancements</h3>
+        <ul>
+            <li><strong>BaseException</strong> now injects <code>ITranslationService</code> via CDI:
+                <ul>
+                    <li>Constructor calls <code>Cdi.inject(this)</code> to wire <code>@Inject ITranslationService translator</code>.</li>
+                    <li><code>getMessage()</code> returns a translated and parameter-formatted message using <code>translator.tr()</code>, falling back to <code>errorKey.getDefaultCaption()</code> on failure.</li>
+                </ul>
+            </li>
+            <li>Introduced <code>Cdi.inject(Object)</code> helper:
+                <ul>
+                    <li>Scans for <code>@Inject</code> fields and creates or retrieves dependencies via <code>ModuleClassLoader</code>.</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h3>🈳  i18n &amp; CSV</h3>
+        <ul>
+            <li><code>updateTranslationsCsv</code> now populates the <code>en_US</code> column with each enum’s <code>getDefaultCaption()</code> if that cell is empty.</li>
+            <li>Fixed header-merge logic to avoid spurious extra columns (“e” column); existing languages are preserved, and default captions fill blanks.</li>
+        </ul>
+
+        <h3>🧪  New Tests</h3>
+        <ul>
+            <li><code>ComponentGraphConnectivityTest</code> in <code>gwstarter</code>:
+                <ul>
+                    <li>Ensures every concrete component from <code>ModuleClassLoader.concreteTypes</code> is connected (has at least one incoming or outgoing <code>@Inject</code> edge).</li>
+                    <li>Fails if any component is isolated, listing them in the failure message.</li>
+                </ul>
+            </li>
+            <li>Updated <code>PlatformDifferentiationComplianceTest</code> to also assert that <code>Init.isPlatformDependent()</code> is <code>true</code> whenever multiple implementations exist at the same module level.</li>
+        </ul>
+
+    </div>
+</details>
+
+<!-- ---------- 0.0.3b ---------------------------------------------------- -->
+<details>
     <summary style="color:var(--v3)">
         <span class="tag" style="color:var(--v3)">0.0.3 b</span>
         <em style="flex:1">“Localization&nbsp;Overdrive” – released&nbsp;31&nbsp;May&nbsp;2025</em>

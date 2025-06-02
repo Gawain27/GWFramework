@@ -48,6 +48,8 @@ application {
 // Dependencies
 // ---------------------------------------------------------------------
 dependencies {
+  implementation project(path: ':gwcore', configuration: 'testOutput')
+
   implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
   implementation "com.badlogicgames.gdx-controllers:gdx-controllers-desktop:$gdxControllersVersion"
   implementation "com.badlogicgames.gdx:gdx-box2d-platform:$gdxVersion:natives-desktop"

@@ -1,0 +1,46 @@
+/* =========================================================================
+ *  bumpBuildVersions (runs before any jar task on shipping builds)
+ * ========================================================================= */
+import java.util.Properties
+
+Map<String, Integer> projectBuildVersions = [:]      // ext is implicit
+ext.isShippingBuild = gradle.startParameter.taskNames.any {
+    it.equalsIgnoreCase('build') || it.equalsIgnoreCase('delivery')
+}
+
+tasks.register('bumpBuildVersions') {
+    doLast {
+        println '🔼  bumpBuildVersions …'
+        includedProjects.each { Project prj ->
+            File propsFile = prj.file('gradle.properties')
+            Properties props = new Properties()
+            propsFile.withInputStream { props.load(it) }
+
+            int buildVer = (props.getProperty('buildVersion') ?: '0').toInteger()
+            File srcDir  = prj.file('src')
+            long latest  = srcDir.exists() ? prj.fileTree(srcDir).files.max { it.lastModified() }?.lastModified() ?: 0L : 0L
+
+            File stamp   = prj.file('.lastVersionCheck')
+            long previous = stamp.exists() ? stamp.text.toLong() : 0L
+
+            if (latest > previous) {
+                buildVer++
+                props['buildVersion'] = buildVer.toString()
+                propsFile.withOutputStream { props.store(it, null) }
+                stamp.text = latest.toString()
+                println "   • ${prj.name} → buildVersion = $buildVer"
+            }
+            projectBuildVersions[prj.name] = buildVer
+        }
+    }
+}
+
+/* helper so other scripts can ask for the current buildVersion --------- */
+ext.buildVerOf = { String prjName ->
+    projectBuildVersions[prjName] ?:
+            new Properties().with { props ->
+                file("${project(":$prjName").projectDir}/gradle.properties")
+                        .withInputStream { props.load(it) }
+                props.getProperty('buildVersion').toInteger()
+            }
+}

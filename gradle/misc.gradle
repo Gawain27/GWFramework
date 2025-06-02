@@ -1,0 +1,37 @@
+/* =========================================================================
+ * Extra utilities – translation editor & changelog viewers
+ * ========================================================================= */
+import java.awt.Desktop
+
+void openInBrowser(File html) {
+    if (!html.exists()) throw new GradleException("❌ File not found: $html")
+    if (!Desktop.isDesktopSupported()) throw new GradleException('Desktop API not supported on this JVM')
+    println "🌐 Opening $html"
+    Desktop.desktop.browse(html.toURI())
+}
+
+/* -------------------------------------------------------------------- */
+tasks.register('translationEditor', JavaExec) {
+    group       = 'i18n'
+    description = 'Run the desktop Translation Editor (Java FX)'
+    dependsOn project(':tools:translation-editor').tasks.named('run')
+    doFirst {
+        Project ed = project(':tools:translation-editor')
+        mainClass.set('com.gw.editor.EditorApp')
+        classpath  = ed.sourceSets.main.runtimeClasspath
+        workingDir = rootDir
+    }
+}
+
+/* -------------------------------------------------------------------- */
+tasks.register('viewFrameworkChangelog') {
+    group       = 'documentation'
+    description = 'Open changelog/framework.log.html in default browser'
+    doLast { openInBrowser(file('changelog/framework.log.html')) }
+}
+
+tasks.register('viewGameChangelog') {
+    group       = 'documentation'
+    description = "Open changelog/games/${configSet}.log.html for current config"
+    doLast { openInBrowser(file("changelog/games/${configSet}.log.html")) }
+}

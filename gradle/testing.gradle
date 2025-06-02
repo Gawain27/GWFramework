@@ -1,0 +1,19 @@
+/* =========================================================================
+ *  ... JUnit-Jupiter & per-project Test task setup
+ * ========================================================================= */
+subprojects { Project sp ->
+  if (!includedProjectNames.contains(sp.name)) return
+
+  dependencies { testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2' }
+
+  tasks.named('test', Test) { Test t ->
+    dependsOn rootProject.tasks.named('assembleTestRuntime')
+    File binDir = rootProject.layout.buildDirectory
+      .dir("generatedConfig/${configSet}-${projectVersion}/bin")
+      .get().asFile
+    systemProperty 'gw.bin.dir', binDir.absolutePath
+    workingDir = binDir
+    useJUnitPlatform()
+    testLogging { events 'passed', 'skipped', 'failed' }
+  }
+}

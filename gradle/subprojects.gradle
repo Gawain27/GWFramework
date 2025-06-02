@@ -1,0 +1,29 @@
+/* =========================================================================
+ * Common sub-project convention (plugins, Java version, JAR naming)
+ * ========================================================================= */
+subprojects { Project subproj ->
+  if (!includedProjectNames.contains(subproj.name)) return
+
+  apply plugin: 'java-library'
+  apply plugin: 'idea'
+  apply plugin: 'eclipse'
+
+  sourceCompatibility = JavaVersion.VERSION_21
+  targetCompatibility = JavaVersion.VERSION_21
+  version = projectVersion                         // from gradle.properties
+
+  /* -------------------------------------------------------------- */
+  // JAR naming and buildVersion bump on shipping builds
+  /* -------------------------------------------------------------- */
+  tasks.named('jar') { Jar jarTask ->
+    if (rootProject.isShippingBuild) {
+      dependsOn rootProject.tasks.named('bumpBuildVersions')
+      outputs.upToDateWhen { false }           // force rebuild
+    }
+    doFirst {
+      Properties p = new Properties()
+      file("${projectDir}/gradle.properties").withInputStream { p.load(it) }
+      archiveFileName.set("${subproj.name}-${p.getProperty('buildVersion')}.jar")
+    }
+  }
+}

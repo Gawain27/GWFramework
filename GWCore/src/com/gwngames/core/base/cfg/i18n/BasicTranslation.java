@@ -13,10 +13,10 @@ public enum BasicTranslation {
         this.key = String.join(".", this.name().split("_"));
     }
 
-    String getKey(){
+    public String getKey(){
         return key;
     }
-    String getDefaultCaption(){
+    public String getDefaultCaption(){
         return defaultCaption;
     }
 }

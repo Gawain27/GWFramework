@@ -1,0 +1,142 @@
+/* =========================================================================
+ * Prepare distribution / pathing-jar / run-scripts / archives
+ * ========================================================================= */
+import groovy.json.JsonOutput
+import org.gradle.api.tasks.bundling.Compression
+
+/* ---------------- helper (needs buildVerOf from bump-version.gradle) -- */
+Provider<String> starterBuildVersion = project.provider { buildVerOf('gwstarter') }
+def jarTaskProviders = includedProjects.collect { it.tasks.named('jar') }
+def projectJarProviders = includedProjects
+        .findAll { it.name != 'gwstarter' }.collect { it.tasks.named('jar') }
+
+/* ---------------- write config.json + unpack starter ZIP -------------- */
+tasks.register('injectProjectVersionIntoConfig') {
+    dependsOn jarTaskProviders
+
+    doLast {
+        File genDir = file("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin")
+        genDir.mkdirs()
+        File jsonFile = new File(genDir, 'config.json')
+
+        List<Map> projectsJson = parsedConfig.projects.collect { Map p ->
+            [
+                    name : p.name,
+                    level: rootProject.projectLevels[p.name],
+                    jar  : "lib/${p.name}-${buildVerOf(p.name)}.jar",
+                    type : parsedConfig.gameType
+            ]
+        } + [
+                name : 'gwstarter',
+                level: rootProject.projectLevels['gwstarter'] ?: 99,
+                jar  : "lib/${configSet}-${projectVersion}-${starterBuildVersion.get()}.jar",
+                type : parsedConfig.gameType
+        ]
+
+        Map json = [ gameType: parsedConfig.gameType, projects: projectsJson ]
+        jsonFile.text = JsonOutput.prettyPrint(JsonOutput.toJson(json))
+        println "📄  config.json written → $jsonFile"
+    }
+}
+
+/* ---------------- prepareDistribution  -------------------------------- */
+tasks.register('prepareDistribution', Copy) {
+    dependsOn project(':gwstarter').tasks.named('distZip'), 'injectProjectVersionIntoConfig'
+
+    from zipTree(project(':gwstarter').layout.buildDirectory.file("distributions/gwstarter-${projectVersion}.zip"))
+    eachFile { FileCopyDetails fcd ->
+        String rootOld = "gwstarter-${projectVersion}"
+        String rootNew = "${configSet}-${projectVersion}"
+        if (fcd.path.startsWith(rootOld)) fcd.path = fcd.path.replaceFirst(rootOld, rootNew)
+        if (fcd.path ==~ /.*\/lib\/gwstarter-\d+\.jar$/) {
+            fcd.path = fcd.path.replaceFirst(/gwstarter-\d+\.jar/,
+                    "${configSet}-${projectVersion}-${starterBuildVersion.get()}.jar")
+        }
+    }
+    includeEmptyDirs = false
+    into "$buildDir/generatedConfig"
+}
+
+/* ---------------- copyProjectJarsToDistribution ----------------------- */
+tasks.register('copyProjectJarsToDistribution', Copy) {
+
+    dependsOn 'prepareDistribution', jarTaskProviders
+    doFirst { println '📥  Copying freshly-built jars into distribution …' }
+    from projectJarProviders.collect { it.flatMap { j -> j.archiveFile } }
+    into "$buildDir/generatedConfig/${configSet}-${projectVersion}/lib"
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+/* ---------------- createPathingJar ------------------------------------ */
+tasks.register('createPathingJar') {
+    dependsOn 'copyProjectJarsToDistribution'
+    doLast {
+        File distroDir = file("$buildDir/generatedConfig/${configSet}-${projectVersion}")
+        File binDir    = new File(distroDir, 'bin')
+        binDir.mkdirs()
+        File libDir    = new File(distroDir, 'lib')
+        File launcher  = new File(binDir, 'launcher.jar')
+
+        String libs = libDir.listFiles()
+                .findAll { it.name.endsWith('.jar') }
+                .collect { "../lib/${it.name}" }
+                .sort()
+                .join(' ')
+
+        ant.jar(destfile: launcher) {
+            manifest {
+                attribute(name: 'Manifest-Version', value: '1.0')
+                attribute(name: 'Main-Class', value: 'com.gwngames.starter.Starter')
+                attribute(name: 'Class-Path', value: libs)
+            }
+        }
+        println "📦  Pathing JAR created → $launcher"
+    }
+}
+
+/* ---------------- generateRunScripts ---------------------------------- */
+tasks.register('generateRunScripts') {
+    dependsOn 'createPathingJar'
+    doLast {
+        File binDir = file("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin")
+        File sh = new File(binDir, 'run.sh')
+        sh.text = '''#!/usr/bin/env bash
+DIR="$( cd "${BASH_SOURCE%/*}" && pwd )"
+"${JAVA_HOME:+$JAVA_HOME/bin/}java" -jar "$DIR/launcher.jar" "$@"
+'''
+        sh.setExecutable(true)
+
+        File bat = new File(binDir, 'run.bat')
+        bat.text = '''@echo off
+set DIRNAME=%~dp0
+set JAVA=%JAVA_HOME%\\bin\\java.exe
+if not exist "%JAVA%" set JAVA=java.exe
+"%JAVA%" -jar "%DIRNAME%launcher.jar" %*
+'''
+        println "🚀  run.sh & run.bat written to $binDir"
+    }
+}
+
+/* ---------------- assembleTestRuntime (shared by test tasks) ---------- */
+tasks.register('assembleTestRuntime') {
+    dependsOn 'generateRunScripts'
+    outputs.dir("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin")
+}
+
+/* ---------------- archive tasks --------------------------------------- */
+tasks.register('zipDistribution', Zip) {
+    dependsOn 'generateRunScripts'
+    archiveBaseName.set(configSet)
+    archiveVersion.set("${projectVersion}-${starterBuildVersion.get()}")
+    destinationDirectory.set(layout.buildDirectory.dir('distributions'))
+    from layout.buildDirectory.dir('generatedConfig')
+}
+
+tasks.register('tarDistribution', Tar) {
+    dependsOn 'generateRunScripts'
+    archiveBaseName.set(configSet)
+    archiveVersion.set("${projectVersion}-${starterBuildVersion.get()}")
+    compression = Compression.GZIP
+    destinationDirectory.set(layout.buildDirectory.dir('distributions'))
+    from layout.buildDirectory.dir('generatedConfig')
+}

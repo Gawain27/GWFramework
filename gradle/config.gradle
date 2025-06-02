@@ -1,0 +1,41 @@
+/* =========================================================================
+* Read  configSet  + expose root-wide ext & helpers
+* ========================================================================= */
+import groovy.json.JsonSlurper
+import groovy.transform.Field
+import java.util.Properties
+
+@Field final String CONFIG_INI    = 'config.ini'
+@Field final String CONFIG_FOLDER = 'configs'
+
+String configSet = project.findProperty('configSet') as String
+if (!configSet) {
+  File ini = file(CONFIG_INI)
+  if (ini.exists()) {
+    Properties p = new Properties()
+    ini.withReader { p.load(it) }
+    configSet = p.getProperty('config_set')
+  }
+}
+if (!configSet) throw new GradleException('❌ Pass -PconfigSet=<game> or define config.ini')
+
+println "✅ configSet = $configSet"
+
+File cfgFile = file("$CONFIG_FOLDER" + "/" + "$configSet" + ".json")
+if (!cfgFile.exists()) throw new GradleException("❌ No such file $cfgFile")
+Map parsedConfig = new JsonSlurper().parse(cfgFile) as Map
+
+/*  ---- collect module handles (incl. gwstarter) ------------------- */
+List<Project> includedProjects = parsedConfig.projects.collect { project(":${it.name}") } +
+  project(':gwstarter')
+ext.includedProjects      = includedProjects
+ext.includedProjectNames  = includedProjects*.name as Set<String>
+ext.parsedConfig          = parsedConfig
+ext.configSet             = configSet
+ext.translationKeysGlobal = [:]          // Map<String, String>
+ext.projectLevels         = [:]
+
+/* ---- internationalisation locale list ---------------------------- */
+String rawLocales = rootProject.findProperty('supportedLocales') ?: 'en_US'
+ext.supportedLocales = rawLocales.split(',')*.trim() as List<String>
+println "🌐 Supported locales: ${supportedLocales}"

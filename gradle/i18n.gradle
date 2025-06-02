@@ -31,7 +31,6 @@ import jdk.internal.org.objectweb.asm.AnnotationVisitor
 import jdk.internal.org.objectweb.asm.ClassReader
 import jdk.internal.org.objectweb.asm.ClassVisitor
 import jdk.internal.org.objectweb.asm.Opcodes
-
 import java.lang.reflect.Method
 
 /* --------------------------------------------------------------------- */
@@ -110,7 +109,6 @@ void ensureAlphabeticOrder(Class<?> enumCls, Project prj) {
 /* Per‐module “updateTranslationsCsv” task                               */
 /* --------------------------------------------------------------------- */
 subprojects { Project subproj ->
-  // only run in “included” modules
   if (!includedProjectNames.contains(subproj.name)) return
 
   tasks.register('updateTranslationsCsv') {
@@ -122,7 +120,7 @@ subprojects { Project subproj ->
     doLast {
       println "🔍  ${subproj.path}: scanning for @Translations…"
 
-      // (1) Find all .class files that are enums annotated with @Translations
+      // (1) Collect all enum‐class files annotated with @Translations
       List<Map> toLoad = []
       subproj.sourceSets.main.output.classesDirs.files.each { File dir ->
         if (!dir.exists()) return
@@ -132,40 +130,35 @@ subprojects { Project subproj ->
           }
         }
       }
-
       if (toLoad.isEmpty()) {
         println "ℹ️  no @Translations enums found."
         return
       }
 
-      // (2) Use a minimal ClassLoader to load each enum
+      // (2) Use a minimal ClassLoader to load those enums
       URL[] urls = subproj.sourceSets.main.output.classesDirs.files
         .collect { it.toURI().toURL() } as URL[]
       ClassLoader loader = new URLClassLoader(urls, (ClassLoader) null)
 
-      // Map<key, defaultCaption> for this module
       Map<String, String> moduleKeys = [:]
-
       toLoad.each { Map entry ->
         String rel = entry.file.path - entry.root.path - File.separator
-        String className = rel
-          .replace(File.separatorChar, '.' as char)
+        String className = rel.replace(File.separatorChar, '.' as char)
           .replaceAll(/\.class$/, '')
-
         Class<?> cls = loader.loadClass(className)
 
-        // (a) Auto‐sort the enum constants in source
+        // Auto‐sort the enum constants in source
         ensureAlphabeticOrder(cls, subproj)
 
-        // (b) Gather each enum constant’s key + defaultCaption
+        // Gather key/defaultCaption from each enum constant
         cls.enumConstants.each { Object constant ->
-          Method getKeyMeth       = constant.class.getMethod('getKey')
-          Method getDefaultMeth   = constant.class.getMethod('getDefaultCaption')
-          String key        = getKeyMeth.invoke(constant) as String
-          String defaultCap = getDefaultMeth.invoke(constant) as String
-          String where      = "${subproj.path}:${cls.simpleName}"
-          String prev       = rootProject.translationKeysGlobal.putIfAbsent(key, where)
-          if (prev) {
+          Method getKeyMeth        = constant.class.getMethod('getKey')
+          Method getDefaultMeth    = constant.class.getMethod('getDefaultCaption')
+          String key           = getKeyMeth.invoke(constant) as String
+          String defaultCap    = getDefaultMeth.invoke(constant) as String
+          String where         = "${subproj.path}:${cls.simpleName}"
+          String prev          = rootProject.translationKeysGlobal.putIfAbsent(key, where)
+          if (prev != null) {
             throw new GradleException(
               "Duplicate translation key '$key': declared in $where, already in $prev"
             )
@@ -178,7 +171,7 @@ subprojects { Project subproj ->
       File csvFile = subproj.file('resources/translation/messages.csv')
       csvFile.parentFile.mkdirs()
 
-      // Read or initialize the header row
+      // Read or initialize the header + existing rows
       List<String> header = ['key'] + supportedLocales
       Map<String, List<String>> rows = [:]
 
@@ -186,8 +179,12 @@ subprojects { Project subproj ->
         csvFile.readLines('UTF-8').withIndex().each { String line, int idx ->
           List<String> cols = line.split(',', -1) as List<String>
           if (idx == 0) {
-            // Incorporate any new supportedLocales into the existing header.
-            header = (['key'] + ((cols - 'key') + supportedLocales)).unique()
+            // ───────────────────────────────────────────────────────────
+            // NEW: only keep “key” plus any pre‐existing columns that are in supportedLocales
+            List<String> existingLocales = (cols - 'key')
+              .findAll { supportedLocales.contains(it) }
+            header = ['key'] + (existingLocales + supportedLocales).unique()
+            // ───────────────────────────────────────────────────────────
           } else {
             List<String> padded = (cols + [''] * header.size()).take(header.size())
             rows[cols[0]] = padded
@@ -195,33 +192,23 @@ subprojects { Project subproj ->
         }
       }
 
-      //
-      // ─── FORCIBLY ENSURE “en_US” IS AT INDEX 1 ─────────────────────────────
-      //
-      // If “en_US” is not already in the header, insert it immediately after “key.”
-      //
-      int enUsIndex = header.indexOf(supportedLocales[0])
-      if (enUsIndex != 1) {
-        // If it was present somewhere else, remove it first
-        if (enUsIndex >= 0) {
-          header.remove(enUsIndex)
-        }
-        // Then insert “en_US” at index 1
-        header.add(1, supportedLocales[0])
+      // Figure out which column index corresponds to “en_US” (the first supported locale)
+      int defaultCol = header.indexOf(supportedLocales[0])
+      if (defaultCol < 0) {
+        // In case “en_US” isn’t literally in the header, fall back to column 1
+        defaultCol = 1
       }
-      // Now definitive location of “en_US” is always 1
-      int defaultCol = 1
 
-      // (4) For each discovered key → fill in or create row
+      // (4) Populate or create rows; fill in “en_US” if blank
       moduleKeys.each { String key, String defaultCap ->
         if (rows.containsKey(key)) {
-          // Existing row: if its “en_US” cell is blank, fill it
+          // If an “en_US” cell is empty, fill it
           List<String> existingRow = rows[key]
           if (existingRow[defaultCol]?.trim() == '') {
             existingRow[defaultCol] = defaultCap
           }
         } else {
-          // Brand‐new key: create a blank row, put key in col0, defaultCap in “en_US”
+          // Brand‐new key: create a blank row, put key + defaultCap into “en_US”
           List<String> newRow = [''] * header.size()
           newRow[0] = key
           newRow[defaultCol] = defaultCap
@@ -229,24 +216,23 @@ subprojects { Project subproj ->
         }
       }
 
-      // (5) Write back to messages.csv in sorted‐by‐key order
+      // (5) Write everything back, sorted by key
       csvFile.withWriter('UTF-8') { writer ->
         writer.println header.join(',')
         rows.keySet().sort().each { String k ->
           writer.println rows[k].join(',')
         }
       }
-      println "✅  ${csvFile} updated → ${moduleKeys.size()} keys scanned, “en_US” column populated where needed."
+      println "✅  ${csvFile} updated → ${moduleKeys.size()} keys scanned; ‘en_US’ cells populated."
     }
   }
 
-  // Hook it into processResources
+  // Hook into processResources
   subproj.tasks.named('processResources') {
     dependsOn 'updateTranslationsCsv'
   }
 }
 
-/* ─── umbrella task on root to update every module ──────────────────── */
 tasks.register('updateAllTranslations') {
   group       = 'i18n'
   description = 'Update messages.csv in every module'

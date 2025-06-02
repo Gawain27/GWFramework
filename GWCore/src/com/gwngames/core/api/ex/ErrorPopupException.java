@@ -1,8 +1,11 @@
 package com.gwngames.core.api.ex;
 
+import com.gwngames.core.api.build.ITranslatable;
+import com.gwngames.core.base.cfg.i18n.BasicTranslation;
+
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
-import java.util.List;
+import java.util.Locale;
 
 /**
  * A runtime exception that immediately shows a Swing error dialog
@@ -17,18 +20,25 @@ import java.util.List;
  */
 public class ErrorPopupException extends BaseException {
 
-    public ErrorPopupException(String message) {
-        super(ExceptionCode.SYSTEM_FAULT, message);
-        showErrorDialog(message);
+    public ErrorPopupException(ITranslatable message, String ...params) {
+        super(message, ExceptionCode.SYSTEM_FAULT, params);
+        showErrorDialog(getMessage());
     }
 
     /** Opens an ERROR_MESSAGE dialog on the Swing EDT. */
     private void showErrorDialog(String message) {
+        String errorTitle;
+        try {
+            errorTitle = translator.tr(BasicTranslation.ERROR.getKey(), Locale.getDefault());
+        } catch (Exception e){
+            errorTitle = BasicTranslation.ERROR.getDefaultCaption();
+        }
+        String finalErrorTitle = errorTitle;
         SwingUtilities.invokeLater(() ->
             JOptionPane.showMessageDialog(
                 null,                       // parent component
                 message,                    // dialog content
-                "Error",                    // title
+                finalErrorTitle,                    // title
                 JOptionPane.ERROR_MESSAGE   // icon / type
             )
         );

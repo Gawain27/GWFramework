@@ -24,6 +24,7 @@ public @interface Init {
     ComponentNames component() default ComponentNames.NONE;
     PlatformNames platform() default PlatformNames.ALL;
     boolean allowMultiple() default false;
+    boolean isPlatformDependent() default false;
     SubComponentNames subComp() default SubComponentNames.NONE;
 }
 

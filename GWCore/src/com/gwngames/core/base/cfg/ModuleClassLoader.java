@@ -6,6 +6,7 @@ import com.google.gson.stream.JsonReader;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.ex.ErrorPopupException;
+import com.gwngames.core.base.cfg.i18n.CoreTranslation;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.*;
 
@@ -88,7 +89,7 @@ public final class ModuleClassLoader extends ClassLoader {
             whereAmI = new File(src.toURI());
             if (whereAmI.isFile()) whereAmI = whereAmI.getParentFile();
         } catch (Exception e) {
-            throw new ErrorPopupException("Cannot determine executable location");
+            throw new ErrorPopupException(CoreTranslation.EXE_NOT_FOUND);
         }
 
         File binDir;
@@ -97,7 +98,7 @@ public final class ModuleClassLoader extends ClassLoader {
         } else if ("lib".equals(whereAmI.getName())) {
             binDir = new File(whereAmI.getParentFile(), "bin");
         } else {
-            throw new ErrorPopupException("Cannot locate bin directory (looked in " + whereAmI + ")");
+            throw new ErrorPopupException(CoreTranslation.BIN_NOT_FOUND, whereAmI.toString());
         }
         useBinDir(binDir);
     }
@@ -109,13 +110,13 @@ public final class ModuleClassLoader extends ClassLoader {
         try (JsonReader r = new JsonReader(new FileReader(new File(binDir, "config.json")))) {
             cfg = new Gson().fromJson(r, new TypeToken<Map<String,Object>>(){}.getType());
         } catch (Exception e) {
-            throw new ErrorPopupException("Cannot read config.json");
+            throw new ErrorPopupException(CoreTranslation.CONFIG_NOT_FOUND);
         }
 
         String gameType = (String) cfg.get("gameType");
         List<Map<String,Object>> projects = (List<Map<String,Object>>) cfg.get("projects");
         if (projects == null || projects.isEmpty())
-            throw new ErrorPopupException("No projects defined in config.json");
+            throw new ErrorPopupException(CoreTranslation.PROJECTS_NOT_FOUND);
 
         File root = binDir.getParentFile();
         for (Map<String,Object> p : projects) {
@@ -128,7 +129,7 @@ public final class ModuleClassLoader extends ClassLoader {
                 log.debug("loader '{}' (level {})", cl.getName(), p.get("level"));
                 classLoaders.add(new ProjectLoader(cl, (int) Double.parseDouble(String.valueOf(p.get("level")))));
             } catch (MalformedURLException e) {
-                throw new ErrorPopupException("Bad jar URL: " + jar);
+                throw new ErrorPopupException(CoreTranslation.JAR_NOT_FOUND, jar.toString());
             }
         }
         loaders.sort(Comparator.comparing(ClassLoader::getName)); // already ordered by filename/level

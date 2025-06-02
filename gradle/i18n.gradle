@@ -22,31 +22,34 @@ allprojects {
     maven { url 'https://jitpack.io' }
   }
 }
-
 /* =========================================================================
  * I18N  – scan enums annotated with @Translations and maintain CSV
  * ========================================================================= */
+
 
 import jdk.internal.org.objectweb.asm.AnnotationVisitor
 import jdk.internal.org.objectweb.asm.ClassReader
 import jdk.internal.org.objectweb.asm.ClassVisitor
 import jdk.internal.org.objectweb.asm.Opcodes
-import org.objectweb.asm.*
+
 import java.lang.reflect.Method
 
 /* --------------------------------------------------------------------- */
-/* Helper functions kept package-private inside the script               */
+/* Helper methods (unchanged)                                            */
 /* --------------------------------------------------------------------- */
 
 static boolean isTranslationsEnum(File classFile) {
   ClassReader cr = new ClassReader(classFile.bytes)
   boolean isEnum = (cr.access & Opcodes.ACC_ENUM) != 0
   if (!isEnum) return false
+
   boolean found = false
   cr.accept(new ClassVisitor(Opcodes.ASM9) {
     @Override
     AnnotationVisitor visitAnnotation(String desc, boolean visible) {
-      if (desc == 'Lcom/gwngames/core/api/build/Translations;') found = true
+      if (desc == 'Lcom/gwngames/core/api/build/Translations;') {
+        found = true
+      }
       return null
     }
   }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES)
@@ -54,22 +57,31 @@ static boolean isTranslationsEnum(File classFile) {
 }
 
 void ensureAlphabeticOrder(Class<?> enumCls, Project prj) {
-  /* ----- 1) locate java source ----------------------------------- */
   String relPath = enumCls.name.replace('.', '/') + '.java'
   File src = null
   prj.fileTree("${prj.projectDir}/src").matching { include "**/$relPath" }
     .visit { d -> if (!d.directory) src = d.file }
-  if (!src) { println "   🔸 source not found for ${enumCls.name}"; return }
 
-  /* ----- 2) parse block ------------------------------------------ */
+  if (!src) {
+    println "   🔸 source not found for ${enumCls.name}"
+    return
+  }
+
   List<String> lines = src.readLines('UTF-8')
   int decl  = lines.findIndexOf { it.contains("enum ${enumCls.simpleName}") }
   int brace = lines[(decl)..<lines.size()].findIndexOf { it.contains('{') } + decl
   int term  = lines[(brace)..<lines.size()].findIndexOf { it.contains(';') } + brace
-  if (decl < 0 || brace < 0 || term < 0) { println "      ⚠ could not parse enum"; return }
+  if (decl < 0 || brace < 0 || term < 0) {
+    println "      ⚠ could not parse enum"
+    return
+  }
 
+  // Collect only the constant lines between “{” and “;”
   List<String> constLines = lines[(brace + 1)..term]
-    .findAll { line -> !(line.trim().isEmpty() || line.trim().startsWith('//')) }
+    .findAll { String l ->
+      def t = l.trim()
+      !(t.isEmpty() || t.startsWith("//"))
+    }
 
   Map<String, String> entryMap = [:]
   constLines.each { String l ->
@@ -79,9 +91,12 @@ void ensureAlphabeticOrder(Class<?> enumCls, Project prj) {
   List<String> names   = entryMap.keySet().toList()
   List<String> sorted  = names.sort(false)
 
-  if (names == sorted) { println "      ✓ already alphabetical"; return }
+  if (names == sorted) {
+    println "      ✓ already alphabetical"
+    return
+  }
 
-  /* rebuild */
+  // Rebuild the enum-constant block in alphabetical order
   List<String> newBlock = sorted.collect { '\t' + entryMap[it] + ',' }
   newBlock[-1] = newBlock[-1].replaceFirst(/,$/, ';')
 
@@ -92,63 +107,78 @@ void ensureAlphabeticOrder(Class<?> enumCls, Project prj) {
 }
 
 /* --------------------------------------------------------------------- */
-/* Per-module task  updateTranslationsCsv                                */
+/* Per‐module “updateTranslationsCsv” task                               */
 /* --------------------------------------------------------------------- */
 subprojects { Project subproj ->
+  // only run in “included” modules
   if (!includedProjectNames.contains(subproj.name)) return
-
-  Map<String, Integer> projectLevels = rootProject.ext.projectLevels ?: [:]
 
   tasks.register('updateTranslationsCsv') {
     group       = 'i18n'
     description = 'Scan enums annotated with @Translations and update messages.csv'
-    dependsOn subproj.tasks.named('compileJava')
+    dependsOn   subproj.tasks.named('compileJava')
     mustRunAfter subproj.tasks.named('compileJava')
 
     doLast {
       println "🔍  ${subproj.path}: scanning for @Translations…"
 
-      /* ----- (1) collect class files to load --------------- */
+      // (1) Find all .class files that are enums annotated with @Translations
       List<Map> toLoad = []
       subproj.sourceSets.main.output.classesDirs.files.each { File dir ->
         if (!dir.exists()) return
         dir.eachFileRecurse { File f ->
-          if (f.name.endsWith('.class') && isTranslationsEnum(f))
+          if (f.name.endsWith('.class') && isTranslationsEnum(f)) {
             toLoad << [root: dir, file: f]
+          }
         }
       }
-      if (toLoad.empty) { println 'ℹ️  no @Translations enums found.'; return }
 
-      /* ----- (2) load with minimal class-loader ------------- */
+      if (toLoad.isEmpty()) {
+        println "ℹ️  no @Translations enums found."
+        return
+      }
+
+      // (2) Use a minimal ClassLoader to load each enum
       URL[] urls = subproj.sourceSets.main.output.classesDirs.files
         .collect { it.toURI().toURL() } as URL[]
       ClassLoader loader = new URLClassLoader(urls, (ClassLoader) null)
 
+      // Map<key, defaultCaption> for this module
       Map<String, String> moduleKeys = [:]
 
-      toLoad.each { Map m ->
-        String rel = m.file.path - m.root.path - File.separator
-        String className = rel.replace(File.separatorChar, '.' as char)
+      toLoad.each { Map entry ->
+        String rel = entry.file.path - entry.root.path - File.separator
+        String className = rel
+          .replace(File.separatorChar, '.' as char)
           .replaceAll(/\.class$/, '')
+
         Class<?> cls = loader.loadClass(className)
+
+        // (a) Auto‐sort the enum constants in source
         ensureAlphabeticOrder(cls, subproj)
+
+        // (b) Gather each enum constant’s key + defaultCaption
         cls.enumConstants.each { Object constant ->
-          Method getKeyMeth          = constant.class.getMethod('getKey')
-          Method getDefaultCaption   = constant.class.getMethod('getDefaultCaption')
-          String key       = getKeyMeth.invoke(constant) as String
-          String caption   = getDefaultCaption.invoke(constant) as String
-          String where     = "${subproj.path}:${cls.simpleName}"
-          String prev      = rootProject.translationKeysGlobal.putIfAbsent(key, where)
-          if (prev) throw new GradleException(
-            "Duplicate translation key '$key': declared in $where, already in $prev")
-          moduleKeys[key] = caption
+          Method getKeyMeth       = constant.class.getMethod('getKey')
+          Method getDefaultMeth   = constant.class.getMethod('getDefaultCaption')
+          String key        = getKeyMeth.invoke(constant) as String
+          String defaultCap = getDefaultMeth.invoke(constant) as String
+          String where      = "${subproj.path}:${cls.simpleName}"
+          String prev       = rootProject.translationKeysGlobal.putIfAbsent(key, where)
+          if (prev) {
+            throw new GradleException(
+              "Duplicate translation key '$key': declared in $where, already in $prev"
+            )
+          }
+          moduleKeys[key] = defaultCap
         }
       }
 
-      /* ----- (3) merge into messages.csv -------------------- */
+      // (3) Merge into messages.csv
       File csvFile = subproj.file('resources/translation/messages.csv')
       csvFile.parentFile.mkdirs()
 
+      // Read or initialize the header row
       List<String> header = ['key'] + supportedLocales
       Map<String, List<String>> rows = [:]
 
@@ -156,36 +186,67 @@ subprojects { Project subproj ->
         csvFile.readLines('UTF-8').withIndex().each { String line, int idx ->
           List<String> cols = line.split(',', -1) as List<String>
           if (idx == 0) {
+            // Incorporate any new supportedLocales into the existing header.
             header = (['key'] + ((cols - 'key') + supportedLocales)).unique()
           } else {
-            rows[cols[0]] = (cols + [''] * header.size()).take(header.size())
+            List<String> padded = (cols + [''] * header.size()).take(header.size())
+            rows[cols[0]] = padded
           }
         }
       }
 
-      moduleKeys.each { String k, String caption ->
-        if (!rows.containsKey(k)) {
-          List<String> blank = [''] * header.size()
-          blank[0] = k
-          int defCol = header.indexOf(supportedLocales[0])
-          if (defCol >= 0) blank[defCol] = caption
-          rows[k] = blank
+      //
+      // ─── FORCIBLY ENSURE “en_US” IS AT INDEX 1 ─────────────────────────────
+      //
+      // If “en_US” is not already in the header, insert it immediately after “key.”
+      //
+      int enUsIndex = header.indexOf(supportedLocales[0])
+      if (enUsIndex != 1) {
+        // If it was present somewhere else, remove it first
+        if (enUsIndex >= 0) {
+          header.remove(enUsIndex)
+        }
+        // Then insert “en_US” at index 1
+        header.add(1, supportedLocales[0])
+      }
+      // Now definitive location of “en_US” is always 1
+      int defaultCol = 1
+
+      // (4) For each discovered key → fill in or create row
+      moduleKeys.each { String key, String defaultCap ->
+        if (rows.containsKey(key)) {
+          // Existing row: if its “en_US” cell is blank, fill it
+          List<String> existingRow = rows[key]
+          if (existingRow[defaultCol]?.trim() == '') {
+            existingRow[defaultCol] = defaultCap
+          }
+        } else {
+          // Brand‐new key: create a blank row, put key in col0, defaultCap in “en_US”
+          List<String> newRow = [''] * header.size()
+          newRow[0] = key
+          newRow[defaultCol] = defaultCap
+          rows[key] = newRow
         }
       }
 
+      // (5) Write back to messages.csv in sorted‐by‐key order
       csvFile.withWriter('UTF-8') { writer ->
         writer.println header.join(',')
-        rows.keySet().sort().each { writer.println rows[it].join(',') }
+        rows.keySet().sort().each { String k ->
+          writer.println rows[k].join(',')
+        }
       }
-      println "✅  ${csvFile} updated with ${moduleKeys.size()} keys"
+      println "✅  ${csvFile} updated → ${moduleKeys.size()} keys scanned, “en_US” column populated where needed."
     }
   }
 
-  /* hook it before resources are packed ---------------------------- */
-  subproj.tasks.named('processResources') { dependsOn 'updateTranslationsCsv' }
+  // Hook it into processResources
+  subproj.tasks.named('processResources') {
+    dependsOn 'updateTranslationsCsv'
+  }
 }
 
-/* umbrella task  updateAllTranslations on the root project ----------- */
+/* ─── umbrella task on root to update every module ──────────────────── */
 tasks.register('updateAllTranslations') {
   group       = 'i18n'
   description = 'Update messages.csv in every module'

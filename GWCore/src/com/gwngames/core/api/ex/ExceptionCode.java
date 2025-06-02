@@ -2,6 +2,11 @@ package com.gwngames.core.api.ex;
 
 import static com.gwngames.core.api.ex.ExceptionLevel.CRITICAL;
 
+/**
+ * Exception codes are bundles that categorize different exceptions<p>
+ * This way, we can keep track on reported error and sort them by priority
+ * and components used.
+ * */
 public enum ExceptionCode {
     SYSTEM_FAULT(CRITICAL, 0),
     INCONSISTENT_STATE(CRITICAL, 10),

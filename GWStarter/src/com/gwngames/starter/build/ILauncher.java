@@ -8,7 +8,6 @@ import com.gwngames.core.data.ModuleNames;
 
 @Init(component = ComponentNames.LAUNCHER, module = ModuleNames.INTERFACE)
 public interface ILauncher extends IBaseComp {
-    // TODO: method to get correct game launcher
     Application createApplication();
     String getVersion();
 }

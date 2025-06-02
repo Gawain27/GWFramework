@@ -2,6 +2,9 @@ package com.gwngames.core.base.cfg.i18n;
 
 import com.gwngames.core.api.build.Translations;
 
+/**
+ * Here we put translations easily reused across levels multiple times
+ * */
 @Translations
 public enum BasicTranslation {
 	ERROR("Error"),

@@ -14,32 +14,32 @@ public class TranslationServiceTest extends BaseTest {
         Locale de = Locale.GERMAN;
 
         String key = "ERROR";  // Adjust this to an actual key we have
-
+        TranslationService service = new TranslationService();
         log.info("Check: known key should return English value");
-        String enResult = TranslationService.tr(key, en);
+        String enResult = service.tr(key, en);
         Assertions.assertNotNull(enResult, "English translation should not be null");
         Assertions.assertNotEquals(key, enResult, "English translation should differ from key");
 
         log.info("Check: known key should return German value");
-        String deResult = TranslationService.tr(key, de);
+        String deResult = service.tr(key, de);
         Assertions.assertNotNull(deResult, "German translation should not be null");
         Assertions.assertNotEquals(key, deResult, "German translation should differ from key");
 
         log.info("Check: fallback returns English if locale missing");
         Locale fake = Locale.forLanguageTag("zz-ZZ");
-        String fallback = TranslationService.tr(key, fake);
+        String fallback = service.tr(key, fake);
         Assertions.assertEquals(enResult, fallback, "Should fallback to English for unknown locale");
 
         log.info("Check: unknown key causes crash");
         try {
-            TranslationService.tr("NON_EXISTENT_KEY", en);
+            service.tr("NON_EXISTENT_KEY", en);
         } catch (IllegalStateException e){
             // ignored, test passed
         }
 
         log.info("Check: reload doesn't break things");
         TranslationService.reload();
-        String afterReload = TranslationService.tr(key, de);
+        String afterReload = service.tr(key, de);
         Assertions.assertEquals(deResult, afterReload, "Translation after reload should match previous result");
     }
 }

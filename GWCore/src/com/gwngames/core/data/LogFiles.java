@@ -6,4 +6,5 @@ public class LogFiles {
     public static final String CONFIG = "configuration.log";
     public static final String ERROR = "error.log";
     public static final String TEST = "test.log";
+    public static final String EVENT = "event.log";
 }

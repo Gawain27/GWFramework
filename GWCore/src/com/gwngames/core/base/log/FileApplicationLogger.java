@@ -8,7 +8,6 @@ import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
 
-// TODO: set gdx app
 public class FileApplicationLogger implements ApplicationLogger {
     private static final int MAX_LINES = 10_000; // Maximum lines per file
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");

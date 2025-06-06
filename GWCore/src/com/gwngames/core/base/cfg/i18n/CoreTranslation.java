@@ -10,6 +10,7 @@ import com.gwngames.core.api.build.Translations;
 public enum CoreTranslation implements ITranslatable {
 	BIN_NOT_FOUND("Cannot locate bin directory (looked in $1)"),
 	CONFIG_NOT_FOUND("Cannot read config.json"),
+	EVENT_ERROR("Could not execute event: $1"),
 	EXE_NOT_FOUND("Cannot determine executable location"),
 	INCONSISTENT_ERROR("System was found in an inconsistent state: $1"),
 	JAR_NOT_FOUND("Bad jar URL: $1"),

@@ -10,7 +10,8 @@ import static com.gwngames.core.api.ex.ExceptionLevel.CRITICAL;
 public enum ExceptionCode {
     SYSTEM_FAULT(CRITICAL, 0),
     INCONSISTENT_STATE(CRITICAL, 10),
-    STARTUP(CRITICAL, 30);
+    STARTUP(CRITICAL, 30),
+    QUEUE(CRITICAL, 100);
 
     final int problemLevel;
     final int exceptionId;

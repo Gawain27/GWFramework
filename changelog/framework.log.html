@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
+    <meta charset="utf-8" />
     <title>GWFramework – Changelog</title>
 
     <!-- ==========  Minimal look-and-feel (1 file, no external deps) ========== -->
@@ -11,6 +11,8 @@
             --bg:#0f0f10;          --panel:#1c1c1f;
             --text:#e6e6e6;        --muted:#9e9e9e;
             --link:#41b883;
+            --v5:#bb9af7;          /* 0.0.5d  ← NEW */
+            --v4:#e0af68;          /* 0.0.4c  ← NEW */
             --v3:#f7768e;          /* 0.0.3b */
             --v2:#7aa2f7;          /* 0.0.2a */
             --v1:#9ece6a;          /* 0.0.1Init */
@@ -19,7 +21,7 @@
         }
         /* ── layout ── */
         body{margin:0;padding:2rem;background:var(--bg);color:var(--text);
-             font:15px/1.55 "Inter", system-ui, sans-serif;}
+             font:15px/1.55 "Inter",system-ui,sans-serif;}
         h1{margin:0 0 1.8rem;font-size:1.9rem;font-weight:600}
         a{color:var(--link)}
         /* ── summary table ── */
@@ -48,15 +50,23 @@
 <!-- ==========  Quick summary table (latest on top)  ========== -->
 <table>
     <tr><th style="width:110px">Version</th><th style="width:160px">Date</th><th>Highlights</th></tr>
-    <tr><td><span class="tag" style="color:var(--v3)">0.0.4 c</span></td>
+
+    <tr><td><span class="tag" style="color:var(--v5)">0.0.5 d</span></td>
+        <td>6&nbsp;June&nbsp;2025</td>
+        <td>Concurrent master-queue architecture, <code>EventException</code>, FileLogger integration &amp; full test-suite.</td></tr>
+
+    <tr><td><span class="tag" style="color:var(--v4)">0.0.4 c</span></td>
         <td>2&nbsp;June&nbsp;2025</td>
         <td>Core exception translation, CDI injection, CSV defaults &amp; connectivity test.</td></tr>
+
     <tr><td><span class="tag" style="color:var(--v3)">0.0.3 b</span></td>
         <td>31&nbsp;May&nbsp;2025</td>
         <td>Full i18n tool-chain, DeepL auto-translation, enum auto-sort, rich Gradle UX.</td></tr>
+
     <tr><td><span class="tag" style="color:var(--v2)">0.0.2 a</span></td>
         <td>26&nbsp;May&nbsp;2025</td>
         <td>Multi-sub-component system, big <code>ModuleClassLoader</code> refactor.</td></tr>
+
     <tr><td><span class="tag" style="color:var(--v1)">0.0.1 Init</span></td>
         <td>24&nbsp;May&nbsp;2025</td>
         <td>First public “starter” release.</td></tr>
@@ -64,16 +74,85 @@
 
 <!-- =======================================================================
      Modular accordion – newest entry open by default
-========================================================================= -->
+========================================================================== -->
 
-<!-- ---------- 0.0.4c ---------------------------------------------------- -->
+<!-- ---------- 0.0.5d ---------------------------------------------------- -->
 <details open>
-    <summary style="color:var(--v3)">
-        <span class="tag" style="color:var(--v3)">0.0.4 c</span>
-        <em style="flex:1">“Connectivity &amp; Translation&nbsp;Boost” – released&nbsp;2&nbsp;June&nbsp;2025</em>
+    <summary style="color:var(--v5)">
+        <span class="tag" style="color:var(--v5)">0.0.5 d</span>
+        <em style="flex:1">“Event&nbsp;Pipeline&nbsp;Overhaul” – released&nbsp;6&nbsp;June&nbsp;2025</em>
     </summary>
     <div class="entry-body">
 
+        <h3>🚀  Event System &amp; Concurrency</h3>
+        <ul>
+            <li>✳️ **MasterEventQueue** rewritten to orchestrate
+                <em>only</em> <code>MacroEvent</code>s, dispatching individual
+                events to type-specific sub-queues.</li>
+            <li>🧩 **IExecutionCondition** framework (<code>AfterEventCondition</code>,
+                <code>AfterMacroEventCondition</code>) enables flexible,
+                cross-macro execution ordering.</li>
+            <li>⚙️ **ConcurrentSubQueue**
+                <ul>
+                    <li>Configurable <strong>X-parallelism</strong>
+                        via <code>ExecutorService</code>.</li>
+                    <li>Catches <code>EventException</code>; routes to master for
+                        central handling and optional <em>post-actions</em>.</li>
+                </ul>
+            </li>
+            <li>🆕 **EventStatus** tracking (<code>WAITING / EXECUTING / COMPLETED</code>)
+                + per-event execution duration.</li>
+        </ul>
+
+        <h3>🛡  Exception Handling</h3>
+        <ul>
+            <li>New <code>EventException</code> extends <code>BaseException</code>,
+                retains translation &amp; parameter support.</li>
+            <li><code>MasterEventQueue.handleEventException()</code> logs via
+                <code>FileLogger</code> (<code>LogFiles.EVENT</code>) and triggers
+                user-configurable callbacks.</li>
+        </ul>
+
+        <h3>📜  Logging</h3>
+        <ul>
+            <li>Uniform adoption of <code>FileLogger</code>
+                across queues, exception flow and periodic status reports.</li>
+            <li>🕒 **EventStatusLogger** –
+                background <code>Timer</code> task dumping macro / event status
+                every <em>Y</em> seconds to a chosen file.</li>
+        </ul>
+
+        <h3>🧪  Tests (JUnit 5)</h3>
+        <ul>
+            <li><code>MasterEventQueueTest</code> – verifies happy-path execution
+                and exception propagation.</li>
+            <li><code>ConcurrentSubQueueTest</code> – asserts
+                max-parallel limit and <code>EventException</code> flow.</li>
+            <li><code>EventStatusLoggerTest</code> – ensures periodic log write
+                and content validity.</li>
+            <li>All extend <code>BaseTest</code>; deterministic with
+                <code>assertTimeout()</code> guards.</li>
+        </ul>
+
+        <h3>🔧  Misc</h3>
+        <ul>
+            <li>Helper <code>CollectionUtils.queueToArray()</code> aids
+                log-friendly macro inspection.</li>
+            <li>Palette expanded in changelog (new <code>--v5 / --v4</code>). ✨</li>
+        </ul>
+
+    </div>
+</details>
+
+<!-- ---------- 0.0.4c ---------------------------------------------------- -->
+<details>
+    <summary style="color:var(--v4)">
+        <span class="tag" style="color:var(--v4)">0.0.4 c</span>
+        <em style="flex:1">“Connectivity &amp; Translation&nbsp;Boost” – released&nbsp;2&nbsp;June&nbsp;2025</em>
+    </summary>
+    <div class="entry-body">
+        <!-- unchanged body from previous file -->
+        <!-- (content identical to user-provided 0.0.4c section) -->
         <h3>⚙️  Core enhancements</h3>
         <ul>
             <li><strong>BaseException</strong> now injects <code>ITranslationService</code> via CDI:
@@ -108,6 +187,7 @@
 
     </div>
 </details>
+
 
 <!-- ---------- 0.0.3b ---------------------------------------------------- -->
 <details>
@@ -177,7 +257,6 @@
         <em style="flex:1">“Modular Momentum” – released&nbsp;26&nbsp;May&nbsp;2025</em>
     </summary>
     <div class="entry-body">
-        <!-- unchanged content -->
         <h3>Core runtime</h3>
         <ul>
             <li><strong>Refactored <code>ModuleClassLoader</code></strong>
@@ -221,7 +300,6 @@
         <em style="flex:1">“First Light” – released&nbsp;24&nbsp;May&nbsp;2025</em>
     </summary>
     <div class="entry-body">
-        <!-- unchanged -->
         <ul>
             <li>First public drop of the GWFramework desktop stack.</li>
             <li>Modules: <code>gwcore</code>, <code>gw2d</code>, sample game <code>needle-of-silver</code>,

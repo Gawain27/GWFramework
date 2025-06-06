@@ -13,5 +13,7 @@ public enum ComponentNames {
     //
     // THESE ARE MULTIPLE COMPONENTS
     //
+    MACRO_EVENT,
+    EVENT,
     STARTUP_CHECK;
 }

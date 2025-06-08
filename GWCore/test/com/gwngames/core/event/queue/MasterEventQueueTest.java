@@ -28,8 +28,8 @@ public final class MasterEventQueueTest extends BaseTest {
      */
     private static final class SimpleSubQueue extends ConcurrentSubQueue<SimpleEvent> {
         private final CountDownLatch latch;
-        SimpleSubQueue(int maxParallel, CountDownLatch latch) {
-            super(maxParallel);
+        SimpleSubQueue(int maxParallel, CountDownLatch latch, MasterEventQueue master) {
+            super(maxParallel, master);
             this.latch = latch;
         }
         @Override protected void processEvent(SimpleEvent event) {
@@ -43,7 +43,7 @@ public final class MasterEventQueueTest extends BaseTest {
      * {@link MasterEventQueue} – not here.
      */
     private static final class FaultySubQueue extends ConcurrentSubQueue<SimpleEvent> {
-        FaultySubQueue() { super(1); }
+        FaultySubQueue(MasterEventQueue master) { super(1, master); }
         @Override
         protected void processEvent(SimpleEvent event) throws EventException {
             throw new DummyEventException(DUMMY_TRANSLATABLE);
@@ -59,7 +59,7 @@ public final class MasterEventQueueTest extends BaseTest {
         CountDownLatch successLatch = new CountDownLatch(2);
 
         MasterEventQueue master = new MasterEventQueue();
-        SimpleSubQueue   okQueue = new SimpleSubQueue(2, successLatch);
+        SimpleSubQueue   okQueue = new SimpleSubQueue(2, successLatch, master);
         master.registerSubQueue(SimpleEvent.class, okQueue);
 
         MacroEvent macro = new MacroEvent("macro-1");
@@ -90,7 +90,7 @@ public final class MasterEventQueueTest extends BaseTest {
         CountDownLatch exceptionLatch = new CountDownLatch(1);
 
         MasterEventQueue faultyMaster = new MasterEventQueue();
-        faultyMaster.registerSubQueue(SimpleEvent.class, new FaultySubQueue());
+        faultyMaster.registerSubQueue(SimpleEvent.class, new FaultySubQueue(faultyMaster));
 
         // Notify the test when the exception bubbles up.
         faultyMaster.setPostExceptionAction((evt, ex) -> exceptionLatch.countDown());

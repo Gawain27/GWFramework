@@ -32,8 +32,8 @@ public final class ConcurrentSubQueueTest extends BaseTest {
         private final AtomicInteger  running     = new AtomicInteger(0);
         private final AtomicInteger  peakRunning = new AtomicInteger(0);
 
-        CountingSubQueue(int maxParallel, CountDownLatch doneLatch) {
-            super(maxParallel);
+        CountingSubQueue(int maxParallel, CountDownLatch doneLatch, MasterEventQueue master) {
+            super(maxParallel, master);
             this.doneLatch = doneLatch;
         }
         @Override protected void processEvent(SimpleEvent evt) {
@@ -48,7 +48,7 @@ public final class ConcurrentSubQueueTest extends BaseTest {
 
     /** Sub-queue that always throws an {@link EventException}. */
     private static final class FailingSubQueue extends ConcurrentSubQueue<SimpleEvent> {
-        FailingSubQueue() { super(1); }
+        FailingSubQueue(MasterEventQueue master) { super(1, master); }
         @Override protected void processEvent(SimpleEvent evt) throws EventException {
             throw new DummyEventException(DUMMY);
         }
@@ -80,9 +80,10 @@ public final class ConcurrentSubQueueTest extends BaseTest {
         final int TOTAL_EVENTS = 6;
 
         CountDownLatch done = new CountDownLatch(TOTAL_EVENTS);
-        CountingSubQueue subQueue = new CountingSubQueue(MAX_PARALLEL, done);
-
         MasterEventQueue master = new MasterEventQueue();
+
+        CountingSubQueue subQueue = new CountingSubQueue(MAX_PARALLEL, done, master);
+
         master.registerSubQueue(SimpleEvent.class, subQueue);
 
         MacroEvent macro = new MacroEvent("macro-ok");
@@ -110,7 +111,7 @@ public final class ConcurrentSubQueueTest extends BaseTest {
         CountDownLatch caught = new CountDownLatch(1);
 
         CapturingMaster master = new CapturingMaster(caught);
-        master.registerSubQueue(SimpleEvent.class, new FailingSubQueue());
+        master.registerSubQueue(SimpleEvent.class, new FailingSubQueue(master));
 
         MacroEvent macro = new MacroEvent("macro-fail");
         macro.addEvent(new SimpleEvent());

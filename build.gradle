@@ -59,8 +59,8 @@ tasks.register('delivery') {
 }
 
 tasks.register('clean', Delete) {
-  delete layout.buildDirectory
   dependsOn cleanTasks
+  delete layout.buildDirectory
 }
 
 println '✅  root build.gradle loaded – high-level tasks configured'

@@ -10,4 +10,6 @@ import com.gwngames.core.event.base.MacroEvent;
 public interface IEvent extends IBaseComp {
     MacroEvent getMacroEvent();
     void setMacroEvent(MacroEvent macroEvent);
+    Iterable<IExecutionCondition> getConditions();
+    void addCondition(IExecutionCondition c);
 }

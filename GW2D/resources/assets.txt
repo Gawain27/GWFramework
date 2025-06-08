@@ -1,3 +1,4 @@
+assets.txt
 koalio-single.png
 koalio.png
 level1.tmx

@@ -91,7 +91,7 @@ void ensureAlphabeticOrder(Class<?> enumCls, Project prj) {
   List<String> sorted  = names.sort(false)
 
   if (names == sorted) {
-    println "      ✓ already alphabetical"
+    println "      ✓ already alphabetical - " + enumCls.getSimpleName()
     return
   }
 

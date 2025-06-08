@@ -42,4 +42,45 @@ subprojects { Project subproj ->
       archiveFileName.set("${subproj.name}-${p.getProperty('buildVersion')}.jar")
     }
   }
+
+  /* ------------------------------------------------------------------ */
+  /*  Generate assets.txt with a flat list of every resource file       */
+  /* ------------------------------------------------------------------ */
+  tasks.register('generateAssetsTxt') { Task t ->
+    group       = 'build'
+    description = 'List all files under resources into assets.txt'
+
+    // --- inputs & outputs for incremental builds -------------------
+    inputs.files(sourceSets.main.resources)
+    outputs.file("${projectDir}/resources/assets.txt")
+
+    // --- work -------------------------------------------------------
+    doLast {
+      // Pick the first existing resource root (handles multi‐srcDir setups)
+      File resRoot = sourceSets.main.resources.srcDirs.find { it.exists() } as File
+      if (resRoot == null) {
+        logger.lifecycle("No resources for ${project.path}, skipping assets.txt")
+        return
+      }
+
+      File outFile = new File(resRoot, 'assets.txt')
+      // Collect all regular files (skip directories) and sort for reproducibility
+      def relPaths = fileTree(resRoot) {
+        include '**/*.*'                       // take every file with an extension
+      }.files.collect { f ->
+        // Normalise to forward slashes so paths look the same on Windows & *nix
+        resRoot.toPath().relativize(f.toPath())
+          .toString()
+          .replace('\\', '/')
+      }.sort()
+
+      outFile.text = relPaths.join('\n') + '\n'  // final \n → POSIX-friendly
+      logger.lifecycle("Wrote ${relPaths.size()} entries to ${outFile}")
+    }
+  }
+
+  // Ensure it runs early enough to be copied by processResources
+  tasks.named('processResources').configure {
+    dependsOn tasks.named('generateAssetsTxt')
+  }
 }

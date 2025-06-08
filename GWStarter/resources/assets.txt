@@ -1,3 +1,4 @@
+assets.txt
 icons/logo.icns
 icons/logo.ico
 icons/logo.png

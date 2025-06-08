@@ -11,8 +11,9 @@
             --bg:#0f0f10;          --panel:#1c1c1f;
             --text:#e6e6e6;        --muted:#9e9e9e;
             --link:#41b883;
-            --v5:#bb9af7;          /* 0.0.5d  ← NEW */
-            --v4:#e0af68;          /* 0.0.4c  ← NEW */
+            --v6:#2ac3de;          /* 0.0.6e  ← NEW */
+            --v5:#bb9af7;          /* 0.0.5d */
+            --v4:#e0af68;          /* 0.0.4c */
             --v3:#f7768e;          /* 0.0.3b */
             --v2:#7aa2f7;          /* 0.0.2a */
             --v1:#9ece6a;          /* 0.0.1Init */
@@ -51,6 +52,10 @@
 <table>
     <tr><th style="width:110px">Version</th><th style="width:160px">Date</th><th>Highlights</th></tr>
 
+    <tr><td><span class="tag" style="color:var(--v6)">0.0.6 e</span></td>
+        <td>8&nbsp;June&nbsp;2025</td>
+        <td>Trigger system, per-event &amp; global conditions, new tests.</td></tr>
+
     <tr><td><span class="tag" style="color:var(--v5)">0.0.5 d</span></td>
         <td>6&nbsp;June&nbsp;2025</td>
         <td>Concurrent master-queue architecture, <code>EventException</code>, FileLogger integration &amp; full test-suite.</td></tr>
@@ -76,8 +81,59 @@
      Modular accordion – newest entry open by default
 ========================================================================== -->
 
-<!-- ---------- 0.0.5d ---------------------------------------------------- -->
+<!-- ---------- 0.0.6e ---------------------------------------------------- -->
 <details open>
+    <summary style="color:var(--v6)">
+        <span class="tag" style="color:var(--v6)">0.0.6 e</span>
+        <em style="flex:1">“Triggers&nbsp;&amp;&nbsp;Conditions” – released&nbsp;8&nbsp;June&nbsp;2025</em>
+    </summary>
+    <div class="entry-body">
+
+        <h3>⚡️  Event Triggers &nbsp;<small>(new module)</small></h3>
+        <ul>
+            <li><strong>IEventTrigger</strong> SPI &amp; helper base-class
+                <code>AbstractEventTrigger</code>.</li>
+            <li>Built-in implementations
+                <code>TimeTrigger</code> (delay / interval) &amp;
+                <code>ManualTrigger</code> (fire-on-demand).</li>
+            <li><code>MasterEventQueue</code>
+                <ul>
+                    <li>Registry for triggers (<code>registerTrigger/enable/disable</code>).</li>
+                    <li>Polls triggers at start of every <code>process()</code>.</li>
+                    <li>New <code>enqueueEvent()</code> helper wraps single events into synthetic macros.</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h3>🧩  Condition Framework 2 · 0</h3>
+        <ul>
+            <li>Per-event <em>and</em> global <strong>IExecutionCondition</strong>s – unified evaluation order.</li>
+            <li><code>ConditionPolicy</code> and <code>ConditionResult</code> finite-state model.</li>
+            <li>Convenience bases <code>StrictCondition</code> + <code>LenientCondition</code>.</li>
+            <li>Automatic queue promotion: ready events jump to front; blocked ones stay until rules are TRUE.</li>
+        </ul>
+
+        <h3>🧪  Tests</h3>
+        <ul>
+            <li><code>ManualTriggerTest</code> &amp; <code>TimeTriggerTest</code> use
+                <code>CountDownLatch</code> to assert correct firing.</li>
+            <li>Updated <code>AfterEventConditionTest</code> &amp;
+                <code>AfterMacroEventConditionTest</code> for <code>WAIT</code>/<code>TRUE</code> semantics.</li>
+            <li>New <strong>BaseTest</strong> helpers: <code>setupApplication()</code>, LibGDX stubs.</li>
+        </ul>
+
+        <h3>🔧  Misc</h3>
+        <ul>
+            <li><code>AbstractEvent</code> gains <code>conditions</code> list +
+                <code>addCondition/getConditions</code> API.</li>
+            <li>Added color&nbsp;⧉ <code>--v6</code> for changelog styling. 🎨</li>
+        </ul>
+
+    </div>
+</details>
+
+<!-- ---------- 0.0.5d ---------------------------------------------------- -->
+<details>
     <summary style="color:var(--v5)">
         <span class="tag" style="color:var(--v5)">0.0.5 d</span>
         <em style="flex:1">“Event&nbsp;Pipeline&nbsp;Overhaul” – released&nbsp;6&nbsp;June&nbsp;2025</em>

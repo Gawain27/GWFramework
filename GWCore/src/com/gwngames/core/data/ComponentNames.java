@@ -8,6 +8,8 @@ public enum ComponentNames {
     SYSTEM,
     TRANSLATOR,
     LOCALE,
+    SUBTYPE_REGISTRY,
+    ASSET_MANAGER,
     GAME,
     LAUNCHER_MASTER,
 
@@ -16,5 +18,7 @@ public enum ComponentNames {
     //
     MACRO_EVENT,
     EVENT,
-    STARTUP_CHECK;
+    STARTUP_CHECK,
+    FILE_EXTENSION,
+    ASSET_SUBTYPE;
 }

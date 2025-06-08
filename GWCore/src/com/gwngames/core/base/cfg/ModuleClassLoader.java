@@ -364,52 +364,54 @@ public final class ModuleClassLoader extends ClassLoader {
         return out;
     }
 
-    /* ==================================================================== */
-    /*  Factory helpers                                                     */
-    /* ==================================================================== */
-
-    @SuppressWarnings("unchecked")
-    public <T extends IBaseComp> T tryCreate(ComponentNames comp, Object... args) {
-        try { return (T) createInstance(findClass(comp), args); }
+    /* -------------------------------------------------------------------- */
+    /*  SIMPLE COMPONENT (one impl only)                                    */
+    /* -------------------------------------------------------------------- */
+    public <T> T tryCreate(ComponentNames comp, Object... args) {
+        try { return firstInstanceOf(findClass(comp), args); }
         catch (ClassNotFoundException e) {
             log.error(e.getMessage());
             return null;
         }
     }
 
-    @SuppressWarnings("unchecked")
-    public <T extends IBaseComp> T tryCreate(ComponentNames comp, SubComponentNames sub, Object... args) {
+    /* -------------------------------------------------------------------- */
+    /*  SIMPLE COMPONENT + SUBCOMPONENT                                     */
+    /* -------------------------------------------------------------------- */
+    public <T> T tryCreate(ComponentNames comp, SubComponentNames sub, Object... args) {
         try {
-            T obj = (T) createInstance(findSubComponent(comp, sub), args);
-            log.debug("Created {} id={}", obj.getClass().getSimpleName(), obj.getMultId());
+            T obj = firstInstanceOf(findSubComponent(comp, sub), args);
+            if (obj instanceof IBaseComp bc)
+                log.debug("Created {} id={}", bc.getClass().getSimpleName(), bc.getMultId());
             return obj;
         } catch (ClassNotFoundException e) { return null; }
     }
 
-    @SuppressWarnings("unchecked")
-    public <T extends IBaseComp> List<T> tryCreateAll(ComponentNames comp, Object... args) {
+    /* -------------------------------------------------------------------- */
+    /*  ALL SUBCOMPONENTS (allowMultiple = true)                            */
+    /* -------------------------------------------------------------------- */
+    public <T> List<T> tryCreateAll(ComponentNames comp, Object... args) {
         try {
             List<Class<?>> clz = findSubComponents(comp);
-            List<T> out = new ArrayList<>(clz.size());
-            for (Class<?> c : clz) {
-                T obj = (T) createInstance(c, args);
-                log.debug("Created {} id={}", obj.getClass().getSimpleName(), obj.getMultId());
-                out.add(obj);
-            }
+            List<T> out = new ArrayList<>();
+            for (Class<?> c : clz) out.addAll(instancesOf(c, args));
             return out;
         } catch (ClassNotFoundException e) { return Collections.emptyList(); }
     }
 
-    @SuppressWarnings("unchecked")
+    /* -------------------------------------------------------------------- */
+    /*  PLATFORM-SPECIFIC LOOK-UP                                           */
+    /* -------------------------------------------------------------------- */
     public <T> T tryCreate(ComponentNames comp, PlatformNames platform, Object... args) {
         try {
             for (Class<?> c : findClasses(comp)) {
                 if (resolvedInit(c).platform() == platform)
-                    return (T) createInstance(c, args);
+                    return firstInstanceOf(c, args);
             }
         } catch (ClassNotFoundException ignored) { }
         throw new IllegalStateException("No "+comp+" for "+platform);
     }
+
 
     /* ==================================================================== */
     /*  Reflection convenience                                              */
@@ -431,6 +433,30 @@ public final class ModuleClassLoader extends ClassLoader {
             throw new IllegalStateException("Cannot instantiate "+clazz.getName(), e);
         }
     }
+
+    /* ==================================================================== */
+    /*  Enum helpers                                                        */
+    /* ==================================================================== */
+
+    /** Returns all enum constants or a singleton list with one normal instance. */
+    @SuppressWarnings("unchecked")
+    private <T> List<T> instancesOf(Class<?> c, Object... ctorArgs) {
+        if (c.isEnum()) {
+            return Arrays.stream(c.getEnumConstants())
+                .map(o -> (T) o)
+                .toList();
+        }
+        return List.of((T) createInstance(c, ctorArgs));
+    }
+
+    /** First constant of an enum – convenient for single-instance look-ups. */
+    @SuppressWarnings("unchecked")
+    private <T> T firstInstanceOf(Class<?> c, Object... ctorArgs) {
+        if (c.isEnum())
+            return (T) c.getEnumConstants()[0];
+        return (T) createInstance(c, ctorArgs);
+    }
+
 
     /* ==================================================================== */
     /*  Helper DTO                                                          */

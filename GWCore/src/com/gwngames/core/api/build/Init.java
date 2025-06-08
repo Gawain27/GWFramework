@@ -25,6 +25,7 @@ public @interface Init {
     PlatformNames platform() default PlatformNames.ALL;
     boolean allowMultiple() default false;
     boolean isPlatformDependent() default false;
+    boolean isEnum() default false;
     SubComponentNames subComp() default SubComponentNames.NONE;
 }
 

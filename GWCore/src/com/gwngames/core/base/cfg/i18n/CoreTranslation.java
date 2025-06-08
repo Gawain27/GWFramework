@@ -15,7 +15,7 @@ public enum CoreTranslation implements ITranslatable {
 	INCONSISTENT_ERROR("System was found in an inconsistent state: $1"),
 	JAR_NOT_FOUND("Bad jar URL: $1"),
 	PROJECTS_NOT_FOUND("No projects defined in config.json"),
-	STARTUP_ERROR("A system check has failed: $1");
+	STARTUP_ERROR("A system check has failed: $1. Reason: $2");
     final String defaultCaption;
     final String key;
     CoreTranslation(String defaultCaption){

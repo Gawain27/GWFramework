@@ -7,6 +7,7 @@ public enum ComponentNames {
     LAUNCHER,
     SYSTEM,
     TRANSLATOR,
+    LOCALE,
     GAME,
     LAUNCHER_MASTER,
 

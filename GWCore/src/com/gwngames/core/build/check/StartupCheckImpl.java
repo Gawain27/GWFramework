@@ -1,11 +1,17 @@
 package com.gwngames.core.build.check;
 
 import com.gwngames.core.api.base.check.IStartupCheck;
+import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.ex.BaseException;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.LogFiles;
+import com.gwngames.core.data.ModuleNames;
 
+/**
+ * Note: A check component should not be per-platform, it should make
+ * all the adequate checks for the operating system inside!
+ * */
 public abstract class StartupCheckImpl extends BaseComponent implements IStartupCheck {
     FileLogger log = FileLogger.get(LogFiles.SYSTEM);
     /** By using the required flag, you may skip or force the success of a check<p> Default true. */

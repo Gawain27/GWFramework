@@ -1,6 +1,7 @@
 package com.gwngames.core.event.queue;
 
 import com.gwngames.core.api.event.IEvent;
+import com.gwngames.core.api.event.IEventTrigger;
 import com.gwngames.core.api.event.IExecutionCondition;
 import com.gwngames.core.api.ex.EventException;
 import com.gwngames.core.base.log.FileLogger;
@@ -27,6 +28,7 @@ public class MasterEventQueue {
     private final Map<String, GlobalRule> globalRules = new ConcurrentHashMap<>();
     private final FileLogger logger = FileLogger.get(LogFiles.EVENT);
     private BiConsumer<IEvent, EventException> postExceptionAction;
+    private final Map<String, IEventTrigger> triggers = new ConcurrentHashMap<>();
 
     public synchronized void registerSubQueue(Class<? extends IEvent> cls, ConcurrentSubQueue<? extends AbstractEvent> queue) {
         subQueues.put(cls, queue);
@@ -34,6 +36,14 @@ public class MasterEventQueue {
 
     public synchronized void enqueueMacroEvent(MacroEvent macroEvent) {
         macroQueue.addLast(macroEvent);
+    }
+
+    /* ───────────── helper: enqueue *single* event ───────────── */
+    public synchronized void enqueueEvent(IEvent ev) {
+        /* wrap into a synthetic macro so the usual flow works */
+        MacroEvent wrap = new MacroEvent("single-" + UUID.randomUUID());
+        wrap.addEvent(ev);
+        enqueueMacroEvent(wrap);
     }
 
     public boolean canExecute(IEvent ev) {
@@ -57,6 +67,7 @@ public class MasterEventQueue {
     }
 
     private boolean fails(IExecutionCondition c, IEvent ev) {
+        //TODO: encapsulate this logic somewhere
         ConditionResult r = c.evaluate(ev, this);
         return (c.policy() == ConditionPolicy.WAIT_UNTIL_TRUE    && r != ConditionResult.TRUE)
             || (c.policy() == ConditionPolicy.EXECUTE_UNLESS_FALSE && r == ConditionResult.FALSE);
@@ -86,14 +97,20 @@ public class MasterEventQueue {
     }
 
     public void process(float delta) {
+
+        /*  let every trigger decide if it fires this frame */
+        triggers.values().forEach(t -> t.pollAndFire(delta));
+
+        /*  move macro-events’ inner events to their sub-queues */
         synchronized (this) {
             for (MacroEvent macro : macroQueue)
-                for (IEvent event : macro.getEvents())
-                    subQueues.get(event.getClass()).enqueue((AbstractEvent) event);
+                for (IEvent e : macro.getEvents())
+                    subQueues.get(e.getClass()).enqueue((AbstractEvent) e); // pass master
             macroQueue.clear();
         }
 
-        subQueues.values().forEach(q -> q.processAllEligible());
+        /* ask each sub-queue to execute what is now eligible */
+        subQueues.values().forEach(ConcurrentSubQueue::processAllEligible);
     }
 
     public FileLogger getLogger() {
@@ -137,4 +154,10 @@ public class MasterEventQueue {
         GlobalRule r = globalRules.get(id);
         return r == null ? 0 : r.getVetoCount().get();
     }
+
+    public void registerTrigger(IEventTrigger t) { triggers.put(t.getId(), t); }
+    public void removeTrigger  (String id)      { triggers.remove(id);        }
+    public void enableTrigger  (String id)      { triggers.get(id).setEnabled(true);  }
+    public void disableTrigger (String id)      { triggers.get(id).setEnabled(false); }
+
 }

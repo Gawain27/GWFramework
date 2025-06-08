@@ -1,5 +1,6 @@
 package com.gwngames.core.api.ex;
 
+import com.gwngames.core.api.base.ILocale;
 import com.gwngames.core.api.base.ITranslationService;
 import com.gwngames.core.api.build.ITranslatable;
 import com.gwngames.core.api.build.Inject;
@@ -26,7 +27,10 @@ public class BaseException extends Exception {
     protected final String[] params;
 
     @Inject
-    public ITranslationService translator;
+    protected ITranslationService translator;
+
+    @Inject
+    protected ILocale locale;
 
     public BaseException(ITranslatable errorKey, ExceptionCode code, String... params) {
         // Inject translation service before anything else
@@ -102,6 +106,9 @@ public class BaseException extends Exception {
         return message.toString();
     }
 
+    protected String getTranslatedText(ITranslatable translatable){
+        return translator.tr(translatable.getKey(), locale.getLocale());
+    }
     /**
      * Returns the translated (or default) message and then applies parameter formatting.
      */
@@ -115,7 +122,7 @@ public class BaseException extends Exception {
             errorMessage = errorKey.getDefaultCaption();
         } else {
             try {
-                errorMessage = translator.tr(errorKey.getKey(), Locale.getDefault());
+                errorMessage = translator.tr(errorKey.getKey(), locale.getLocale());
                 if (errorMessage == null) {
                     // translator.tr might return null if key is missing
                     FileLogger.get(LogFiles.ERROR)

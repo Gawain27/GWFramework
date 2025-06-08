@@ -1,5 +1,7 @@
 package com.gwngames.core.api.build;
 
+import com.gwngames.core.data.SubComponentNames;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -16,4 +18,5 @@ import java.lang.annotation.Target;
 @Target(ElementType.FIELD)
 public @interface Inject {
     boolean createNew() default false;
+    SubComponentNames subComp() default SubComponentNames.NONE;
 }

@@ -26,7 +26,7 @@ public class CoreConfigCheck extends StartupCheckImpl{
     @Override
     protected boolean executeCheck() throws BaseException {
         if (config == null)
-            throw new StartupException(this.getClass().getSimpleName());
+            throw new StartupException(this.getClass().getSimpleName(), CheckTranslations.CONFIG_NOT_FOUND);
         return true;
     }
 }

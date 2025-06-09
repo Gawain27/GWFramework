@@ -1,6 +1,9 @@
 package com.gwngames.core.i18n;
 
+import com.gwngames.core.api.base.ITranslationService;
+import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.BaseTest;
+import com.gwngames.core.base.cfg.i18n.BasicTranslation;
 import com.gwngames.core.base.cfg.i18n.TranslationService;
 import org.junit.jupiter.api.Assertions;
 
@@ -10,11 +13,14 @@ public class TranslationServiceTest extends BaseTest {
 
     @Override
     protected void runTest() {
+        setupApplication();
+
         Locale en = Locale.US;
         Locale de = Locale.GERMAN;
 
-        String key = "ERROR";  // Adjust this to an actual key we have
-        TranslationService service = new TranslationService();
+        String key = BasicTranslation.ERROR.getKey();  // Adjust this to an actual key we have
+        ITranslationService service = BaseComponent.getInstance(ITranslationService.class);
+        service.reload();
         log.info("Check: known key should return English value");
         String enResult = service.tr(key, en);
         Assertions.assertNotNull(enResult, "English translation should not be null");
@@ -38,7 +44,7 @@ public class TranslationServiceTest extends BaseTest {
         }
 
         log.info("Check: reload doesn't break things");
-        TranslationService.reload();
+        service.reload();
         String afterReload = service.tr(key, de);
         Assertions.assertEquals(deResult, afterReload, "Translation after reload should match previous result");
     }

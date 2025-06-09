@@ -1,6 +1,7 @@
 package com.gwngames.core.base;
 
 import com.badlogic.gdx.*;
+import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.utils.Clipboard;
 import com.google.gson.Gson;
@@ -25,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Base class for all GWFramework tests.
@@ -179,6 +181,21 @@ public abstract class BaseTest {
         }
 
         public boolean isLocalStorageAvailable()   { return true; }
+    }
+
+    /* ───────────── in-memory AssetManager stub ───────────── */
+    public static final class StubAssetManager extends AssetManager {
+        private final ConcurrentHashMap<String,Object> store = new ConcurrentHashMap<>();
+        @Override public void load(String n, Class t){ store.putIfAbsent(n,new Object()); }
+        @Override public boolean isLoaded(String n){ return store.containsKey(n); }
+        @SuppressWarnings("unchecked") @Override
+        public <T> T get(String n, Class<T> t){ return (T) store.get(n); }
+        @SuppressWarnings("unchecked")
+        @Override
+        public <T> T finishLoadingAsset(String fileName) { return (T) store.get(fileName); }
+        @Override public void unload(String n){ store.remove(n); }
+        @Override public boolean update(int ms){ return true; }
+        @Override public int getReferenceCount(String n){ return store.containsKey(n)?1:0; }
     }
 
     /** Dummy Event */

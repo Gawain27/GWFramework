@@ -9,4 +9,6 @@ import java.util.Locale;
 @Init(module = ModuleNames.INTERFACE, component = ComponentNames.TRANSLATOR)
 public interface ITranslationService extends IBaseComp{
     String tr(String key, Locale locale);
+
+    void reload();
 }

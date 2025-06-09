@@ -18,5 +18,6 @@ import java.lang.annotation.Target;
 @Target(ElementType.FIELD)
 public @interface Inject {
     boolean createNew() default false;
+    boolean immortal() default false;
     SubComponentNames subComp() default SubComponentNames.NONE;
 }

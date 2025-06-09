@@ -56,7 +56,56 @@ public final class CSVTranslationLoader {
                 throw new RuntimeException(e);
             }
         }
+
+        // ── FALLBACK: classpath lookup (e.g. for tests or single‐jar setups) ──
+        if (bundle.isEmpty()) {
+            try (InputStream is = Thread.currentThread()
+                .getContextClassLoader()
+                .getResourceAsStream(CSV_PATH)) {
+                if (is != null) {
+                    log.debug("Loading translations from classpath: {}", CSV_PATH);
+                    loadFromStream(is, bundle);
+                } else {
+                    log.error("No translations found on classpath at {}", CSV_PATH);
+                }
+            } catch (IOException | CsvException e) {
+                log.error("Failed to load translations from classpath", e);
+                throw new RuntimeException(e);
+            }
+        }
+
         log.debug("Translations Loaded: {}", bundle);
         return bundle;
+    }
+
+    private static void loadFromStream(InputStream is,
+                                       Map<Locale, Map<String, String>> bundle)
+        throws IOException, CsvException {
+        try (CSVReader reader = new CSVReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+            List<String[]> rows = reader.readAll();
+            if (rows.isEmpty()) return;
+
+            String[] header = rows.getFirst();
+            Map<Integer, Locale> colLocales = new HashMap<>();
+            for (int col = 1; col < header.length; col++) {
+                colLocales.put(col,
+                    Locale.forLanguageTag(header[col].replace('_','-')));
+            }
+
+            for (int i = 1; i < rows.size(); i++) {
+                String[] row = rows.get(i);
+                if (row.length == 0 || row[0].isBlank()) continue;
+                String key = row[0].trim();
+                for (int col = 1; col < row.length; col++) {
+                    Locale loc = colLocales.get(col);
+                    if (loc == null) continue;
+                    String val = row[col];
+                    if (val == null || val.isBlank()) continue;
+                    bundle
+                        .computeIfAbsent(loc, __ -> new HashMap<>())
+                        .putIfAbsent(key, val);
+                }
+            }
+        }
     }
 }

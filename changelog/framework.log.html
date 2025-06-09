@@ -11,7 +11,8 @@
             --bg:#0f0f10;          --panel:#1c1c1f;
             --text:#e6e6e6;        --muted:#9e9e9e;
             --link:#41b883;
-            --v6:#2ac3de;          /* 0.0.6e  ← NEW */
+            --v7:#f5c2e7;          /* 0.0.7f */
+            --v6:#2ac3de;          /* 0.0.6e */
             --v5:#bb9af7;          /* 0.0.5d */
             --v4:#e0af68;          /* 0.0.4c */
             --v3:#f7768e;          /* 0.0.3b */
@@ -52,6 +53,17 @@
 <table>
     <tr><th style="width:110px">Version</th><th style="width:160px">Date</th><th>Highlights</th></tr>
 
+    <tr><td><span class="tag" style="color:var(--v7)">0.0.7 f</span></td>
+        <td>9&nbsp;June&nbsp;2025</td>
+        <td>
+              LazyProxy idle-time eviction & immortal flag;
+              ModularAssetManager lazy load & auto-eviction;
+              BaseComponent lazy @Inject with enum & subComp support;
+              AssetSubTypeRegistry multi-mapping & explicit lookups;
+              CSVTranslationLoader classpath fallback;
+              comprehensive tests added.
+            </td></tr>
+
     <tr><td><span class="tag" style="color:var(--v6)">0.0.6 e</span></td>
         <td>8&nbsp;June&nbsp;2025</td>
         <td>Trigger system, per-event &amp; global conditions, new tests.</td></tr>
@@ -81,8 +93,55 @@
      Modular accordion – newest entry open by default
 ========================================================================== -->
 
-<!-- ---------- 0.0.6e ---------------------------------------------------- -->
+<!-- ---------- 0.0.7f ---------------------------------------------------- -->
 <details open>
+    <summary style="color:var(--v7)">
+        <span class="tag" style="color:var(--v7)">0.0.7 f</span>
+        <em style="flex:1">“Framework&nbsp;Supercharged” – released&nbsp;9&nbsp;June&nbsp;2025</em>
+    </summary>
+    <div class="entry-body">
+
+        <h3>⚡️  LazyProxy Enhancements</h3>
+        <ul>
+            <li>Idle-time eviction based on last-use timestamp.</li>
+            <li>Optional <code>immortal</code> flag to disable eviction.</li>
+        </ul>
+
+        <h3>🧩  ModularAssetManager Improvements</h3>
+        <ul>
+            <li>Lazy scheduling: assets load on first {@code get()}.</li>
+            <li>Time-cached eviction: automatically unload unused assets.</li>
+        </ul>
+
+        <h3>🧱  BaseComponent &amp; @Inject Upgrades</h3>
+        <ul>
+            <li>Enum-aware component factory: loads all enum constants.</li>
+            <li>Lazy injection via <code>LazyProxy</code> with sub-component support.</li>
+            <li><code>@Inject(immortal=true)</code> and <code>@Inject(subComp=…)</code> now supported.</li>
+        </ul>
+
+        <h3>✨  AssetSubTypeRegistry Multi-Mapping</h3>
+        <ul>
+            <li>Supports multiple sub-types per extension.</li>
+            <li>New look-ups: default, explicit by ID, and <code>allByExtension()</code>.</li>
+        </ul>
+
+        <h3>🌐 CSVTranslationLoader Fallback</h3>
+        <ul>
+            <li>Now merges module CSVs <em>and</em> falls back to classpath <code>translation/messages.csv</code>.</li>
+        </ul>
+
+        <h3>🧪  New &amp; Updated Tests</h3>
+        <ul>
+            <li><code>LazyProxyTest</code>, <code>ModularAssetManagerTest</code>,
+                <code>AssetSubTypeRegistryTest</code>, <code>TranslationServiceTest</code>.</li>
+        </ul>
+
+    </div>
+</details>
+
+<!-- ---------- 0.0.6e ---------------------------------------------------- -->
+<details>
     <summary style="color:var(--v6)">
         <span class="tag" style="color:var(--v6)">0.0.6 e</span>
         <em style="flex:1">“Triggers&nbsp;&amp;&nbsp;Conditions” – released&nbsp;8&nbsp;June&nbsp;2025</em>

@@ -30,8 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * </ul>
  */
 @Init(module = ModuleNames.CORE)
-public final class ModularAssetManager extends BaseComponent
-    implements IAssetManager, Disposable {
+public final class ModularAssetManager extends BaseComponent implements IAssetManager, Disposable {
 
     // ───────────────────────── configuration ──────────────────────────
     /** Milliseconds an asset may remain unused before it is evicted. */
@@ -114,9 +113,12 @@ public final class ModularAssetManager extends BaseComponent
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(in))) {
                     br.lines()
                         .filter(s -> !s.isBlank())
-                        .forEach(path -> discovered.put(
-                            path,
-                            reg.byExtension(extensionOf(path))));
+                        .forEach(path -> {
+                            assert reg != null;
+                            discovered.put(
+                                path,
+                                reg.byExtension(extensionOf(path)));
+                        });
                 }
 
             } catch (IOException e) {

@@ -29,13 +29,13 @@ public final class TranslationService extends BaseComponent implements ITranslat
             if (def != null) value = def.get(key);
         }
         if (StringUtils.isEmpty(value))
-            throw new IllegalStateException("No valid text found: " + key);
+            throw new IllegalStateException("No valid text found: " + key  + " - locale: " + locale.toString());
         log.debug("Lookup: {} - {} -> {}", key, locale, value);
         return value;
     }
 
     /** Hot‑reload support, e.g. JRebel or dev mode */
-    public static void reload() {
+    public void reload() {
         translations = CSVTranslationLoader.load();
     }
 

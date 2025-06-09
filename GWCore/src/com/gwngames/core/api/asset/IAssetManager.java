@@ -9,4 +9,5 @@ import com.gwngames.core.data.ModuleNames;
 public interface IAssetManager extends IBaseComp {
     <T> T get(String path, Class<T> as);
     IAssetSubType subtypeOf(String path);
+    boolean update(float delta);
 }

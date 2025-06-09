@@ -1,0 +1,70 @@
+package com.gwngames.core.asset;
+
+import com.gwngames.core.api.asset.AssetCategory;
+import com.gwngames.core.api.asset.IAssetSubType;
+import com.gwngames.core.api.asset.IAssetSubTypeRegistry;
+import com.gwngames.core.api.asset.IFileExtension;
+import com.gwngames.core.api.base.ILocale;
+import com.gwngames.core.api.build.Init;
+import com.gwngames.core.base.BaseComponent;
+import com.gwngames.core.base.BaseTest;
+import com.gwngames.core.data.ComponentNames;
+import com.gwngames.core.data.ModuleNames;
+import com.gwngames.core.data.SubComponentNames;
+import org.junit.jupiter.api.Assertions;
+
+import java.util.List;
+import java.util.Locale;
+
+/** Unit-test for {@link AssetSubTypeRegistry}. */
+public final class AssetSubTypeRegistryTest extends BaseTest {
+
+    /* ──────────────────  dummy Locale component for DI  ───────────── */
+
+    @Init(module = ModuleNames.CORE, component = ComponentNames.LOCALE, subComp   = SubComponentNames.NONE)
+    public static final class TestLocale extends BaseComponent implements ILocale {
+        @Override public Locale getLocale() { return Locale.ENGLISH; }
+    }
+
+    /* ──────────────────  custom sub-type for dynamic registration  ── */
+
+    private static final class XyzExt implements IFileExtension {
+        @Override public String ext() { return "xyz"; }
+    }
+
+    private static final class XyzSubType implements IAssetSubType {
+        @Override public String        id()            { return "xyz-data"; }
+        @Override public AssetCategory category()      { return AssetCategory.MISC; }
+        @Override public Class<?>      libGdxClass()   { return null; }
+        @Override public List<IFileExtension> extensions() {
+            return List.of(new XyzExt());
+        }
+    }
+
+    /* ──────────────────  test logic  ──────────────────────────────── */
+    @Override protected void runTest() throws Exception {
+
+        /* instance with proper DI (TestLocale injected) */
+        IAssetSubTypeRegistry reg =
+            BaseComponent.getInstance(IAssetSubTypeRegistry.class);
+
+        /* built-ins --------------------------------------------------- */
+        Assertions.assertEquals(
+            BuiltInSubTypes.TEXTURE,
+            reg.byExtension("png"));                        // default = first
+
+        Assertions.assertEquals(
+            BuiltInSubTypes.REGION,
+            reg.byExtension("png", "region"));              // explicit
+
+        Assertions.assertTrue(
+            reg.allByExtension("png").contains(BuiltInSubTypes.REGION));
+
+        /* register custom --------------------------------------------- */
+        IAssetSubType xyz = new XyzSubType();
+        reg.register(xyz);
+
+        Assertions.assertEquals(
+            xyz, reg.byExtension("xyz"), "dynamic registration failed");
+    }
+}

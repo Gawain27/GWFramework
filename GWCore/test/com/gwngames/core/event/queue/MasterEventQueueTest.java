@@ -13,6 +13,7 @@ import java.util.concurrent.CountDownLatch;
 /**
  * Unit tests for {@link MasterEventQueue}.
  */
+// TODO: make tests adhere to class loading logic
 public final class MasterEventQueueTest extends BaseTest {
 
 

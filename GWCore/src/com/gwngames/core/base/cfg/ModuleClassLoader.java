@@ -457,6 +457,55 @@ public final class ModuleClassLoader extends ClassLoader {
         return (T) createInstance(c, ctorArgs);
     }
 
+    /* ------------------------------------------------------------------ */
+    /*  Helper to merge @Init attributes up the hierarchy (loader logic)  */
+    /* ------------------------------------------------------------------ */
+    public Init mergedInit(Class<?> type) {
+        Init self = type.getAnnotation(Init.class);
+        if (self == null) return null;
+
+        // Nothing missing? – return as-is
+        if (self.module() != ModuleNames.UNIMPLEMENTED &&
+            self.component() != ComponentNames.NONE)
+            return self;
+
+        /* climb the hierarchy until we fill both component() and module() */
+        ModuleNames    mod = self.module();
+        ComponentNames cmp = self.component();
+
+        Class<?> sup = type.getSuperclass();
+        for (Class<?> iFace : type.getInterfaces()) {
+            if (sup == null || sup == Object.class) sup = iFace; // pick at least one
+        }
+
+        while (sup != null && sup != Object.class) {
+            Init supAnn = sup.getAnnotation(Init.class);
+            if (supAnn != null) {
+                if (mod == ModuleNames.UNIMPLEMENTED && supAnn.module()   != ModuleNames.UNIMPLEMENTED)
+                    mod = supAnn.module();
+                if (cmp == ComponentNames.NONE        && supAnn.component()!= ComponentNames.NONE)
+                    cmp = supAnn.component();
+                if (mod != ModuleNames.UNIMPLEMENTED && cmp != ComponentNames.NONE)
+                    break;
+            }
+            sup = sup.getSuperclass();
+        }
+
+        ModuleNames    finalMod = mod;
+        ComponentNames finalCmp = cmp;
+        Init original          = self;
+
+        /* build proxy that reflects merged values */
+        return (Init) java.lang.reflect.Proxy.newProxyInstance(
+            Init.class.getClassLoader(),
+            new Class<?>[]{Init.class},
+            (p, m, a) -> switch (m.getName()) {
+                case "annotationType" -> Init.class;
+                case "module"         -> finalMod;
+                case "component"      -> finalCmp;
+                default               -> m.invoke(original, a);
+            });
+    }
 
     /* ==================================================================== */
     /*  Helper DTO                                                          */

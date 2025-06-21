@@ -13,6 +13,7 @@ public enum ComponentNames {
     INPUT_ADAPTER_MANAGER,
     GAME,
     LAUNCHER_MASTER,
+    INPUT_ACTION_MANAGER,
 
     //
     // THESE ARE MULTIPLE COMPONENTS
@@ -27,5 +28,5 @@ public enum ComponentNames {
     INPUT_LISTENER,
     INPUT_ADAPTER,
     INPUT_DEVICE_LISTENER,
-    DEVICE_DETECTOR;
+    DEVICE_DETECTOR, INPUT_ACTION;
 }

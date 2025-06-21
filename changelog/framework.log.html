@@ -53,6 +53,14 @@
 <table>
     <tr><th style="width:110px">Version</th><th style="width:160px">Date</th><th>Highlights</th></tr>
 
+    <!-- ---------- 0.0.9h ---------------------------------------------------- -->
+    <tr><td><span class="tag" style="color:var(--v2)">0.0.9&nbsp;h</span></td>
+        <td>22&nbsp;June&nbsp;2025</td>
+        <td>
+            Action–mapping layer (per-slot enable &amp; cooldown), mapper↔adapter hot-swap,
+            Init-inheritance compliance checks, extended test-suite.
+        </td></tr>
+
     <tr><td><span class="tag" style="color:var(--v1)">0.0.8&nbsp;g</span></td>
         <td>21&nbsp;June&nbsp;2025</td>
         <td>
@@ -100,8 +108,69 @@
      Modular accordion – newest entry open by default
 ========================================================================== -->
 
-<!-- ---------- 0.0.8g ---------------------------------------------------- -->
+<!-- ---------- 0.0.9h ---------------------------------------------------- -->
 <details open>
+    <summary style="color:var(--v2)">
+        <span class="tag" style="color:var(--v2)">0.0.9 h</span>
+        <em style="flex:1">“Actions&nbsp;&amp;&nbsp;Mappings” – released&nbsp;22&nbsp;June&nbsp;2025</em>
+    </summary>
+    <div class="entry-body">
+
+        <h3>🎯  High-Level Action System</h3>
+        <ul>
+            <li><strong>BaseInputAction</strong>
+                <ul>
+                    <li>Per-adapter-slot <em>enabled</em> flag &amp; millisecond cool-down.</li>
+                    <li>Default template + per-slot overrides.</li>
+                    <li>Centralised error trapping &amp; logging (<code>FileLogger&nbsp;INPUT</code>).</li>
+                </ul>
+            </li>
+            <li><strong>InputActionManager</strong>
+                <ul>
+                    <li>Registry: one singleton instance per concrete <code>IInputAction</code>.</li>
+                    <li>New mapper API – <code>attachMapper()</code> / <code>detachMapper()</code> hot-swaps
+                        <code>IInputMapper</code>s between adapters at runtime
+                        (auto-listener wiring).</li>
+                </ul>
+            </li>
+            <li><strong>BaseInputMapper</strong>
+                <ul>
+                    <li>Context-based maps (<em>play</em>, <em>menu</em>, …) switchable on the fly.</li>
+                    <li>Logs unmapped input for easy debugging.</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h3>🛡️  Annotation Compliance</h3>
+        <ul>
+            <li><code>SubComponentForceDefinitionTest</code> mirrors <code>ModuleClassLoader</code>’s
+                inheritance merge logic to enforce:
+                <ul>
+                    <li><code>@Init.module = INTERFACE</code> ↔ interface ⇄ <code>IBaseComp</code> consistency.</li>
+                    <li><code>allowMultiple + forceDefinition</code> ⇒ every concrete impl
+                        defines <code>subComp</code>.</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h3>🧪  New Tests</h3>
+        <ul>
+            <li><code>InputActionManagerTest</code> – singleton guarantees.</li>
+            <li><code>InputActionManagerMapperTest</code> – mapper attach / re-attach / detach flow.</li>
+            <li><code>InputMapperTest</code> – context switching &amp; per-slot enable.</li>
+        </ul>
+
+        <h3>🔧  Misc</h3>
+        <ul>
+            <li><code>DummyInput</code> gains <code>isPeripheralAvailable</code> stub for tests.</li>
+            <li><code>InputAdapterManager.attachMapper</code> duplicate-listener fix.</li>
+        </ul>
+
+    </div>
+</details>
+
+<!-- ---------- 0.0.8g ---------------------------------------------------- -->
+<details>
     <summary style="color:var(--v1)">
         <span class="tag" style="color:var(--v1)">0.0.8 g</span>
         <em style="flex:1">“Plug-and-Play&nbsp;Input” – released&nbsp;21&nbsp;June&nbsp;2025</em>

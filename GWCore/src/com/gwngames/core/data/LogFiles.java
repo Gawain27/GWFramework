@@ -8,4 +8,5 @@ public class LogFiles {
     public static final String TEST = "test.log";
     public static final String EVENT = "event.log";
     public static final String ASSET = "assets.log";
+    public static final String INPUT = "input.log";
 }

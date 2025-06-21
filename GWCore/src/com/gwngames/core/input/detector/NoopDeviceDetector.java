@@ -6,7 +6,7 @@ import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.SubComponentNames;
 
-@Init(module = ModuleNames.CORE)
+@Init(module = ModuleNames.CORE, subComp = SubComponentNames.NOOP_DETECTOR)
 public class NoopDeviceDetector extends BaseComponent implements IDeviceDetector {
     @Override public void start() { }
     @Override public void stop() { }

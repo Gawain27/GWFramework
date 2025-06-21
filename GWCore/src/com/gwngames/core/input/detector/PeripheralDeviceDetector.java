@@ -3,7 +3,10 @@ package com.gwngames.core.input.detector;
 import com.badlogic.gdx.Input.Peripheral;
 import com.badlogic.gdx.Gdx;
 
+import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.input.*;
+import com.gwngames.core.data.ModuleNames;
+import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.input.adapter.KeyboardInputAdapter;
 import com.gwngames.core.input.adapter.TouchInputAdapter;
 
@@ -11,6 +14,7 @@ import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
 
+@Init(module = ModuleNames.CORE, subComp = SubComponentNames.PERIPHERAL_DETECTOR)
 public class PeripheralDeviceDetector implements IDeviceDetector {
 
     private static final float RECHECK_SECONDS = 1.5f;   // set < 0 to disable polling TODO: to config

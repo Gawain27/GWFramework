@@ -6,12 +6,13 @@ import com.badlogic.gdx.math.Vector2;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.input.*;
 import com.gwngames.core.data.ModuleNames;
+import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.event.input.TouchEvent;
 import com.gwngames.core.input.BaseInputAdapter;
 import com.gwngames.core.api.input.InputType;
 import com.gwngames.core.input.controls.TouchInputIdentifier;
 
-@Init(module = ModuleNames.CORE)
+@Init(module = ModuleNames.CORE, subComp = SubComponentNames.TOUCH_ADAPTER)
 public class TouchInputAdapter extends BaseInputAdapter implements IInputAdapter, InputProcessor {
 
     public TouchInputAdapter() { super("Touchscreen"); }

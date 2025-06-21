@@ -26,6 +26,8 @@ public @interface Init {
     boolean allowMultiple() default false;
     boolean isPlatformDependent() default false;
     boolean isEnum() default false;
+    /** Signals that a component must fill optional parameters */
+    boolean forceDefinition() default false;
     SubComponentNames subComp() default SubComponentNames.NONE;
 }
 

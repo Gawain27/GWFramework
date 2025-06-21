@@ -5,11 +5,12 @@ import com.badlogic.gdx.InputProcessor;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.input.*;
 import com.gwngames.core.data.ModuleNames;
+import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.event.input.ButtonEvent;
 import com.gwngames.core.input.BaseInputAdapter;
 import com.gwngames.core.input.controls.KeyInputIdentifier;
 
-@Init(module = ModuleNames.CORE)
+@Init(module = ModuleNames.CORE, subComp = SubComponentNames.KEYBOARD_ADAPTER)
 public class KeyboardInputAdapter extends BaseInputAdapter implements IInputAdapter, InputProcessor {
 
     public KeyboardInputAdapter() { super("Keyboard"); }

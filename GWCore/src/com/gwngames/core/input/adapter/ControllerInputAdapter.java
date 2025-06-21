@@ -4,11 +4,12 @@ import com.badlogic.gdx.controllers.*;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.input.*;
 import com.gwngames.core.data.ModuleNames;
+import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.event.input.*;
 import com.gwngames.core.input.BaseInputAdapter;
 import com.gwngames.core.input.controls.*;
 
-@Init(module = ModuleNames.CORE)
+@Init(module = ModuleNames.CORE, subComp = SubComponentNames.CONTROLLER_ADAPTER)
 public class ControllerInputAdapter extends BaseInputAdapter implements IInputAdapter, ControllerListener {
 
     private static final float DEAD_ZONE = 0.10f;

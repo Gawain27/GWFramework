@@ -8,7 +8,7 @@ import com.gwngames.core.data.ModuleNames;
 import java.util.List;
 
 @Init(module = ModuleNames.INTERFACE, component = ComponentNames.INPUT_ADAPTER_MANAGER)
-public interface IInputAdapterManager {
+public interface IInputAdapterManager extends IBaseComp {
     /** Slot‐based registration (0…MAX_SLOTS-1). */
     void register(int slot, IInputAdapter adapter);
     void unregister(int slot);

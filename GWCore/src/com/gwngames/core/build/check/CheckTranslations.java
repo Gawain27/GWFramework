@@ -8,7 +8,7 @@ import com.gwngames.core.api.build.Translations;
  * */
 @Translations
 public enum CheckTranslations implements ITranslatable {
-    CONFIG_NOT_FOUND("Configuration data not found");
+    CONFIG_DATA_NOT_FOUND("Configuration data not found");
 
     private final String defaultCaption;
     CheckTranslations(String defaultCaption){

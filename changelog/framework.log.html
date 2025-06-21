@@ -53,6 +53,13 @@
 <table>
     <tr><th style="width:110px">Version</th><th style="width:160px">Date</th><th>Highlights</th></tr>
 
+    <tr><td><span class="tag" style="color:var(--v1)">0.0.8&nbsp;g</span></td>
+        <td>21&nbsp;June&nbsp;2025</td>
+        <td>
+            Cross-platform input framework (adapters + detectors), auto-main controller selection,
+            rich identifiers &amp; unified events, full headless test-suite.
+        </td></tr>
+
     <tr><td><span class="tag" style="color:var(--v7)">0.0.7 f</span></td>
         <td>9&nbsp;June&nbsp;2025</td>
         <td>
@@ -93,8 +100,60 @@
      Modular accordion – newest entry open by default
 ========================================================================== -->
 
-<!-- ---------- 0.0.7f ---------------------------------------------------- -->
+<!-- ---------- 0.0.8g ---------------------------------------------------- -->
 <details open>
+    <summary style="color:var(--v1)">
+        <span class="tag" style="color:var(--v1)">0.0.8 g</span>
+        <em style="flex:1">“Plug-and-Play&nbsp;Input” – released&nbsp;21&nbsp;June&nbsp;2025</em>
+    </summary>
+    <div class="entry-body">
+
+        <h3>🎮  Unified Input System</h3>
+        <ul>
+            <li><strong>IInputAdapter</strong> hierarchy: <code>KeyboardInputAdapter</code>,
+                <code>ControllerInputAdapter</code>, <code>TouchInputAdapter</code>.</li>
+            <li>Rich <strong>IInputIdentifier</strong>s (<code>KeyInputIdentifier</code>,
+                <code>ControllerButtonInputIdentifier</code>, <code>ControllerAxisInputIdentifier</code>,
+                <code>TouchControl</code>) with <em>device / component / display-name</em> metadata.</li>
+            <li>Event classes: <code>ButtonEvent</code>, <code>AxisEvent</code>, <code>TouchEvent</code>;
+                all extend <code>InputEvent</code> &amp; carry timestamps + slot index.</li>
+        </ul>
+
+        <h3>🔌  Pluggable Device Detection</h3>
+        <ul>
+            <li><strong>IDeviceDetector</strong> SPI + built-ins:
+                <ul>
+                    <li><code>ControllerDeviceDetector</code> – LibGDX hot-plug gamepads.</li>
+                    <li><code>PeripheralDeviceDetector</code> – keyboards &amp; touch (optional polling).</li>
+                </ul>
+            </li>
+            <li><code>InputAdapterManager</code>
+                <ul>
+                    <li>Keeps <em>all</em> vs <em>active</em> adapters, fixed 4-slot register/unregister API.</li>
+                    <li>Auto-promotes the first available adapter as the <strong>main controller</strong>;
+                        re-promotes if main is unplugged.</li>
+                    <li>Broadcasts connect/disconnect via <code>IInputDeviceListener</code>.</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h3>🧪  Headless Test-Suite</h3>
+        <ul>
+            <li><strong>BaseTest</strong> expanded with <code>setupApplication()</code>,
+                <code>DummyApp</code>, <code>DummyFiles</code>, and new <code>DummyInput</code>
+                stub for <code>Gdx.input</code>.</li>
+            <li>JUnit 5 tests:
+                <ul>
+                    <li><code>InputAdapterManagerTest</code> (slot logic, main promotion, detector events).</li>
+                    <li><code>KeyboardDeviceDetectorTest</code> &amp; <code>KeyboardInputAdapterTest</code>.</li>
+                </ul>
+            </li>
+        </ul>
+    </div>
+</details>
+
+<!-- ---------- 0.0.7f ---------------------------------------------------- -->
+<details>
     <summary style="color:var(--v7)">
         <span class="tag" style="color:var(--v7)">0.0.7 f</span>
         <em style="flex:1">“Framework&nbsp;Supercharged” – released&nbsp;9&nbsp;June&nbsp;2025</em>

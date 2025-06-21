@@ -1,6 +1,7 @@
 key,en_US,de_DE,fr_FR,es_ES,en_US,de_DE,fr_FR,es_ES
 BIN.NOT.FOUND,Cannot locate bin directory (looked in $1),Bin-Verzeichnis kann nicht gefunden werden (gesucht in $1),Impossible de localiser le répertoire bin (cherché dans $1),,
 CONFIG.NOT.FOUND,Cannot read config.json,Kann config.json nicht lesen,Impossible de lire config.json,,
+CONFIG_DATA_NOT_FOUND,Configuration data not found,,,,
 CONFIG_NOT_FOUND,Configuration data not found,,,,
 ERROR,Error,Fehler,Erreur,,
 EVENT.ERROR,Could not execute event: $1,,Impossible d'exécuter l'événement : $1,,

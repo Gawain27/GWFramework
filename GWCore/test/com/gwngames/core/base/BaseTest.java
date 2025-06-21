@@ -3,6 +3,7 @@ package com.gwngames.core.base;
 import com.badlogic.gdx.*;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.files.FileHandle;
+import com.badlogic.gdx.input.NativeInputConfiguration;
 import com.badlogic.gdx.utils.Clipboard;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -14,6 +15,7 @@ import com.gwngames.core.data.LogFiles;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.event.base.AbstractEvent;
+import com.gwngames.core.input.KeyboardDeviceDetectorTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
@@ -63,6 +65,9 @@ public abstract class BaseTest {
     protected void setupApplication(){
         Gdx.app   = new DummyApp();
         Gdx.files = new DummyFiles();
+        if (Gdx.input == null) {           // install only if someone else hasn’t
+            Gdx.input = new DummyInput();  //  put a custom stub in place
+        }
         log.debug("DummyApp + DummyFiles installed");
     }
 
@@ -202,6 +207,120 @@ public abstract class BaseTest {
     @Init(subComp = SubComponentNames.SIMPLE_EVENT, module = ModuleNames.CORE)
     public static final class SimpleEvent extends AbstractEvent { }
 
+    protected static final class DummyInput implements Input {
+
+        @Override public boolean isPeripheralAvailable(Peripheral peripheral) {
+            return peripheral == Peripheral.HardwareKeyboard;
+        }
+
+        /* ---------- unused methods throw/return defaults --------------- */
+        @Override public float getAccelerometerX() { return 0; }
+        @Override public float getAccelerometerY() { return 0; }
+        @Override public float getAccelerometerZ() { return 0; }
+        @Override public float getGyroscopeX() { return 0; }
+        @Override public float getGyroscopeY() { return 0; }
+        @Override public float getGyroscopeZ() { return 0; }
+
+        @Override
+        public int getMaxPointers() {
+            return 0;
+        }
+
+        @Override public int getRotation() { return 0; }
+
+        @Override
+        public Orientation getNativeOrientation() {
+            return null;
+        }
+
+        @Override public int getX() { return 0; }
+        @Override public int getX(int pointer) { return 0; }
+        @Override public int getDeltaX() { return 0; }
+        @Override public int getDeltaX(int pointer) { return 0; }
+        @Override public int getY() { return 0; }
+        @Override public int getY(int pointer) { return 0; }
+        @Override public int getDeltaY() { return 0; }
+        @Override public int getDeltaY(int pointer) { return 0; }
+        @Override public boolean isTouched() { return false; }
+        @Override public boolean justTouched() { return false; }
+        @Override public boolean isTouched(int pointer) { return false; }
+        @Override public float getPressure() { return 0; }
+        @Override public float getPressure(int pointer) { return 0; }
+        @Override public boolean isKeyPressed(int key) { return false; }
+
+        @Override
+        public boolean isKeyJustPressed(int i) {
+            return false;
+        }
+
+        @Override public boolean isButtonPressed(int button) { return false; }
+
+        @Override
+        public boolean isButtonJustPressed(int i) {
+            return false;
+        }
+
+        @Override public void getTextInput(TextInputListener listener, String title, String text, String hint) {}
+
+        @Override
+        public void getTextInput(TextInputListener textInputListener, String s, String s1, String s2, OnscreenKeyboardType onscreenKeyboardType) {
+
+        }
+
+        @Override public void setOnscreenKeyboardVisible(boolean visible) {}
+
+        @Override
+        public void setOnscreenKeyboardVisible(boolean b, OnscreenKeyboardType onscreenKeyboardType) {
+
+        }
+
+        @Override
+        public void openTextInputField(NativeInputConfiguration nativeInputConfiguration) {
+
+        }
+
+        @Override
+        public void closeTextInputField(boolean b) {
+
+        }
+
+        @Override
+        public void setKeyboardHeightObserver(KeyboardHeightObserver keyboardHeightObserver) {
+
+        }
+
+        @Override public void vibrate(int milliseconds) {}
+
+        @Override
+        public void vibrate(int i, boolean b) {
+
+        }
+
+        @Override
+        public void vibrate(int i, int i1, boolean b) {
+
+        }
+
+        @Override
+        public void vibrate(VibrationType vibrationType) {
+
+        }
+
+        @Override public float getAzimuth() { return 0; }
+        @Override public float getPitch() { return 0; }
+        @Override public float getRoll() { return 0; }
+        @Override public void getRotationMatrix(float[] matrix) {}
+        @Override public long getCurrentEventTime() { return 0; }
+        @Override public void setCatchKey(int keycode, boolean catchKey) {}
+        @Override public boolean isCatchKey(int keycode) { return false; }
+
+
+        @Override public void setInputProcessor(InputProcessor processor) {}
+        @Override public InputProcessor getInputProcessor() { return null; }
+        @Override public void setCursorCatched(boolean catched) {}
+        @Override public boolean isCursorCatched() { return false; }
+        @Override public void setCursorPosition(int x, int y) {}
+    }
     /** Short timestamp helper for log lines. */
     protected static String ts() { return Instant.now().toString().substring(11, 23); }
 }

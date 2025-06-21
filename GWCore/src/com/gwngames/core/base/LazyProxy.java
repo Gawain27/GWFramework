@@ -51,7 +51,7 @@ public final class LazyProxy {
 
         private final Supplier<T> supplier;
         private final boolean immortal;
-        /* ✱ explicit type argument to silence -Xlint:unchecked */
+        /* explicit type argument to silence -Xlint:unchecked */
         private volatile WeakReference<T> ref = new WeakReference<>((T) null);
         private volatile long lastUse = System.currentTimeMillis();
 

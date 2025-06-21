@@ -10,6 +10,7 @@ public enum ComponentNames {
     LOCALE,
     SUBTYPE_REGISTRY,
     ASSET_MANAGER,
+    INPUT_ADAPTER_MANAGER,
     GAME,
     LAUNCHER_MASTER,
 
@@ -18,7 +19,13 @@ public enum ComponentNames {
     //
     MACRO_EVENT,
     EVENT,
+    INPUT_EVENT,
     STARTUP_CHECK,
     FILE_EXTENSION,
-    ASSET_SUBTYPE;
+    ASSET_SUBTYPE,
+    INPUT_IDENTIFIER,
+    INPUT_LISTENER,
+    INPUT_ADAPTER,
+    INPUT_DEVICE_LISTENER,
+    DEVICE_DETECTOR;
 }

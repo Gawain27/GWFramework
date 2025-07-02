@@ -3,6 +3,7 @@ package com.gwngames.core.api.event;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.input.InputType;
+import com.gwngames.core.api.input.action.IInputAction;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
 
@@ -20,4 +21,8 @@ public interface IInputEvent extends IBaseComp {
 
     /** Event time in epoch-nanoseconds ( System.nanoTime() ). */
     long getTimestamp();
+
+    /** The action assigned at runtime to the input type */
+    IInputAction getAssignedAction();
+    void assignAction(IInputAction action);
 }

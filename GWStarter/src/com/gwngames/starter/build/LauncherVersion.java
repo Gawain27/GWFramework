@@ -1,7 +1,7 @@
 package com.gwngames.starter.build;
 
 public enum LauncherVersion {
-    DESKTOP("0.0.9");
+    DESKTOP("0.0.10");
 
     final String version;
     LauncherVersion(String version){

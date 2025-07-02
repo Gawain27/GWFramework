@@ -188,7 +188,7 @@ public final class ModuleClassLoader extends ClassLoader {
      * {@link ModuleNames#UNIMPLEMENTED}) are inherited from the nearest superclass that
      * specifies them.
      */
-    private static Init resolvedInit(Class<?> clazz) {
+    public static Init resolvedInit(Class<?> clazz) {
         Init base = clazz.getAnnotation(Init.class);
         if (base == null) return null;
 

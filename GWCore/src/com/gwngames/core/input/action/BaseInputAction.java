@@ -67,6 +67,11 @@ public abstract class BaseInputAction extends BaseComponent implements IInputAct
 
     @Override
     public final void execute(IInputEvent evt){
+        if (evt == null){
+            log.error("No event received");
+            return;
+        }
+
         int slot = evt.getSlot();
         SlotCfg c = cfg(slot);
 

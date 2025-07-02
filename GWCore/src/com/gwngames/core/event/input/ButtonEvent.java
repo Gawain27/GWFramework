@@ -12,7 +12,7 @@ import com.gwngames.core.data.SubComponentNames;
  * convey the analog value (0‥1).  Keyboard keys simply use 0 or 1.
  */
 @Init(module = ModuleNames.CORE, subComp = SubComponentNames.BUTTON_EVENT)
-public final class ButtonEvent extends InputEvent {
+public class ButtonEvent extends InputEvent {
 
     /** Which physical control generated the event. */
     private final IInputIdentifier control;

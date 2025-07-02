@@ -53,6 +53,14 @@
 <table>
     <tr><th style="width:110px">Version</th><th style="width:160px">Date</th><th>Highlights</th></tr>
 
+    <!-- ---------- 0.0.10e --------------------------------------------------- -->
+    <tr><td><span class="tag" style="color:var(--v3)">0.0.10&nbsp;e</span></td>
+        <td>1&nbsp;July&nbsp;2025</td>
+        <td>
+            Priority-aware combos, longest-match chain engine, greedy mapper revamp,
+            press-cycle input history, new buffer/manager test-suite.
+        </td></tr>
+
     <!-- ---------- 0.0.9h ---------------------------------------------------- -->
     <tr><td><span class="tag" style="color:var(--v2)">0.0.9&nbsp;h</span></td>
         <td>22&nbsp;June&nbsp;2025</td>
@@ -108,8 +116,84 @@
      Modular accordion – newest entry open by default
 ========================================================================== -->
 
-<!-- ---------- 0.0.9h ---------------------------------------------------- -->
+<!-- ---------- 0.0.10e --------------------------------------------------- -->
 <details open>
+    <summary style="color:var(--v3)">
+        <span class="tag" style="color:var(--v3)">0.0.10 e</span>
+        <em style="flex:1">“Combo&nbsp;Crafter” – released&nbsp;1&nbsp;July&nbsp;2025</em>
+    </summary>
+    <div class="entry-body">
+
+        <h3>🧩  Combo & Chain Architecture</h3>
+        <ul>
+            <li><strong>IdentifierDefinition · ComboDefinition · ChainDefinition</strong> enums –
+                single authoritative place for every <em>identifier ⇢ combo ⇢ chain</em>.</li>
+            <li><strong>ComboPriority</strong> enum (HIGH / NORMAL / LOW):
+                greedy resolver favours higher priority, then larger identifier sets.</li>
+            <li><strong>SmartComboManager</strong>
+                <ul>
+                    <li>Greedy <code>resolve(Set&lt;IInputIdentifier&gt;)</code> returns the
+                        <em>best subset of combos</em> for simultaneous presses.</li>
+                </ul>
+            </li>
+            <li><strong>CoreInputChainManager</strong>
+                <ul>
+                    <li>Longest-match algorithm over the input buffer.</li>
+                    <li>Per-chain <em>visibility whitelist</em> (contexts in which it is allowed).</li>
+                    <li>Enable / disable chains at runtime.</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h3>📦  SmartInputBuffer&nbsp;(ring + TTL)</h3>
+        <ul>
+            <li>Bounded ring storing <code>IInputCombo</code>s with per-combo TTL.</li>
+            <li>Auto-expiry each frame; trims to capacity before chain evaluation.</li>
+            <li><code>peekOldest()</code> helper feeds mapper with age-aware info.</li>
+        </ul>
+
+        <h3>🎮  BaseInputMapper 2 · 0</h3>
+        <ul>
+            <li>Press-cycle recording – identifiers only logged on fresh press.</li>
+            <li>Per-frame pipeline:
+                <ol>
+                    <li>Collect pressed identifiers.</li>
+                    <li>Resolve combos → push into buffer.</li>
+                    <li>When oldest combo expires → try longest-match chain.</li>
+                    <li>Map chain + context → action, enforce cool-down, execute.</li>
+                </ol>
+            </li>
+            <li>Verbose structured logs for every stage
+                (press set, combos added, chain evaluation &amp; result).</li>
+        </ul>
+
+        <h3>📈  InputHistory Improvements</h3>
+        <ul>
+            <li>Thread-safe counters for identifiers / combos / chains.</li>
+            <li>New rule: identifier counted <em>once per press-cycle</em>.</li>
+            <li><code>clear()</code> helper resets stats (levels, tests).</li>
+        </ul>
+
+        <h3>🧪  Test-Suite Expansion</h3>
+        <ul>
+            <li><code>SmartInputBufferTest</code> – TTL expiry &amp; capacity trim.</li>
+            <li><code>ComboManagerTest</code> – priority &amp; greedy selection.</li>
+            <li><code>CoreInputChainManagerTest</code> – longest-match &amp; visibility.</li>
+            <li><code>InputMapperTest</code> – end-to-end chain → action flow with history checks.</li>
+        </ul>
+
+        <h3>🔧  Misc</h3>
+        <ul>
+            <li>BaseInputMapper now exposes <code>history()</code> getter for diagnostics.</li>
+            <li>Enhanced <code>DummyInput</code> &amp; <code>BaseTest</code> helpers for combo/chain tests.</li>
+            <li>Changelog palette cycles: 0.0.10e adopts <code>--v3</code> colour.</li>
+        </ul>
+
+    </div>
+</details>
+
+<!-- ---------- 0.0.9h ---------------------------------------------------- -->
+<details>
     <summary style="color:var(--v2)">
         <span class="tag" style="color:var(--v2)">0.0.9 h</span>
         <em style="flex:1">“Actions&nbsp;&amp;&nbsp;Mappings” – released&nbsp;22&nbsp;June&nbsp;2025</em>

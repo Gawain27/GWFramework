@@ -5,6 +5,7 @@ import com.gwngames.core.api.event.IInputEvent;
 import com.gwngames.core.api.input.IInputAdapter;
 import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.api.input.IInputListener;
+import com.gwngames.core.api.input.buffer.InputContext;
 
 @Init(forceDefinition = true)
 public interface IInputMapper extends IInputListener {
@@ -19,11 +20,10 @@ public interface IInputMapper extends IInputListener {
 
     /* ---------- context handling ---------- */
 
-    /** Active mapping set. */
-    String getContext();
-
-    /** Switch to another mapping set (creates it lazily if absent). */
-    void switchContext(String context);
+    /**
+     * Active mapping set.
+     */
+    InputContext getContext();
 
     /* ---------- mapping helpers ---------- */
 
@@ -32,6 +32,8 @@ public interface IInputMapper extends IInputListener {
     void clear  (String context);
 
     /* ---------- events (from IInputListener) ---------- */
+
+    void switchContext(InputContext c);
 
     @Override
     void onInput(IInputEvent event);

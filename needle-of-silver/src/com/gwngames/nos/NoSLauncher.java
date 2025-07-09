@@ -1,9 +1,7 @@
 package com.gwngames.nos;
 
-import com.badlogic.gdx.ApplicationListener;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input.Keys;
-import com.badlogic.gdx.InputAdapter;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
@@ -25,7 +23,7 @@ import com.badlogic.gdx.utils.Pool;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.gwngames.core.api.build.IGameLauncher;
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.data.ComponentNames;
+import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.data.ModuleNames;
 
 /** Super Mario Brothers-like very basic platformer, using a tile map built using <a href="https://www.mapeditor.org/">Tiled</a> and a
@@ -34,7 +32,12 @@ import com.gwngames.core.data.ModuleNames;
  * Shows simple platformer collision detection as well as on-the-fly map modifications through destructible blocks!
  * @author mzechner */
 @Init(module = ModuleNames.NEEDLE_OF_SILVER)
-public class NoSLauncher extends InputAdapter implements IGameLauncher {
+public class NoSLauncher extends BaseComponent implements IGameLauncher {
+    @Override
+    public String getLauncherName() {
+        return "Needle of Silver";
+    }
+
     /** The player character, has state and state time, */
     static class Koala {
         static float WIDTH;
@@ -277,18 +280,11 @@ public class NoSLauncher extends InputAdapter implements IGameLauncher {
 
     private void renderKoala (float deltaTime) {
         // based on the koala state, get the animation frame
-        TextureRegion frame = null;
-        switch (koala.state) {
-        case Standing:
-            frame = stand.getKeyFrame(koala.stateTime);
-            break;
-        case Walking:
-            frame = walk.getKeyFrame(koala.stateTime);
-            break;
-        case Jumping:
-            frame = jump.getKeyFrame(koala.stateTime);
-            break;
-        }
+        TextureRegion frame = switch (koala.state) {
+            case Standing -> stand.getKeyFrame(koala.stateTime);
+            case Walking -> walk.getKeyFrame(koala.stateTime);
+            case Jumping -> jump.getKeyFrame(koala.stateTime);
+        };
 
         // draw the koala, depending on the current velocity
         // on the x-axis, draw the koala facing either right

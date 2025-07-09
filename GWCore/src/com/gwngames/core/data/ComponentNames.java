@@ -1,7 +1,7 @@
 package com.gwngames.core.data;
 
 public enum ComponentNames {
-    NONE,
+    // Core system
     CONFIGURATION,
     CONTEXT,
     LAUNCHER,
@@ -9,25 +9,45 @@ public enum ComponentNames {
     TRANSLATOR,
     LOCALE,
     SUBTYPE_REGISTRY,
-    ASSET_MANAGER,
-    INPUT_ADAPTER_MANAGER,
-    INPUT_CHAIN_MANAGER,
+
+    // Game lifecycle
     GAME,
     LAUNCHER_MASTER,
-    INPUT_ACTION_MANAGER,
 
-    //
-    // THESE ARE MULTIPLE COMPONENTS
-    //
-    MACRO_EVENT,
-    EVENT,
-    INPUT_EVENT,
-    STARTUP_CHECK,
-    FILE_EXTENSION,
+    // Asset & file management
+    ASSET_MANAGER,
     ASSET_SUBTYPE,
+    FILE_EXTENSION,
+
+    // Input system – managers
+    INPUT_ADAPTER_MANAGER,
+    INPUT_CHAIN_MANAGER,
+    INPUT_ACTION_MANAGER,
+    INPUT_COMBO_MANAGER,
+
+    // Input system – components
+    INPUT_EVENT,
     INPUT_IDENTIFIER,
-    INPUT_LISTENER,
     INPUT_ADAPTER,
     INPUT_DEVICE_LISTENER,
-    DEVICE_DETECTOR, INPUT_ACTION, INPUT_COMBO, INPUT_CHAIN, INPUT_BUFFER, INPUT_COMBO_MANAGER, INPUT_HISTORY;
+    INPUT_LISTENER,
+    INPUT_ACTION,
+    INPUT_COMBO,
+    INPUT_CHAIN,
+    INPUT_BUFFER,
+    INPUT_HISTORY,
+    INPUT_MAPPER,
+
+    // Events & macros
+    MACRO_EVENT,
+    EVENT,
+
+    // Startup
+    STARTUP_CHECK,
+
+    // Detectors
+    DEVICE_DETECTOR,
+
+    // Special
+    NONE;
 }

@@ -4,50 +4,93 @@ import com.gwngames.core.api.asset.IAssetManager;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.BaseTest;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
-import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.*;
 
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.List;
 
 /** Unit-test for {@link ModularAssetManager}. */
 public final class ModularAssetManagerTest extends BaseTest {
 
-    @Override protected void runTest() throws Exception {
+    /** Keeps the original loader list so we can put it back afterwards. */
+    private List<Object> originalLoaders;
 
-        setupApplication();
-        System.setProperty("gw.asset.ttl", "150");   // 150 ms
+    /** Field handle cached once – avoids repeating reflection look-ups. */
+    private static final Field loadersField;
 
-        /* 1️⃣  make ModuleClassLoader ignore real jars */
+    static {
+        try {
+            loadersField = ModuleClassLoader.class.getDeclaredField("classLoaders");
+            loadersField.setAccessible(true);
+        } catch (NoSuchFieldException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    /* ─────────────────── JUnit scaffolding ──────────────────────── */
+
+    @BeforeEach
+    void snapshotLoaders() throws IllegalAccessException {
+        // get the singleton instance *first* …
         ModuleClassLoader mcl = ModuleClassLoader.getInstance();
-        Field clField = ModuleClassLoader.class.getDeclaredField("classLoaders");
-        clField.setAccessible(true);
 
-        List<?> loaders = (List<?>) clField.get(mcl);
-        loaders.clear();                 // no assets.txt will be scanned
-        clField.setAccessible(false);
+        // … then read the field value from that instance
+        @SuppressWarnings("unchecked")
+        List<Object> list = (List<Object>) loadersField.get(mcl);
 
-        /* 2️⃣  get manager via DI and inject stub AssetManager */
+        // deep copy so we can restore it later
+        originalLoaders = new ArrayList<>(list);
+
+        // finally, clear the real list so no assets.txt files are scanned
+        list.clear();
+    }
+
+    @AfterEach
+    void restoreLoaders() throws IllegalAccessException {
+        ModuleClassLoader mcl = ModuleClassLoader.getInstance();
+
+        @SuppressWarnings("unchecked")
+        List<Object> target = (List<Object>) loadersField.get(mcl);
+
+        target.clear();
+        target.addAll(originalLoaders);   // compiler-safe: both are List<Object>
+    }
+
+    /* ─────────────────── actual test body ───────────────────────── */
+
+    @Override
+    protected void runTest() throws Exception {
+        setupApplication();                      // LibGDX stubs
+
+        // Use a small TTL so the eviction path can be exercised quickly
+        ModularAssetManager.setTtl(150);         // 150 ms
+
+        // Obtain manager via DI and replace its internal AssetManager
         IAssetManager mgr = BaseComponent.getInstance(IAssetManager.class);
 
+        // Swap out the real AssetManager for the stub (no file I/O)
         Field gdxF = ModularAssetManager.class.getDeclaredField("gdx");
         gdxF.setAccessible(true);
         StubAssetManager stub = new StubAssetManager();
         gdxF.set(mgr, stub);
         gdxF.setAccessible(false);
 
-        /* 3️⃣  assertions: lazy-load ➜ keep ➜ evict */
+        /* ── lazy-load → keep → evict sequence ─────────────────────── */
+
         final String ASSET = "dummy.data";
 
         Assertions.assertFalse(stub.isLoaded(ASSET));
 
-        mgr.get(ASSET, Object.class);          // lazy load
+        mgr.get(ASSET, Object.class);            // schedules & loads lazily
         Assertions.assertTrue(stub.isLoaded(ASSET));
 
-        mgr.update(0.05f);                     // 50 ms  (< TTL)
+        mgr.update(0.05f);                       // 50 ms  (< TTL) – still loaded
         Assertions.assertTrue(stub.isLoaded(ASSET));
 
-        Thread.sleep(200);                     // > TTL
-        mgr.update(0.1f);
-        Assertions.assertFalse(stub.isLoaded(ASSET), "asset was not evicted");
+        Thread.sleep(200);                       // > TTL
+        mgr.update(0.1f);                        // eviction pass
+        Assertions.assertFalse(stub.isLoaded(ASSET),
+            "asset was not evicted after TTL elapsed and single ref-count");
     }
 }

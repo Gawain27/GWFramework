@@ -4,8 +4,9 @@ import com.badlogic.gdx.utils.Array;
 import com.gwngames.core.api.event.EventStatus;
 import com.gwngames.core.api.event.IEvent;
 import com.gwngames.core.api.event.IExecutionCondition;
+import com.gwngames.core.base.BaseComponent;
 
-public abstract class AbstractEvent implements IEvent {
+public abstract class AbstractEvent extends BaseComponent implements IEvent {
     private MacroEvent macroEvent;
     private EventStatus status = EventStatus.WAITING;
     private long executionStartTime;

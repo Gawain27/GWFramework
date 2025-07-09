@@ -1,26 +1,27 @@
 package com.gwngames.starter.launcher;
 
-import com.badlogic.gdx.ApplicationListener;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
 import com.gwngames.core.api.build.IGameLauncher;
 import com.gwngames.core.api.build.Init;
+import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.PlatformNames;
-import com.gwngames.starter.Starter;
 import com.gwngames.starter.build.ILauncher;
 import com.gwngames.starter.build.LauncherVersion;
 
 /** Launches the desktop (LWJGL3) application. */
-@Init(module = ModuleNames.GW_STARTER, platform = PlatformNames.DESKTOP)
-public class Lwjgl3Launcher implements ILauncher {
+@Init(module = ModuleNames.STARTER, platform = PlatformNames.DESKTOP)
+public class Lwjgl3Launcher extends BaseComponent implements ILauncher {
     private final ModuleClassLoader loader = ModuleClassLoader.getInstance();
+    private IGameLauncher launcher;
+
     @Override
     public Lwjgl3Application createApplication() {
-        IGameLauncher gameLauncher = loader.tryCreate(ComponentNames.GAME);
-        return new Lwjgl3Application(gameLauncher, getDefaultConfiguration());
+        launcher = loader.tryCreate(ComponentNames.GAME);
+        return new Lwjgl3Application(launcher, getDefaultConfiguration());
     }
 
     @Override
@@ -30,7 +31,7 @@ public class Lwjgl3Launcher implements ILauncher {
 
     private Lwjgl3ApplicationConfiguration getDefaultConfiguration() {
         Lwjgl3ApplicationConfiguration configuration = new Lwjgl3ApplicationConfiguration();
-        configuration.setTitle("Needle of Silver");
+        configuration.setTitle(launcher.getLauncherName());
         //// Vsync limits the frames per second to what your hardware can display, and helps eliminate
         //// screen tearing. This setting doesn't always work on Linux, so the line after is a safeguard.
         configuration.useVsync(true);

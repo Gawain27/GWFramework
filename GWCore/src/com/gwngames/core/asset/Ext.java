@@ -12,4 +12,9 @@ public enum Ext implements IFileExtension {
     private final String e;
     Ext(String e){ this.e=e; }
     @Override public String ext(){ return e; }
+
+    @Override
+    public int getMultId() {
+        return this.ordinal();
+    }
 }

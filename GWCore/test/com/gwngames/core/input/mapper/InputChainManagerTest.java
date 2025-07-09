@@ -1,10 +1,10 @@
 package com.gwngames.core.input.mapper;
 
 import com.gwngames.core.api.input.IInputIdentifier;
-import com.gwngames.core.api.input.buffer.ComboPriority;
+import com.gwngames.core.data.ComboPriority;
 import com.gwngames.core.api.input.buffer.IInputChain;
 import com.gwngames.core.api.input.buffer.IInputCombo;
-import com.gwngames.core.api.input.buffer.InputContext;
+import com.gwngames.core.data.InputContext;
 import com.gwngames.core.base.BaseTest;
 import com.gwngames.core.input.buffer.CoreInputChainManager;
 import org.junit.jupiter.api.Assertions;
@@ -87,12 +87,27 @@ public final class InputChainManagerTest extends BaseTest {
         public String getDisplayName() {
             return "";
         }
+
+        @Override
+        public boolean isRecordWhilePressed() {
+            return true;
+        }
+
+        @Override
+        public int getMultId() {
+            return 0;
+        }
     }
 
     /** Test-combo factory. */
     private static IInputCombo combo(String name, IInputIdentifier... ids){
         Set<IInputIdentifier> set = Set.of(ids);
         return new IInputCombo() {
+            @Override
+            public int getMultId() {
+                return 0;
+            }
+
             @Override public String name()           { return name; }
             @Override public Set<IInputIdentifier> identifiers(){ return set; }
             @Override public int  activeFrames()     { return 6; }
@@ -107,6 +122,11 @@ public final class InputChainManagerTest extends BaseTest {
         List<IInputCombo> immutableSeq = List.copyOf(seq);
         Set<InputContext> immutableVis = Set.copyOf(vis);
         return new IInputChain() {
+            @Override
+            public int getMultId() {
+                return 0;
+            }
+
             @Override public String name()                  { return n; }
             @Override public List<IInputCombo> combos()     { return immutableSeq; }
             @Override public Set<InputContext> visibility() { return immutableVis; }

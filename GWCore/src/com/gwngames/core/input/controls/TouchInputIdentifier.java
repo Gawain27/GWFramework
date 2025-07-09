@@ -11,11 +11,14 @@ import com.gwngames.core.data.SubComponentNames;
  * Pointer index comes directly from LibGDX InputProcessor callbacks.
  */
 @Init(module = ModuleNames.CORE, subComp = SubComponentNames.TOUCH_INPUT)
-public class TouchInputIdentifier extends BaseComponent implements IInputIdentifier {
+public class TouchInputIdentifier extends BaseInputIdentifier {
 
     private final int pointer;  // LibGDX pointer index (0,1,2...)
 
-    public TouchInputIdentifier(int pointer) { this.pointer = pointer; }
+    public TouchInputIdentifier(int pointer, boolean recordWhilePressed) {
+        super(recordWhilePressed);
+        this.pointer = pointer;
+    }
 
     public int getPointer() { return pointer; }
 

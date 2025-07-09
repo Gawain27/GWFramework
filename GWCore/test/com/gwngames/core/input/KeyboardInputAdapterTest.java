@@ -4,6 +4,7 @@ import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Input.*;
 import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.input.NativeInputConfiguration;
+import com.gwngames.core.api.event.IInputEvent;
 import com.gwngames.core.api.input.*;
 import com.gwngames.core.base.BaseTest;
 import com.gwngames.core.event.input.ButtonEvent;
@@ -283,11 +284,22 @@ public class KeyboardInputAdapterTest extends BaseTest {
         AtomicInteger upCnt   = new AtomicInteger();
         AtomicReference<ButtonEvent> lastEvt = new AtomicReference<>();
 
-        IInputListener listener = evt -> {
-            if (evt instanceof ButtonEvent be) {
-                lastEvt.set(be);
-                if (be.isPressed()) downCnt.incrementAndGet();
-                else                upCnt.incrementAndGet();
+        IInputListener listener = new IInputListener() {
+            @Override
+            public int getMultId() {
+                return 0;
+            }
+
+            @Override
+            public void onInput(IInputEvent evt) {
+                if (evt instanceof ButtonEvent be) {
+                    lastEvt.set(be);
+                    if (be.isPressed()) {
+                        downCnt.incrementAndGet();
+                    } else {
+                        upCnt.incrementAndGet();
+                    }
+                }
             }
         };
         adapter.addListener(listener);
@@ -302,13 +314,13 @@ public class KeyboardInputAdapterTest extends BaseTest {
         input.getInputProcessor().keyDown(key);
         Assertions.assertEquals(1, downCnt.get(), "One DOWN event expected");
         ButtonEvent evt = lastEvt.get();
-        Assertions.assertTrue(evt.getControl() instanceof KeyInputIdentifier);
+        Assertions.assertInstanceOf(KeyInputIdentifier.class, evt.getControl());
         Assertions.assertEquals(key, ((KeyInputIdentifier) evt.getControl()).getKeycode());
 
         input.getInputProcessor().keyUp(key);
         Assertions.assertEquals(1, upCnt.get(), "One UP event expected");
 
-        /* 5 — stop() must clear processor */
+        /* stop() must clear processor */
         adapter.stop();
         Assertions.assertNull(input.getInputProcessor(), "InputProcessor should be cleared on stop()");
     }

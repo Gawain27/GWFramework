@@ -39,7 +39,7 @@ public class SubComponentForceDefinitionTest extends BaseTest {
 
         /* ---------------- Rule #1 : interface ⇄ annotation consistency --- */
         for (Class<?> iface : interfaces) {
-            Init an = mcl.mergedInit(iface);
+            Init an = ModuleClassLoader.resolvedInit(iface);
             assert an != null;
 
             boolean extendsBase = IBaseComp.class.isAssignableFrom(iface);
@@ -59,7 +59,7 @@ public class SubComponentForceDefinitionTest extends BaseTest {
 
         /* ---------------- Rule #2 : allowMultiple+forceDefinition --------- */
         for (Class<?> iface : interfaces) {
-            Init an = mcl.mergedInit(iface);
+            Init an = ModuleClassLoader.resolvedInit(iface);
             assert an != null;
             if (!an.allowMultiple() || !an.forceDefinition()) continue;
 
@@ -71,7 +71,7 @@ public class SubComponentForceDefinitionTest extends BaseTest {
                 .toList();
 
             for (Class<?> impl : impls) {
-                Init implAnn = mcl.mergedInit(impl);
+                Init implAnn = ModuleClassLoader.resolvedInit(impl);
                 Assertions.assertNotNull(implAnn,
                     "Concrete "+impl.getSimpleName()+" missing @Init");
 

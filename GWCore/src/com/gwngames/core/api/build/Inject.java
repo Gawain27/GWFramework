@@ -6,6 +6,7 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.util.function.Predicate;
 
 /**
  * Annotation used in game components to inject an existing or new object into the class.<p>
@@ -17,7 +18,12 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.FIELD)
 public @interface Inject {
+    /** If true (and allowMultiple must be true!) then inject all concrete components into the list field */
+    boolean loadAll() default false;
+    /** If true, create a new temporary comp every time annotated component is injected */
     boolean createNew() default false;
+    /** If true, concrete class injected will never unload. */
     boolean immortal() default false;
+    /** Specify the sub component, if component has multiple */
     SubComponentNames subComp() default SubComponentNames.NONE;
 }

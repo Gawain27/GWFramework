@@ -9,11 +9,12 @@ import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.util.ControllerMappingUtil;
 
 @Init(module = ModuleNames.CORE, subComp = SubComponentNames.CONTROLLER_INPUT)
-public class ControllerAxisInputIdentifier extends BaseComponent implements IInputIdentifier {
+public class ControllerAxisInputIdentifier extends BaseInputIdentifier {
     private final Controller controller;
     private final int        axisCode;
 
-    public ControllerAxisInputIdentifier(Controller controller, int axisCode) {
+    public ControllerAxisInputIdentifier(Controller controller, int axisCode, boolean recordWhilePressed) {
+        super(recordWhilePressed);
         this.controller = controller;
         this.axisCode   = axisCode;
     }
@@ -51,6 +52,8 @@ public class ControllerAxisInputIdentifier extends BaseComponent implements IInp
 
     @Override
     public int hashCode() {
+        if (controller == null) return -99 + Integer.hashCode(axisCode);
         return controller.hashCode() * 31 + Integer.hashCode(axisCode);
     }
+
 }

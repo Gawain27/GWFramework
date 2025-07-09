@@ -12,6 +12,7 @@ import com.gwngames.core.data.ModuleNames;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 @Init(module = ModuleNames.CORE)
 public class AssetSubTypeRegistry extends BaseComponent implements IAssetSubTypeRegistry {
@@ -19,7 +20,7 @@ public class AssetSubTypeRegistry extends BaseComponent implements IAssetSubType
     @Inject()
     private final ILocale locale;
 
-    private final Map<String, List<IAssetSubType>> byExt = new ConcurrentHashMap<>();
+    private final Map<String, Collection<IAssetSubType>> byExt = new ConcurrentHashMap<>();
 
     public AssetSubTypeRegistry() {
         /* ensure we have a locale even before @Inject wiring finishes */
@@ -38,30 +39,38 @@ public class AssetSubTypeRegistry extends BaseComponent implements IAssetSubType
         Locale loc = locale == null ? Locale.ENGLISH : locale.getLocale();
         st.extensions().forEach(ext -> {
             String key = ext.ext().toLowerCase(loc);
-            byExt.computeIfAbsent(key, k -> new ArrayList<>()).add(st);
+            byExt.computeIfAbsent(key, k -> new ConcurrentLinkedQueue<>()).add(st);
         });
     }
 
     /** Falls back to BuiltinSubtypes.MISC */
     @Override
     public IAssetSubType byExtension(String ext) {
-        List<IAssetSubType> list = byExt.get(ext.toLowerCase(locale.getLocale()));
-        return list == null || list.isEmpty() ? BuiltInSubTypes.MISC : list.getFirst();
+        Collection<IAssetSubType> c =
+            byExt.get(ext.toLowerCase(locale.getLocale()));
+        return (c == null || c.isEmpty())
+            ? BuiltInSubTypes.MISC
+            : c.iterator().next();
     }
 
     /** Sub-type with the given ID, or null if not present. */
     @Override
     public IAssetSubType byExtension(String ext, String id) {
-        List<IAssetSubType> list = byExt.get(ext.toLowerCase(locale.getLocale()));
-        if (list == null) return null;
-        for (IAssetSubType st : list) if (st.id().equals(id)) return st;
-        return null;
+        Collection<IAssetSubType> c =
+            byExt.get(ext.toLowerCase(locale.getLocale()));
+        if (c == null) return null;
+        for (IAssetSubType st : c) if (st.id().equals(id)) return st;
+        return c.isEmpty()
+            ? BuiltInSubTypes.MISC
+            : c.iterator().next();
+
     }
 
     /** All registered sub-types for that extension (unmodifiable). */
     @Override
     public List<IAssetSubType> allByExtension(String ext) {
-        List<IAssetSubType> l = byExt.get(ext.toLowerCase(locale.getLocale()));
-        return l == null ? List.of() : List.copyOf(l);
+        Collection<IAssetSubType> c =
+            byExt.get(ext.toLowerCase(locale.getLocale()));
+        return c == null ? List.of() : List.copyOf(c);
     }
 }

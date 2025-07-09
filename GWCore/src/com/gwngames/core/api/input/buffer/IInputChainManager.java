@@ -4,6 +4,7 @@ import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.input.action.IInputAction;
 import com.gwngames.core.data.ComponentNames;
+import com.gwngames.core.data.InputContext;
 import com.gwngames.core.data.ModuleNames;
 
 import java.util.List;

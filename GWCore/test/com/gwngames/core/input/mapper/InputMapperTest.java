@@ -5,118 +5,139 @@ import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.api.input.action.IInputAction;
 import com.gwngames.core.api.input.action.IInputHistory;
 import com.gwngames.core.api.input.buffer.*;
+import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.BaseTest;
+import com.gwngames.core.data.ComboPriority;
+import com.gwngames.core.data.IdentifierDefinition;
+import com.gwngames.core.data.InputContext;
+import com.gwngames.core.event.input.ButtonEvent;
 import com.gwngames.core.input.action.BaseInputMapper;
 import com.gwngames.core.input.action.InputHistory;
 import com.gwngames.core.input.buffer.CoreInputChainManager;
 import com.gwngames.core.input.buffer.SmartComboManager;
 import com.gwngames.core.input.buffer.SmartInputBuffer;
-import com.gwngames.core.event.input.ButtonEvent;
 import org.junit.jupiter.api.Assertions;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * Integration-style test for {@link BaseInputMapper}.
+ * Scenario:
+ *   Frame 0 : press & release  DOWN+LEFT          → combo  DOWN_LEFT
+ *   Frame 1 : press            A+B                → combo  AB
+ *   Frame 2 : nothing, first combo expired        → chain  DL_AB fires DummyAction
+ */
 public final class InputMapperTest extends BaseTest {
 
-    /* identifiers */
-    private static final IInputIdentifier DOWN = IdentifierDefinition.DOWN.id();
-    private static final IInputIdentifier LEFT = IdentifierDefinition.LEFT.id();
-    private static final IInputIdentifier A    = IdentifierDefinition.A.id();
-    private static final IInputIdentifier B    = IdentifierDefinition.B.id();
+    /* pick one concrete identifier from each logical definition */
+    private static IInputIdentifier pick(IdentifierDefinition d) {
+        return d.ids().iterator().next();
+    }
 
-    /* combos & chain */
-    private static final IInputCombo DOWN_LEFT = combo("DOWN_LEFT", DOWN, LEFT);
-    private static final IInputCombo AB        = combo("AB", A, B);
+    private static final IInputIdentifier DOWN = pick(IdentifierDefinition.DOWN);
+    private static final IInputIdentifier LEFT = pick(IdentifierDefinition.LEFT);
+    private static final IInputIdentifier  A   = pick(IdentifierDefinition.A);
+    private static final IInputIdentifier  B   = pick(IdentifierDefinition.B);
 
-    private static final IInputChain DL_AB = chain("DL_AB",
-        List.of(DOWN_LEFT, AB), Set.of(InputContext.GAMEPLAY));
+    private static final AtomicInteger ACTION_CALLS = new AtomicInteger();
 
-    private static final SmartComboManager      COMBOS = new SmartComboManager();
-    private static final CoreInputChainManager  CHAINS = new CoreInputChainManager();
-    private static final SmartInputBuffer       BUFFER = new SmartInputBuffer(8);
+    @Override protected void runTest() {
 
-    private static final AtomicInteger actionCalls = new AtomicInteger(0);
+        setupApplication();   // LibGDX head-less scaffolding
 
-    @Override
-    protected void runTest() {
+        /* run-time dictionaries (no static singletons) */
+        SmartComboManager      comboMgr  = new SmartComboManager();
+        CoreInputChainManager  chainMgr  = new CoreInputChainManager();
+        SmartInputBuffer       buffer    = new SmartInputBuffer(8);
 
-        COMBOS.register(DOWN_LEFT);
-        COMBOS.register(AB);
-        CHAINS.register(DL_AB, true);
+        IInputCombo downLeft = combo("DOWN_LEFT", DOWN, LEFT);
+        IInputCombo ab       = combo("AB",        A,    B);
 
-        TestMapper mapper = new TestMapper();
+        comboMgr.register(downLeft);
+        comboMgr.register(ab);
 
-        /* frame 0: DOWN + LEFT */
+        IInputChain dl_ab = chain("DL_AB",
+            List.of(downLeft, ab),
+            Set.of(InputContext.GAMEPLAY));
+
+        chainMgr.register(dl_ab, true);
+
+        /* mapper wired with those helpers */
+        TestMapper mapper = new TestMapper(comboMgr, chainMgr, buffer, dl_ab);
+
+        /* ───── Frame 0 : DOWN+LEFT press & release ───── */
         mapper.onInput(new BtnEvt(DOWN, true));
         mapper.onInput(new BtnEvt(LEFT, true));
         mapper.onInput(new BtnEvt(DOWN, false));
         mapper.onInput(new BtnEvt(LEFT, false));
-        mapper.endFrame();                   // buffer [DOWN_LEFT]
+        mapper.endFrame();                 // buffer = [DOWN_LEFT]
 
-        /* frame 1: A + B */
+        /* ───── Frame 1 : A+B ───── */
         mapper.onInput(new BtnEvt(A, true));
         mapper.onInput(new BtnEvt(B, true));
-        mapper.endFrame();                   // buffer [DOWN_LEFT, AB]
+        mapper.endFrame();                 // buffer = [DOWN_LEFT , AB]
 
-        /* frame 2: advance with no input – chain resolves here */
-        mapper.endFrame();
+        /* ───── Frame 2 : idle (DL combo TTL expired) ───── */
+        mapper.endFrame();                 // chain fires → DummyAction
 
-        /* assertions */
-        Assertions.assertEquals(1, actionCalls.get(), "action executed once");
+        /* ── verifications ─────────────────────────────── */
+        Assertions.assertEquals(1, ACTION_CALLS.get(), "DummyAction must fire exactly once");
 
         IInputHistory h = mapper.history();
-        Assertions.assertEquals(1, h.combos().get(DOWN_LEFT));
-        Assertions.assertEquals(1, h.combos().get(AB));
-        Assertions.assertEquals(1, h.chains().get(DL_AB));
-        Assertions.assertEquals(1, h.identifiers().get(DOWN));
+        Assertions.assertEquals(1, h.combos().get(downLeft));
+        Assertions.assertEquals(1, h.combos().get(ab));
+        Assertions.assertEquals(1, h.chains().get(dl_ab));
+        Assertions.assertEquals(1, h.identifiers().get(DOWN));   // recorded once (first press only)
     }
 
-    /* mapper */
+    /* mapper stub ------------------------------------------------------- */
     private static final class TestMapper extends BaseInputMapper {
-        TestMapper() {
-            this.comboMgr = COMBOS;
-            this.chainMgr = CHAINS;
-            this.buffer   = BUFFER;
+        TestMapper(IInputComboManager cm, IInputChainManager chm, IInputBuffer buf, IInputChain chain) {
+            this.comboMgr = cm;
+            this.chainMgr = chm;
+            this.buffer   = buf;
             this.history  = new InputHistory();
-            map(DL_AB, Set.of(InputContext.GAMEPLAY), new DummyAction());
+            map(chain, Set.of(InputContext.GAMEPLAY), new DummyAction());
         }
         @Override public void map  (String c, IInputIdentifier id, IInputAction a) {}
         @Override public void unmap(String c, IInputIdentifier id)                 {}
         @Override public void clear(String c)                                      {}
     }
 
-    /* dummy action */
-    private static class DummyAction implements IInputAction {
-        @Override public void execute(IInputEvent event) { actionCalls.incrementAndGet(); }
+    private static final class DummyAction extends BaseComponent implements IInputAction {
+        @Override public void execute(IInputEvent evt) { ACTION_CALLS.incrementAndGet(); }
     }
 
-    /* synthetic ButtonEvent */
-    private static class BtnEvt extends ButtonEvent {
+    /* tiny synthetic ButtonEvent */
+    private static final class BtnEvt extends ButtonEvent {
         private final IInputIdentifier id; private final boolean pressed;
         BtnEvt(IInputIdentifier id, boolean pressed) {
             super(0, id, pressed, 1);
             this.id = id; this.pressed = pressed;
         }
-        @Override public IInputIdentifier getControl() { return id; }
-        @Override public boolean          isPressed()  { return pressed; }
+        @Override public IInputIdentifier getControl() { return id;     }
+        @Override public boolean          isPressed () { return pressed;}
     }
 
-    /* helpers to build anonymous combos/chains */
+    /* helpers: anonymous combo / chain objects -------------------------- */
     private static IInputCombo combo(String n, IInputIdentifier... ids) {
         Set<IInputIdentifier> set = Set.of(ids);
         return new IInputCombo() {
-            public String name()                       { return n; }
-            public Set<IInputIdentifier> identifiers() { return set; }
-            public int  activeFrames()                 { return 2; }
-            public ComboPriority priority()            { return ComboPriority.NORMAL; }
+            public String name()                        { return n;          }
+            public Set<IInputIdentifier> identifiers()  { return set;        }
+            public int  activeFrames()                  { return 2;          }
+            public ComboPriority priority()             { return ComboPriority.NORMAL; }
+            @Override public int getMultId()            { return 0; }
         };
     }
+
     private static IInputChain chain(String n, List<IInputCombo> seq, Set<InputContext> vis) {
         return new IInputChain() {
-            public String name()                  { return n; }
-            public List<IInputCombo> combos()     { return seq; }
-            public Set<InputContext> visibility() { return vis; }
+            public String name()                   { return n;   }
+            public List<IInputCombo> combos()      { return seq; }
+            public Set<InputContext> visibility()  { return vis; }
+            @Override public int getMultId()       { return 0; }
         };
     }
 }

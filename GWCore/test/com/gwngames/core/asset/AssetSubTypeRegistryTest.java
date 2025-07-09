@@ -1,6 +1,6 @@
 package com.gwngames.core.asset;
 
-import com.gwngames.core.api.asset.AssetCategory;
+import com.gwngames.core.data.AssetCategory;
 import com.gwngames.core.api.asset.IAssetSubType;
 import com.gwngames.core.api.asset.IAssetSubTypeRegistry;
 import com.gwngames.core.api.asset.IFileExtension;
@@ -28,11 +28,11 @@ public final class AssetSubTypeRegistryTest extends BaseTest {
 
     /* ──────────────────  custom sub-type for dynamic registration  ── */
 
-    private static final class XyzExt implements IFileExtension {
+    private static final class XyzExt extends BaseComponent implements IFileExtension {
         @Override public String ext() { return "xyz"; }
     }
 
-    private static final class XyzSubType implements IAssetSubType {
+    private static final class XyzSubType extends BaseComponent implements IAssetSubType {
         @Override public String        id()            { return "xyz-data"; }
         @Override public AssetCategory category()      { return AssetCategory.MISC; }
         @Override public Class<?>      libGdxClass()   { return null; }

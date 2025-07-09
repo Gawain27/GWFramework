@@ -33,14 +33,19 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class ModularAssetManager extends BaseComponent implements IAssetManager, Disposable {
 
     // ───────────────────────── configuration ──────────────────────────
-    /** Milliseconds an asset may remain unused before it is evicted. */
-    private static final long DEFAULT_TTL_MS =
-        Long.getLong("gw.asset.ttl", 5 * 60_000); // 5 minutes by default
-// TODO : to config
+    /** Idle-time before an unused asset is evicted (milliseconds). */
+    private static volatile long TTL_MS =
+        Long.getLong("gw.asset.ttl", 5 * 60_000);
+
+    /** Tests (or the game) can tweak the TTL at runtime. */
+    public static void setTtl(long millis) {
+        TTL_MS = millis;
+    }// TODO : to config
     private static final FileLogger LOG = FileLogger.get(LogFiles.ASSET);
 
     // ────────────────────────── DI & runtime state ────────────────────
-    @Inject private IAssetSubTypeRegistry reg;
+    @Inject
+    private IAssetSubTypeRegistry reg;
 
     /** LibGDX core manager (handles reference counting, async IO, etc.). */
     private final AssetManager gdx = new AssetManager();
@@ -52,7 +57,12 @@ public final class ModularAssetManager extends BaseComponent implements IAssetMa
     private final Map<String, Long> lastUsed = new ConcurrentHashMap<>();
 
     // ────────────────────────── lifecycle ─────────────────────────────
-    public ModularAssetManager() { scanAllAssetsTxt(); }
+    public ModularAssetManager() {
+        if (reg == null) {
+            reg = BaseComponent.getInstance(IAssetSubTypeRegistry.class);
+        }
+        scanAllAssetsTxt();
+    }
 
     @Override public void dispose() { gdx.dispose(); }
 
@@ -90,12 +100,12 @@ public final class ModularAssetManager extends BaseComponent implements IAssetMa
 
     private void touch(String path) { lastUsed.put(path, System.currentTimeMillis()); }
 
-    /** Unload assets that have not been used for {@link #DEFAULT_TTL_MS}. */
+    /** Unload assets that have not been used for {@link #TTL_MS}. */
     private void evictStale() {
         long now = System.currentTimeMillis();
         lastUsed.forEach((path, ts) -> {
-            if (now - ts < DEFAULT_TTL_MS) return;          // still fresh
-            if (gdx.getReferenceCount(path) > 1) return;    // someone else holds it
+            if (now - ts < TTL_MS) return;            // still fresh
+            if (gdx.getReferenceCount(path) > 1) return; // shared elsewhere
             gdx.unload(path);
             lastUsed.remove(path);
             LOG.debug("Evicted asset {}", path);

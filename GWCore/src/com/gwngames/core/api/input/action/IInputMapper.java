@@ -5,9 +5,11 @@ import com.gwngames.core.api.event.IInputEvent;
 import com.gwngames.core.api.input.IInputAdapter;
 import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.api.input.IInputListener;
-import com.gwngames.core.api.input.buffer.InputContext;
+import com.gwngames.core.data.ComponentNames;
+import com.gwngames.core.data.InputContext;
+import com.gwngames.core.data.ModuleNames;
 
-@Init(forceDefinition = true)
+@Init(component = ComponentNames.INPUT_MAPPER, forceDefinition = true, module = ModuleNames.INTERFACE)
 public interface IInputMapper extends IInputListener {
 
     /* ---------- adapter binding ---------- */

@@ -189,7 +189,7 @@ public abstract class BaseTest {
     }
 
     /* ───────────── in-memory AssetManager stub ───────────── */
-    public static final class StubAssetManager extends AssetManager {
+    public static class StubAssetManager extends AssetManager {
         private final ConcurrentHashMap<String,Object> store = new ConcurrentHashMap<>();
         @Override public void load(String n, Class t){ store.putIfAbsent(n,new Object()); }
         @Override public boolean isLoaded(String n){ return store.containsKey(n); }

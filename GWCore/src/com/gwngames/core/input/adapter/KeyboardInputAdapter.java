@@ -3,55 +3,76 @@ package com.gwngames.core.input.adapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputProcessor;
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.api.input.*;
+import com.gwngames.core.api.input.IInputAdapter;
+import com.gwngames.core.api.input.IInputIdentifier;
+import com.gwngames.core.data.IdentifierDefinition;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.event.input.ButtonEvent;
 import com.gwngames.core.input.BaseInputAdapter;
 import com.gwngames.core.input.controls.KeyInputIdentifier;
 
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Keyboard → GW events adapter with zero allocations at run-time.
+ */
 @Init(module = ModuleNames.CORE, subComp = SubComponentNames.KEYBOARD_ADAPTER)
-public class KeyboardInputAdapter extends BaseInputAdapter implements IInputAdapter, InputProcessor {
+public final class KeyboardInputAdapter
+    extends BaseInputAdapter implements IInputAdapter, InputProcessor {
 
-    public KeyboardInputAdapter() { super("Keyboard"); }
+    private final Map<Integer, KeyInputIdentifier> keyId = new HashMap<>();
 
-    /* life-cycle ----------------------------------------------------------- */
+    public KeyboardInputAdapter() {
+        super("Keyboard"); // TODO to const
+
+        /*  build a canonical map from IdentifierDefinition ---------- */
+        for (IdentifierDefinition def : IdentifierDefinition.values()) {
+            for (IInputIdentifier raw : def.ids()) {
+                if (raw instanceof KeyInputIdentifier k) {
+                    keyId.putIfAbsent(k.getKeycode(), k);
+                }
+            }
+        }
+    }
+
     @Override public void start() { Gdx.input.setInputProcessor(this); }
 
     @Override
     public void stop() {
-        if (Gdx.input.getInputProcessor() == this) Gdx.input.setInputProcessor(null);
+        if (Gdx.input.getInputProcessor() == this)
+            Gdx.input.setInputProcessor(null);
     }
 
-    /* InputProcessor – keys ----------------------------------------------- */
+    /* ───────────────────── InputProcessor (keys) ───────────────────── */
     @Override
     public boolean keyDown(int keycode) {
         dispatch(new ButtonEvent(getSlot(),
-            new KeyInputIdentifier(keycode),
-            true, 1f));
+            resolve(keycode), true, 1f));
         return false;
     }
 
     @Override
     public boolean keyUp(int keycode) {
         dispatch(new ButtonEvent(getSlot(),
-            new KeyInputIdentifier(keycode),
-            false, 0f));
+            resolve(keycode), false, 0f));
         return false;
     }
 
-    /* we ignore the rest --------------------------------------------------- */
-    @Override public boolean keyTyped(char c)                         { return false; }
-    @Override public boolean touchDown (int sx,int sy,int p,int b)    { return false; }
-    @Override public boolean touchUp   (int sx,int sy,int p,int b)    { return false; }
+    /* unused callbacks ------------------------------------------------ */
+    @Override public boolean keyTyped(char c)             { return false; }
+    @Override public boolean touchDown(int x,int y,int p,int b){ return false; }
+    @Override public boolean touchUp  (int x,int y,int p,int b){ return false; }
+    @Override public boolean touchCancelled(int i,int i1,int i2,int i3){return false;}
+    @Override public boolean touchDragged(int x,int y,int p){ return false; }
+    @Override public boolean mouseMoved(int x,int y)      { return false; }
+    @Override public boolean scrolled(float dx,float dy)  { return false; }
 
-    @Override
-    public boolean touchCancelled(int i, int i1, int i2, int i3) {
-        return false;
+    /* helper – canonical or lazily-created identifier */
+    private KeyInputIdentifier resolve(int keycode) {
+        return keyId.computeIfAbsent(
+            keycode,
+            kc -> new KeyInputIdentifier(kc, false));
     }
-
-    @Override public boolean touchDragged(int sx,int sy,int p)        { return false; }
-    @Override public boolean mouseMoved(int sx,int sy)                { return false; }
-    @Override public boolean scrolled(float dx,float dy)              { return false; }
 }
-

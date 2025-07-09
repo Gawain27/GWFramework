@@ -1,6 +1,8 @@
-package com.gwngames.core.base;
+package com.gwngames.core.base.proxy;
 
 import com.gwngames.core.api.base.IBaseComp;
+import com.gwngames.core.base.BaseTest;
+import com.gwngames.core.base.LazyProxy;
 import org.junit.jupiter.api.Assertions;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -23,6 +25,11 @@ public final class LazyProxyTest extends BaseTest {
         @Override public Probe get() {
             int id = seq.incrementAndGet();
             return new Probe() {
+                @Override
+                public int getMultId() {
+                    return 0;
+                }
+
                 @Override public int id()          { return id; }
             };
         }

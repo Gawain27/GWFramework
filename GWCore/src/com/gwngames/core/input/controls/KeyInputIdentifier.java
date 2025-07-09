@@ -8,10 +8,11 @@ import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.SubComponentNames;
 
 @Init(module = ModuleNames.CORE, subComp = SubComponentNames.KEY_INPUT)
-public class KeyInputIdentifier extends BaseComponent implements IInputIdentifier {
+public class KeyInputIdentifier extends BaseInputIdentifier {
     private final int keycode;
 
-    public KeyInputIdentifier(int keycode) {
+    public KeyInputIdentifier(int keycode, boolean recordWhilePressed) {
+        super(recordWhilePressed);
         this.keycode = keycode;
     }
 

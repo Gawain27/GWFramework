@@ -4,7 +4,7 @@ import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.input.buffer.IInputChain;
 import com.gwngames.core.api.input.buffer.IInputChainManager;
 import com.gwngames.core.api.input.buffer.IInputCombo;
-import com.gwngames.core.api.input.buffer.InputContext;
+import com.gwngames.core.data.InputContext;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.data.ModuleNames;
 

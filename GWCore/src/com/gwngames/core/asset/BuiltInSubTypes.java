@@ -1,6 +1,11 @@
 package com.gwngames.core.asset;
 
-import com.gwngames.core.api.asset.AssetCategory;
+import com.badlogic.gdx.audio.Music;
+import com.badlogic.gdx.audio.Sound;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.TextureAtlas;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.gwngames.core.data.AssetCategory;
 import com.gwngames.core.api.asset.IAssetSubType;
 import com.gwngames.core.api.asset.IFileExtension;
 import com.gwngames.core.api.build.Init;
@@ -13,23 +18,23 @@ import java.util.List;
 public enum BuiltInSubTypes implements IAssetSubType {
 
     /* AUDIO ------------------------------------------------------ */
-    MUSIC ("music",  AssetCategory.AUDIO,   com.badlogic.gdx.audio.Music.class,
+    MUSIC ("music",  AssetCategory.AUDIO, Music.class,
         List.of(Ext.MP3, Ext.OGG, Ext.WAV)),
 
-    SOUND ("sound",  AssetCategory.AUDIO,   com.badlogic.gdx.audio.Sound.class,
+    SOUND ("sound",  AssetCategory.AUDIO, Sound.class,
         List.of(Ext.WAV, Ext.OGG)),
 
     /* TEXTURE ---------------------------------------------------- */
     TEXTURE("texture", AssetCategory.TEXTURE,
-        com.badlogic.gdx.graphics.Texture.class,
+        Texture.class,
         List.of(Ext.PNG, Ext.JPG, Ext.JPEG)),
 
     ATLAS  ("atlas",   AssetCategory.TEXTURE,
-        com.badlogic.gdx.graphics.g2d.TextureAtlas.class,
+        TextureAtlas.class,
         List.of(Ext.ATLAS)),
 
     REGION ("region",  AssetCategory.TEXTURE,
-        com.badlogic.gdx.graphics.g2d.TextureRegion.class,
+        TextureRegion.class,
         List.of(Ext.PNG, Ext.JPG, Ext.JPEG)),
 
     /* MISC catch-all -------------------------------------------- */
@@ -46,4 +51,9 @@ public enum BuiltInSubTypes implements IAssetSubType {
     public AssetCategory category(){ return cat; }
     public Class<?> libGdxClass(){ return cls; }
     public Collection<IFileExtension> extensions(){ return exts; }
+
+    @Override
+    public int getMultId() {
+        return this.ordinal();
+    }
 }

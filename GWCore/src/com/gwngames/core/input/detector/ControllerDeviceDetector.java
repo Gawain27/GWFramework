@@ -3,6 +3,7 @@ package com.gwngames.core.input.detector;
 import com.badlogic.gdx.controllers.*;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.input.*;
+import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.input.adapter.ControllerInputAdapter;
@@ -13,7 +14,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 
 @Init(module = ModuleNames.CORE, subComp = SubComponentNames.CONTROLLER_DETECTOR)
-public class ControllerDeviceDetector implements IDeviceDetector, ControllerListener {
+public class ControllerDeviceDetector extends BaseComponent implements IDeviceDetector, ControllerListener {
 
     private final Map<Controller, IInputAdapter> map = new ConcurrentHashMap<>();
     private final List<IInputDeviceListener> listeners = new CopyOnWriteArrayList<>();

@@ -3,6 +3,7 @@ package com.gwngames.core.input.mapper;
 import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.api.input.buffer.*;
 import com.gwngames.core.base.BaseTest;
+import com.gwngames.core.data.ComboPriority;
 import com.gwngames.core.input.buffer.SmartInputBuffer;
 import com.gwngames.core.input.controls.KeyInputIdentifier;
 import org.junit.jupiter.api.Assertions;
@@ -24,13 +25,18 @@ import java.util.Set;
 public class InputBufferTest extends BaseTest {
 
     /* dummy identifiers */
-    private static final IInputIdentifier A = new KeyInputIdentifier(Keys.A);
-    private static final IInputIdentifier B = new KeyInputIdentifier(Keys.B);
-    private static final IInputIdentifier C = new KeyInputIdentifier(Keys.C);
+    private static final IInputIdentifier A = new KeyInputIdentifier(Keys.A, true);
+    private static final IInputIdentifier B = new KeyInputIdentifier(Keys.B, true);
+    private static final IInputIdentifier C = new KeyInputIdentifier(Keys.C, true);
 
     /* helper that creates a TTL-2 combo around one identifier */
     private static IInputCombo mk(String name, IInputIdentifier id){
         return new IInputCombo() {
+            @Override
+            public int getMultId() {
+                return 0;
+            }
+
             @Override public String name()                       { return name; }
             @Override public Set<IInputIdentifier> identifiers() { return Set.of(id); }
             @Override public int  activeFrames()                 { return 2; }      // TTL = 2

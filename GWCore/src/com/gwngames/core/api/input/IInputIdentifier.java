@@ -15,4 +15,6 @@ public interface IInputIdentifier extends IBaseComp {
 
     /** e.g. "Q", "Y Button", "Left Stick X", "Pointer 1" */
     String getDisplayName();
+
+    boolean isRecordWhilePressed();
 }

@@ -1,17 +1,28 @@
 package com.gwngames.core.data;
 
 public enum SubComponentNames {
+    // Special
     NONE,
-    // Input Identifier names
+
+    // Input Identifiers
     KEY_INPUT,
     CONTROLLER_INPUT,
     TOUCH_INPUT,
-    // startup check names
+
+    // Startup / System Checks
     CONFIG_CHECK,
-    // events
+
+    // Event Types
     TOUCH_EVENT,
     BUTTON_EVENT,
     AXIS_EVENT,
-    NOOP_DETECTOR, // TEST
-    CONTROLLER_DETECTOR, PERIPHERAL_DETECTOR, CONTROLLER_ADAPTER, KEYBOARD_ADAPTER, TOUCH_ADAPTER, SIMPLE_EVENT
+    SIMPLE_EVENT,
+
+    // Detection & Adapters
+    NOOP_DETECTOR,
+    CONTROLLER_DETECTOR,
+    PERIPHERAL_DETECTOR,
+    CONTROLLER_ADAPTER,
+    KEYBOARD_ADAPTER,
+    TOUCH_ADAPTER
 }

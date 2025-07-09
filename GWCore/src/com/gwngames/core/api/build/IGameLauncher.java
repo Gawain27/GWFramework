@@ -7,4 +7,5 @@ import com.gwngames.core.data.ModuleNames;
 
 @Init(component = ComponentNames.GAME, module = ModuleNames.INTERFACE)
 public interface IGameLauncher extends ApplicationListener, IBaseComp {
+    String getLauncherName();
 }

@@ -1,4 +1,4 @@
-package com.gwngames.core.api.asset;
+package com.gwngames.core.data;
 
 /**
  * Defines the type of the asset (The context of its usage)

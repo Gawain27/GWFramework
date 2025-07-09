@@ -1,6 +1,7 @@
 package com.gwngames.core.input;
 
 import com.gwngames.core.api.input.*;
+import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.BaseTest;
 import org.junit.jupiter.api.Assertions;
 
@@ -13,7 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class InputAdapterManagerTest extends BaseTest {
 
     /* ─── simple stub adapter ─────────────────────────────────────────── */
-    private static final class StubAdapter implements IInputAdapter {
+    private static final class StubAdapter extends BaseComponent implements IInputAdapter {
         private final String name; private int slot=-1; private boolean started;
         StubAdapter(String n){name=n;}
         @Override public void start(){started=true;}
@@ -27,7 +28,7 @@ public class InputAdapterManagerTest extends BaseTest {
     }
 
     /* ─── fake detector that we manually trigger ──────────────────────── */
-    private static final class FakeDetector implements IDeviceDetector {
+    private static final class FakeDetector extends BaseComponent implements IDeviceDetector {
         private IInputDeviceListener listener;
         @Override public void start(){}
         @Override public void stop(){}
@@ -51,6 +52,11 @@ public class InputAdapterManagerTest extends BaseTest {
         AtomicInteger connects = new AtomicInteger();
         AtomicInteger disconnects = new AtomicInteger();
         mgr.addDeviceListener(new IInputDeviceListener() {
+            @Override
+            public int getMultId() {
+                return 0;
+            }
+
             @Override public void onAdapterConnected(IInputAdapter a){connects.incrementAndGet();}
             @Override public void onAdapterDisconnected(IInputAdapter a){disconnects.incrementAndGet();}
         });

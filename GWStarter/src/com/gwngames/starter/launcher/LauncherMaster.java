@@ -15,9 +15,9 @@ import com.gwngames.starter.StartupHelper;
 import com.gwngames.starter.build.ILauncher;
 import com.gwngames.starter.build.ILauncherMaster;
 
-@Init(module = ModuleNames.GW_STARTER)
+@Init(module = ModuleNames.STARTER)
 public class LauncherMaster extends BaseComponent implements ILauncherMaster {
-    private static final Application.ApplicationType platformDetected = LauncherMaster.detectPlatform();
+    private static final Application.ApplicationType platformDetected = ILauncherMaster.detectPlatform();
     @Inject
     IContext context;
     private static final FileLogger log = FileLogger.get(LogFiles.SYSTEM);
@@ -50,45 +50,5 @@ public class LauncherMaster extends BaseComponent implements ILauncherMaster {
             case WebGL -> loader.tryCreate(ComponentNames.LAUNCHER, PlatformNames.WEB);
             default -> throw new IllegalStateException("Unknown platform detected");
         };
-    }
-
-    private static Application.ApplicationType detectPlatform () {
-        // Android: android.os.Build is part of every Dalvik/ART device
-        if (isPresent("android.os.Build"))
-            return Application.ApplicationType.Android;
-
-        // iOS (RoboVM): UIKit is always on the classpath there
-        if (isPresent("org.robovm.apple.uikit.UIApplication"))
-            return Application.ApplicationType.iOS;
-
-        // GWT / WebGL: GWT replaces this whole method at compile time, so use a constant
-        if (isWeb())
-            return Application.ApplicationType.WebGL;
-
-        // Otherwise we’re running on a desktop JVM
-        return Application.ApplicationType.Desktop;
-    }
-
-    private static boolean isPresent (String fqcn) {
-        try {
-            Class.forName(fqcn, false, LauncherMaster.class.getClassLoader());
-            return true;
-        } catch (ClassNotFoundException e) {
-            return false;
-        }
-    }
-
-    /**
-     * GWT strips `Class.forName`, so we call its own helper via reflection.
-     * Wrapped in a try-catch so the JVM build doesn’t need GWT on the
-     * class-path.
-     */
-    private static boolean isWeb() {
-        try {
-            Class<?> gwt = Class.forName("com.google.gwt.core.client.GWT");
-            return (Boolean) gwt.getMethod("isClient").invoke(null);
-        } catch (Throwable ignored) {
-            return false;
-        }
     }
 }

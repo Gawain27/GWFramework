@@ -195,25 +195,40 @@ public final class ModuleClassLoader extends ClassLoader {
         ComponentNames comp   = base.component();
         ModuleNames    module = base.module();
 
-        if (comp != ComponentNames.NONE && module != ModuleNames.UNIMPLEMENTED)
-            return base;                      // nothing to fill
-
+        /* ── climb super-class chain ─────────────────────────────── */
         Class<?> sup = clazz.getSuperclass();
-        while (sup != null && sup != Object.class) {
-            Init supAnn = sup.getAnnotation(Init.class);
-            if (supAnn != null) {
-                if (comp   == ComponentNames.NONE) comp   = supAnn.component();
-                if (module == ModuleNames.UNIMPLEMENTED)    module = supAnn.module();
-                if (comp != ComponentNames.NONE && module != ModuleNames.UNIMPLEMENTED)
-                    break;
+        while (sup != null && sup != Object.class &&
+            (comp == ComponentNames.NONE || module == ModuleNames.UNIMPLEMENTED)) {
+            Init ann = sup.getAnnotation(Init.class);
+            if (ann != null) {
+                if (comp   == ComponentNames.NONE)       comp   = ann.component();
+                if (module == ModuleNames.UNIMPLEMENTED) module = ann.module();
             }
             sup = sup.getSuperclass();
         }
 
+        /* ──  scan *all* interfaces in the entire hierarchy ───────── */
+        if (comp == ComponentNames.NONE || module == ModuleNames.UNIMPLEMENTED) {
+            Class<?> cur = clazz;
+            while (cur != null && cur != Object.class &&
+                (comp == ComponentNames.NONE || module == ModuleNames.UNIMPLEMENTED)) {
+
+                for (Class<?> ifc : cur.getInterfaces()) {
+                    Init ann = ifc.getAnnotation(Init.class);
+                    if (ann == null) continue;
+                    if (comp   == ComponentNames.NONE)       comp   = ann.component();
+                    if (module == ModuleNames.UNIMPLEMENTED) module = ann.module();
+                    if (comp != ComponentNames.NONE && module != ModuleNames.UNIMPLEMENTED)
+                        break;
+                }
+                cur = cur.getSuperclass();
+            }
+        }
+
+        /* ── build proxy with merged values ──────────────────────── */
         ComponentNames finalComp   = comp;
         ModuleNames    finalModule = module;
 
-        /* dynamic proxy implementing merged Init                            */
         return (Init) Proxy.newProxyInstance(
             Init.class.getClassLoader(),
             new Class<?>[]{Init.class},
@@ -224,7 +239,7 @@ public final class ModuleClassLoader extends ClassLoader {
                 case "subComp"        -> base.subComp();
                 case "platform"       -> base.platform();
                 case "allowMultiple"  -> base.allowMultiple();
-                default -> m.invoke(base, args);
+                default               -> m.invoke(base, args);
             });
     }
 
@@ -257,7 +272,7 @@ public final class ModuleClassLoader extends ClassLoader {
             Class<?> incumbent = bestMulti.get(key);
             if (incumbent == null ||
                 an.module().modulePriority >
-                    resolvedInit(incumbent).module().modulePriority) {
+                    Objects.requireNonNull(resolvedInit(incumbent)).module().modulePriority) {
                 bestMulti.put(key, c);
             }
         }
@@ -265,6 +280,7 @@ public final class ModuleClassLoader extends ClassLoader {
 
         bestMulti.forEach((k, cls) -> {
             Init an = resolvedInit(cls);
+            assert an != null;
             log.info("Multi-component [{}] → {} (prio {})",
                 k, cls.getSimpleName(), an.module().modulePriority);
         });
@@ -304,6 +320,7 @@ public final class ModuleClassLoader extends ClassLoader {
         for (Class<?> c : concreteTypes) {
             if (!iface.isAssignableFrom(c)) continue;
             Init an = resolvedInit(c);
+            assert an != null;
             if (an.subComp() != SubComponentNames.NONE) continue;
             if (an.module().modulePriority > prio) { best = c; prio = an.module().modulePriority; }
         }
@@ -317,12 +334,13 @@ public final class ModuleClassLoader extends ClassLoader {
         for (Class<?> c : concreteTypes) {
             if (!iface.isAssignableFrom(c)) continue;
             Init an = resolvedInit(c);
+            assert an != null;
             if (an.subComp() != SubComponentNames.NONE) continue;
             out.add(c);
         }
         if (out.isEmpty()) throw new ClassNotFoundException("No impl of " + comp);
         out.sort(Comparator.comparingInt(
-            (Class<?> cl) -> resolvedInit(cl).module().modulePriority).reversed());
+            (Class<?> cl) -> Objects.requireNonNull(resolvedInit(cl)).module().modulePriority).reversed());
         return out;
     }
 
@@ -339,6 +357,7 @@ public final class ModuleClassLoader extends ClassLoader {
         Class<?> best = null; int prio = Integer.MIN_VALUE;
         for (Class<?> c : concreteTypes) {
             Init an = resolvedInit(c);
+            assert an != null;
             if (an.subComp()!=sub) continue;
             if (!iface.isAssignableFrom(c)) continue;
             if (an.module().modulePriority > prio) { best = c; prio = an.module().modulePriority; }
@@ -355,12 +374,14 @@ public final class ModuleClassLoader extends ClassLoader {
         List<Class<?>> out = new ArrayList<>();
         for (Class<?> c : concreteTypes) {
             Init an = resolvedInit(c);
-            if (iface.isAssignableFrom(c) && an.subComp()!=SubComponentNames.NONE)
-                out.add(c);
+            if (iface.isAssignableFrom(c)) {
+                assert an != null;
+                if (an.subComp()!=SubComponentNames.NONE) out.add(c);
+            }
         }
         if (out.isEmpty()) throw new ClassNotFoundException("No sub-components for "+comp);
         out.sort(Comparator.comparingInt(
-            (Class<?> cl) -> resolvedInit(cl).module().modulePriority).reversed());
+            (Class<?> cl) -> Objects.requireNonNull(resolvedInit(cl)).module().modulePriority).reversed());
         return out;
     }
 
@@ -405,7 +426,7 @@ public final class ModuleClassLoader extends ClassLoader {
     public <T> T tryCreate(ComponentNames comp, PlatformNames platform, Object... args) {
         try {
             for (Class<?> c : findClasses(comp)) {
-                if (resolvedInit(c).platform() == platform)
+                if (Objects.requireNonNull(resolvedInit(c)).platform() == platform)
                     return firstInstanceOf(c, args);
             }
         } catch (ClassNotFoundException ignored) { }
@@ -455,56 +476,6 @@ public final class ModuleClassLoader extends ClassLoader {
         if (c.isEnum())
             return (T) c.getEnumConstants()[0];
         return (T) createInstance(c, ctorArgs);
-    }
-
-    /* ------------------------------------------------------------------ */
-    /*  Helper to merge @Init attributes up the hierarchy (loader logic)  */
-    /* ------------------------------------------------------------------ */
-    public Init mergedInit(Class<?> type) {
-        Init self = type.getAnnotation(Init.class);
-        if (self == null) return null;
-
-        // Nothing missing? – return as-is
-        if (self.module() != ModuleNames.UNIMPLEMENTED &&
-            self.component() != ComponentNames.NONE)
-            return self;
-
-        /* climb the hierarchy until we fill both component() and module() */
-        ModuleNames    mod = self.module();
-        ComponentNames cmp = self.component();
-
-        Class<?> sup = type.getSuperclass();
-        for (Class<?> iFace : type.getInterfaces()) {
-            if (sup == null || sup == Object.class) sup = iFace; // pick at least one
-        }
-
-        while (sup != null && sup != Object.class) {
-            Init supAnn = sup.getAnnotation(Init.class);
-            if (supAnn != null) {
-                if (mod == ModuleNames.UNIMPLEMENTED && supAnn.module()   != ModuleNames.UNIMPLEMENTED)
-                    mod = supAnn.module();
-                if (cmp == ComponentNames.NONE        && supAnn.component()!= ComponentNames.NONE)
-                    cmp = supAnn.component();
-                if (mod != ModuleNames.UNIMPLEMENTED && cmp != ComponentNames.NONE)
-                    break;
-            }
-            sup = sup.getSuperclass();
-        }
-
-        ModuleNames    finalMod = mod;
-        ComponentNames finalCmp = cmp;
-        Init original          = self;
-
-        /* build proxy that reflects merged values */
-        return (Init) java.lang.reflect.Proxy.newProxyInstance(
-            Init.class.getClassLoader(),
-            new Class<?>[]{Init.class},
-            (p, m, a) -> switch (m.getName()) {
-                case "annotationType" -> Init.class;
-                case "module"         -> finalMod;
-                case "component"      -> finalCmp;
-                default               -> m.invoke(original, a);
-            });
     }
 
     /* ==================================================================== */

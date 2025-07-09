@@ -4,6 +4,7 @@ import com.badlogic.gdx.Input;
 import com.gwngames.core.api.event.IInputEvent;
 import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.api.input.action.IInputAction;
+import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.BaseTest;
 import com.gwngames.core.event.input.ButtonEvent;
 import com.gwngames.core.input.BaseInputAdapter;
@@ -23,7 +24,7 @@ public class InputActionManagerMapperTest extends BaseTest {
     /* ───────────────────────── Stub classes ─────────────────────────── */
 
     /* counts every execution – no enable / cooldown logic */
-    private static final class CounterAction implements IInputAction {
+    private static final class CounterAction extends BaseComponent implements IInputAction {
         private final AtomicInteger cnt = new AtomicInteger();
         @Override public void execute(IInputEvent ctx){ cnt.incrementAndGet(); }
         int hits(){ return cnt.get(); }
@@ -36,7 +37,7 @@ public class InputActionManagerMapperTest extends BaseTest {
     private static final class SimpleMapper extends BaseInputMapper {
 
         private static final IInputIdentifier SPACE =
-            new KeyInputIdentifier(Input.Keys.SPACE);
+            new KeyInputIdentifier(Input.Keys.SPACE, true);
 
         private final IInputAction act;
 
@@ -106,10 +107,10 @@ public class InputActionManagerMapperTest extends BaseTest {
         mapper.setAdapter(pad0);
         Assertions.assertSame(pad0, mgr.adapterOf(mapper));
 
-        pad0.fire(new ButtonEvent(0, new KeyInputIdentifier(Input.Keys.SPACE), true, 1f));
+        pad0.fire(new ButtonEvent(0, new KeyInputIdentifier(Input.Keys.SPACE, true), true, 1f));
         Assertions.assertEquals(1, act.hits(), "Action should fire through pad0");
 
-        pad1.fire(new ButtonEvent(1, new KeyInputIdentifier(Input.Keys.SPACE), true, 1f));
+        pad1.fire(new ButtonEvent(1, new KeyInputIdentifier(Input.Keys.SPACE, true), true, 1f));
         Assertions.assertEquals(1, act.hits(), "Not yet bound to pad1");
 
         /* re-attach to pad1 (auto-detaches from pad0) */
@@ -117,10 +118,10 @@ public class InputActionManagerMapperTest extends BaseTest {
         mapper.setAdapter(pad1);
         Assertions.assertSame(pad1, mgr.adapterOf(mapper));
 
-        pad0.fire(new ButtonEvent(0, new KeyInputIdentifier(Input.Keys.SPACE), true, 1f));
+        pad0.fire(new ButtonEvent(0, new KeyInputIdentifier(Input.Keys.SPACE, true), true, 1f));
         Assertions.assertEquals(1, act.hits(), "Old adapter must no longer trigger");
 
-        pad1.fire(new ButtonEvent(1, new KeyInputIdentifier(Input.Keys.SPACE), true, 1f));
+        pad1.fire(new ButtonEvent(1, new KeyInputIdentifier(Input.Keys.SPACE, true), true, 1f));
         Assertions.assertEquals(2, act.hits(), "Action fires through new adapter");
 
         /* detach mapper entirely */
@@ -128,7 +129,7 @@ public class InputActionManagerMapperTest extends BaseTest {
         mapper.setAdapter(null);
         Assertions.assertNull(mgr.adapterOf(mapper));
 
-        pad1.fire(new ButtonEvent(1, new KeyInputIdentifier(Input.Keys.SPACE), true, 1f));
+        pad1.fire(new ButtonEvent(1, new KeyInputIdentifier(Input.Keys.SPACE, true), true, 1f));
         Assertions.assertEquals(2, act.hits(), "Detached mapper should ignore input");
     }
 }

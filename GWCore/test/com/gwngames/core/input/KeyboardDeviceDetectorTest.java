@@ -38,6 +38,11 @@ public class KeyboardDeviceDetectorTest extends BaseTest {
 
         detector.addDeviceListener(new IInputDeviceListener() {
             @Override
+            public int getMultId() {
+                return 0;
+            }
+
+            @Override
             public void onAdapterConnected(IInputAdapter adapter) {
                 connectCnt.incrementAndGet();
                 captured.set(adapter);

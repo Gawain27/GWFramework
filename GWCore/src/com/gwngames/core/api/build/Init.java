@@ -20,14 +20,21 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
 public @interface Init {
+    /** Specify the module (INTERFACE for interfaces) */
     ModuleNames module() default ModuleNames.UNIMPLEMENTED;
+    /** Specify subcomponent id */
     ComponentNames component() default ComponentNames.NONE;
+    /** Specifies the platform */
     PlatformNames platform() default PlatformNames.ALL;
+    /** allows multiple concrete classes with same interface (still one instance per concrete class)*/
     boolean allowMultiple() default false;
+    /** Signals that concrete component should specify the platform for it (ANDROID, WEB, etc.)*/
     boolean isPlatformDependent() default false;
+    /** Signals that concrete classes are enums */
     boolean isEnum() default false;
-    /** Signals that a component must fill optional parameters */
+    /** Signals that a component must define sub component */
     boolean forceDefinition() default false;
+    /** Specifies the subcomponent id */
     SubComponentNames subComp() default SubComponentNames.NONE;
 }
 

@@ -1,7 +1,7 @@
 package com.gwngames.core.input.mapper;
 
 import com.gwngames.core.api.input.IInputIdentifier;
-import com.gwngames.core.api.input.buffer.ComboPriority;
+import com.gwngames.core.data.ComboPriority;
 import com.gwngames.core.api.input.buffer.IInputCombo;
 import com.gwngames.core.base.BaseTest;
 import com.gwngames.core.input.buffer.SmartComboManager;
@@ -75,6 +75,16 @@ public final class InputComboManagerTest extends BaseTest {
         public String getDisplayName() {
             return "";
         }
+
+        @Override
+        public boolean isRecordWhilePressed() {
+            return true;
+        }
+
+        @Override
+        public int getMultId() {
+            return 0;
+        }
     }
 
     /** Factory for simple immutable combos used in the test */
@@ -84,6 +94,11 @@ public final class InputComboManagerTest extends BaseTest {
                                      IInputIdentifier... ids){
         Set<IInputIdentifier> set = Set.of(ids);
         return new IInputCombo() {
+            @Override
+            public int getMultId() {
+                return 0;
+            }
+
             @Override public String            name()          { return name; }
             @Override public Set<IInputIdentifier> identifiers(){ return set; }
             @Override public int               activeFrames()  { return ttl;  }

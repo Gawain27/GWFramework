@@ -1,7 +1,7 @@
 // *** GENERATED FILE – DO NOT EDIT ***
 package com.gwngames.assets.ui;
 
-public enum UiAssets {
+public enum UIAssets {
     FONT_LIST_FNT("ui/font-list.fnt"),
     FONT_SUBTITLE_FNT("ui/font-subtitle.fnt"),
     FONT_WINDOW_FNT("ui/font-window.fnt"),
@@ -12,7 +12,7 @@ public enum UiAssets {
 
     public final String path;
 
-    UiAssets(String path) {
+    UIAssets(String path) {
         this.path = path;
     }
 

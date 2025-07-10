@@ -1,7 +1,7 @@
 // *** GENERATED FILE – DO NOT EDIT ***
 package com.gwngames.assets;
 
-public enum Gw2dAssets {
+public enum GW2DAssets {
     ASSETS_TXT("assets.txt"),
     KOALIO_SINGLE_PNG("koalio-single.png"),
     KOALIO_PNG("koalio.png"),
@@ -12,7 +12,7 @@ public enum Gw2dAssets {
 
     public final String path;
 
-    Gw2dAssets(String path) {
+    GW2DAssets(String path) {
         this.path = path;
     }
 

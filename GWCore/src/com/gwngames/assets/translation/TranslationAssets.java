@@ -1,12 +1,12 @@
 // *** GENERATED FILE – DO NOT EDIT ***
 package com.gwngames.assets.translation;
 
-public enum TrNslTionAssets {
+public enum TranslationAssets {
     MESSAGES_CSV("translation/messages.csv");
 
     public final String path;
 
-    TrNslTionAssets(String path) {
+    TranslationAssets(String path) {
         this.path = path;
     }
 

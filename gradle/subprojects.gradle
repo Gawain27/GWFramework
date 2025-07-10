@@ -169,8 +169,14 @@ ${enumConstants};
 
 /* ---- helpers ----------------------------------------------------------- */
 static String toPascal(String s) {
-  s.tokenize(/[^A-Za-z0-9]+/)
-    .findAll { it }                       // drop empties
-    .collect { it[0].toUpperCase() + it.substring(1).toLowerCase() }
+  s.split(/[^A-Za-z0-9]+/)
+    .findAll { it }                              // drop empties
+    .collect { tok ->
+      if (tok.length() <= 2 || tok =~ /[0-9]/ || tok == tok.toUpperCase()) {
+        tok.toUpperCase()                   // keep acronyms & things with digits
+      } else {
+        tok[0].toUpperCase() + tok.substring(1).toLowerCase()
+      }
+    }
     .join('')
 }

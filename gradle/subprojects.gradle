@@ -9,32 +9,32 @@ subprojects { Project subproj ->
   apply plugin: 'idea'
   apply plugin: 'eclipse'
 
+  // Treat <subproject>/src as an additional source root
+  sourceSets.main.java.srcDir 'src'
+
   sourceCompatibility = JavaVersion.VERSION_21
   targetCompatibility = JavaVersion.VERSION_21
-  version = projectVersion                         // from gradle.properties
+  version = projectVersion                       // from gradle.properties
 
+  /* ------------------------------------------------------------ */
+  /*  Extra test-JAR artefact                                     */
+  /* ------------------------------------------------------------ */
   plugins.withType(JavaPlugin).configureEach {
-    // 1) Add a new configuration to hold test‐classes
-    configurations {
-      testOutput
-    }
-    // 2) Create the JAR task from the test source set
+    configurations { testOutput }
     tasks.register('testJar', Jar) {
       archiveClassifier.set('tests')
       from sourceSets.test.output
     }
-    // 3) Publish it on testOutput
-    artifacts {
-      testOutput testJar
-    }
+    artifacts { testOutput testJar }
   }
-  /* -------------------------------------------------------------- */
-  // JAR naming and buildVersion bump on shipping builds
-  /* -------------------------------------------------------------- */
+
+  /* ------------------------------------------------------------ */
+  /*  JAR naming + buildVersion bump on shipping builds           */
+  /* ------------------------------------------------------------ */
   tasks.named('jar') { Jar jarTask ->
     if (rootProject.isShippingBuild) {
       dependsOn rootProject.tasks.named('bumpBuildVersions')
-      outputs.upToDateWhen { false }           // force rebuild
+      outputs.upToDateWhen { false }          // force rebuild
     }
     doFirst {
       Properties p = new Properties()
@@ -43,44 +43,134 @@ subprojects { Project subproj ->
     }
   }
 
-  /* ------------------------------------------------------------------ */
-  /*  Generate assets.txt with a flat list of every resource file       */
-  /* ------------------------------------------------------------------ */
+  /* ------------------------------------------------------------ */
+  /* 1)  Write assets.txt with a flat list of every resource file */
+  /* ------------------------------------------------------------ */
   tasks.register('generateAssetsTxt') { Task t ->
     group       = 'build'
     description = 'List all files under resources into assets.txt'
 
-    // --- inputs & outputs for incremental builds -------------------
     inputs.files(sourceSets.main.resources)
     outputs.file("${projectDir}/resources/assets.txt")
 
-    // --- work -------------------------------------------------------
     doLast {
-      // Pick the first existing resource root (handles multi‐srcDir setups)
       File resRoot = sourceSets.main.resources.srcDirs.find { it.exists() } as File
-      if (resRoot == null) {
+      if (!resRoot) {
         logger.lifecycle("No resources for ${project.path}, skipping assets.txt")
         return
       }
 
       File outFile = new File(resRoot, 'assets.txt')
-      // Collect all regular files (skip directories) and sort for reproducibility
       def relPaths = fileTree(resRoot) {
-        include '**/*.*'                       // take every file with an extension
+        include '**/*.*'
       }.files.collect { f ->
-        // Normalise to forward slashes so paths look the same on Windows & *nix
-        resRoot.toPath().relativize(f.toPath())
-          .toString()
-          .replace('\\', '/')
+        resRoot.toPath().relativize(f.toPath()).toString().replace('\\', '/')
       }.sort()
 
-      outFile.text = relPaths.join('\n') + '\n'  // final \n → POSIX-friendly
+      outFile.text = relPaths.join('\n') + '\n'
       logger.lifecycle("Wrote ${relPaths.size()} entries to ${outFile}")
     }
   }
 
-  // Ensure it runs early enough to be copied by processResources
+  /* ------------------------------------------------------------ */
+  /* 2)  Turn assets.txt into enum classes under src/…            */
+  /* ------------------------------------------------------------ */
+  /* ---------------------------------------------------------------------------
+ *  Clean + (re)generate enum classes that mirror the resources tree
+ * --------------------------------------------------------------------------- */
+  tasks.register('generateAssetEnums') {
+    group       = 'build'
+    description = 'Create enum classes that mirror the resources tree'
+    dependsOn   tasks.named('generateAssetsTxt')
+
+    /* ---- where “real” source files will live -------------------------------- */
+    final File srcRoot = file("$projectDir/src/com/gwngames/assets")
+
+    /* ---- inputs & outputs for incremental builds --------------------------- */
+    inputs.file  "${projectDir}/resources/assets.txt"
+    outputs.dir  srcRoot
+
+    doFirst {
+      /* fresh slate – remove *all* previously generated enums */
+      if (srcRoot.exists()) {
+        srcRoot.deleteDir()
+      }
+    }
+
+    doLast {
+      srcRoot.mkdirs()
+
+      /* bucket every resource entry by the folder it lives in */
+      Map<List<String>, List<List<String>>> buckets = [:]
+
+      file("${projectDir}/resources/assets.txt").eachLine { String rel ->
+        int slash      = rel.lastIndexOf('/')
+        String dirPart = slash > -1 ? rel.substring(0, slash) : ''
+        String filePart= slash > -1 ? rel.substring(slash + 1) : rel
+
+        List<String> tokens  = dirPart ? dirPart.tokenize('/') : []
+        String baseName      = tokens ? tokens[-1] : toPascal(project.name)
+        String pkgSuffix     = dirPart ? '.' + dirPart.replace('/', '.') : ''
+        String cls           = toPascal(baseName) + 'Assets'
+
+        buckets.computeIfAbsent([pkgSuffix, cls]) { [] }
+          << [dirPart, filePart]
+      }
+
+      /* emit one enum per bucket */
+      buckets.each { key, entries ->
+        String pkgSuffix = key[0]
+        String cls       = key[1]
+
+        File outDir = new File(srcRoot, pkgSuffix.replace('.', '/'))
+        outDir.mkdirs()
+
+        File javaFile = new File(outDir, "${cls}.java")
+
+        /* build the enum body – 4-space indent, no trailing blanks */
+        String enumConstants = entries.collect { e ->
+          String constName = e[1].replaceAll('[^A-Za-z0-9]', '_').toUpperCase()
+          "    ${constName}(\"${e[0] ? e[0] + '/' : ''}${e[1]}\")"
+        }.join(",\n")
+
+        javaFile.text =
+          """// *** GENERATED FILE – DO NOT EDIT ***
+package com.gwngames.assets${pkgSuffix};
+
+public enum ${cls} {
+${enumConstants};
+
+    public final String path;
+
+    ${cls}(String path) {
+        this.path = path;
+    }
+
+    @Override
+    public String toString() {
+        return path;
+    }
+}
+""".stripIndent()
+      }
+
+      logger.lifecycle("✅  Asset enums written to ${srcRoot}")
+    }
+  }
+
+  /* ------------------------------------------------------------ */
+  /* 3)  Wire tasks into the build                               */
+  /* ------------------------------------------------------------ */
+  tasks.named('compileJava')    { dependsOn tasks.named('generateAssetEnums') }
   tasks.named('processResources').configure {
     dependsOn tasks.named('generateAssetsTxt')
   }
+}
+
+/* ---- helpers ----------------------------------------------------------- */
+static String toPascal(String s) {
+  s.tokenize(/[^A-Za-z0-9]+/)
+    .findAll { it }                       // drop empties
+    .collect { it[0].toUpperCase() + it.substring(1).toLowerCase() }
+    .join('')
 }

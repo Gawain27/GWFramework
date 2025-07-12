@@ -31,6 +31,7 @@ def cleanTasks = includedProjects.collect { it.tasks.named('clean') }
 // ------------------------------------------------------------------
 tasks.register('build') {
   dependsOn buildTasks
+  dependsOn tasks.named('assembleChangelog')
   dependsOn 'generateRunScripts', 'zipDistribution', 'tarDistribution'
 }
 
@@ -55,6 +56,7 @@ tasks.register('run') {
 tasks.register('delivery') {
   group       = 'distribution'
   description = 'Assemble distributable archives (zip & tar) and run tests.'
+  dependsOn tasks.named('assembleChangelog')
   dependsOn testTasks, 'zipDistribution', 'tarDistribution'
 }
 

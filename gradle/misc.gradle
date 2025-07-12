@@ -27,7 +27,8 @@ tasks.register('translationEditor', JavaExec) {
 tasks.register('viewFrameworkChangelog') {
     group       = 'documentation'
     description = 'Open changelog/framework.log.html in default browser'
-    doLast { openInBrowser(file('changelog/framework.log.html')) }
+  dependsOn tasks.named('assembleChangelog')
+  doLast { openInBrowser(file('changelog/framework.log.html')) }
 }
 
 tasks.register('viewGameChangelog') {
@@ -35,3 +36,48 @@ tasks.register('viewGameChangelog') {
     description = "Open changelog/games/${configSet}.log.html for current config"
     doLast { openInBrowser(file("changelog/games/${configSet}.log.html")) }
 }
+
+/* ---------------------------------------------------------------
+ * Merge releases/<releaseN>.html into framework.log.html
+ * --------------------------------------------------------------- */
+tasks.register('assembleChangelog') {
+  group       = 'documentation'
+  description = 'Combine per-release changelog fragments into one HTML file'
+
+  // --- inputs & outputs for incremental builds ----------------
+  inputs.file     file('changelog/template.html')
+  inputs.files    fileTree('changelog/releases').matching { include 'release*.html' }
+  outputs.file    file('changelog/framework.log.html')
+
+  doLast {
+    // 1. Gather fragments, newest first (release0 → release1 → …)
+    def summaryRows = new StringBuilder()
+    def details     = new StringBuilder()
+
+    fileTree('changelog/releases')
+      .matching { include 'release*.html' }
+      .sort { a, b -> a.name <=> b.name }        // release0, release1, …
+      .each { File frag ->
+        def txt = frag.text
+
+        // summary rows between the two markers
+        def m1 = txt =~ /<!--#SUMMARY-->([\s\S]*?)<!--#DETAILS-->/
+        if (!m1) throw new GradleException("${frag.name} is missing SUMMARY/DETAILS markers")
+        summaryRows << m1[0][1].trim() << '\n'
+
+        // every detail after the second marker
+        def m2 = txt =~ /<!--#DETAILS-->([\s\S]*)/
+        details << m2[0][1].trim() << '\n\n'
+      }
+
+    // 2. Inject into template
+    def template = file('changelog/template.html').text
+    template = template
+      .replace('@@SUMMARY_ROWS@@', summaryRows.toString().trim())
+      .replace('@@DETAILS@@',      details.toString().trim())
+
+    file('changelog/framework.log.html').text = template
+    println "✅  Built changelog with ${summaryRows.readLines().size()} table rows"
+  }
+}
+

@@ -19,6 +19,8 @@ import com.gwngames.core.input.buffer.SmartInputBuffer;
 import org.junit.jupiter.api.Assertions;
 
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -41,8 +43,9 @@ public final class InputMapperTest extends BaseTest {
     private static final IInputIdentifier  B   = pick(IdentifierDefinition.B);
 
     private static final AtomicInteger ACTION_CALLS = new AtomicInteger();
+    private static final CountDownLatch LATCH = new CountDownLatch(1);
 
-    @Override protected void runTest() {
+    @Override protected void runTest() throws InterruptedException {
 
         setupApplication();   // LibGDX head-less scaffolding
 
@@ -80,11 +83,10 @@ public final class InputMapperTest extends BaseTest {
 
         /* ───── Frame 2 : idle (DL combo TTL expired) ───── */
         mapper.endFrame();                 // chain fires → DummyAction
-        try {
-            Thread.sleep(50);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+
+        boolean ok = LATCH.await(200, TimeUnit.MILLISECONDS);
+        Assertions.assertTrue(ok, "DummyAction did not fire within 200 ms");
+
         /* ── verifications ─────────────────────────────── */
         Assertions.assertEquals(1, ACTION_CALLS.get(), "DummyAction must fire exactly once");
 
@@ -110,7 +112,10 @@ public final class InputMapperTest extends BaseTest {
     }
 
     private static final class DummyAction extends BaseComponent implements IInputAction {
-        @Override public void execute(IInputEvent evt) { ACTION_CALLS.incrementAndGet(); }
+        @Override public void execute(IInputEvent evt) {
+            ACTION_CALLS.incrementAndGet();
+            LATCH.countDown();
+        }
     }
 
     /* tiny synthetic ButtonEvent */

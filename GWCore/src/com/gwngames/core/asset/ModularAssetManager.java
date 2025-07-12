@@ -28,6 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li>Eviction is safe because we unload only when LibGDX’s reference
  *       count is 1 (ours) <em>and</em> the TTL has expired</li>
  * </ul>
+ * FIXME paths must be converted based on config of assets!
  */
 @Init(module = ModuleNames.CORE)
 public final class ModularAssetManager extends BaseComponent implements IAssetManager, Disposable {

@@ -52,38 +52,47 @@
 <!-- ==========  Quick summary table (latest on top)  ========== -->
 <table>
     <tr><th style="width:110px">Version</th><th style="width:160px">Date</th><th>Highlights</th></tr>
-    <!-- ---------- 0.0.10i --------------------------------------------------- -->
-    <tr><td><span class="tag" style="color:var(--v3)">0.0.10&nbsp;i</span></td>
+
+    <!-- ---------- 0.0.11J -------------------------------------------------- -->
+    <tr><td><span class="tag" style="color:var(--v4)">0.0.11&nbsp;J</span></td>
+        <td>12&nbsp;July&nbsp;2025</td>
+        <td>
+            Remote-asset sync, enum generator polish, unified asset merge,
+            cross-platform FileLogger, robust Windows paths, smarter Gradle UX.
+        </td></tr>
+
+    <!-- ---------- 0.0.10I --------------------------------------------------- -->
+    <tr><td><span class="tag" style="color:var(--v3)">0.0.10&nbsp;I</span></td>
         <td>8&nbsp;July&nbsp;2025</td>
         <td>
             “Held-press” identifiers, adapter refactor, robust mapper fixes,
             asset-TTL tuning, class-loader inheritance patch, +10 new tests.
         </td></tr>
 
-    <!-- ---------- 0.0.10e --------------------------------------------------- -->
-    <tr><td><span class="tag" style="color:var(--v3)">0.0.10&nbsp;e</span></td>
+    <!-- ---------- 0.0.10E --------------------------------------------------- -->
+    <tr><td><span class="tag" style="color:var(--v3)">0.0.10&nbsp;E</span></td>
         <td>1&nbsp;July&nbsp;2025</td>
         <td>
             Priority-aware combos, longest-match chain engine, greedy mapper revamp,
             press-cycle input history, new buffer/manager test-suite.
         </td></tr>
 
-    <!-- ---------- 0.0.9h ---------------------------------------------------- -->
-    <tr><td><span class="tag" style="color:var(--v2)">0.0.9&nbsp;h</span></td>
+    <!-- ---------- 0.0.9H ---------------------------------------------------- -->
+    <tr><td><span class="tag" style="color:var(--v2)">0.0.9&nbsp;H</span></td>
         <td>22&nbsp;June&nbsp;2025</td>
         <td>
             Action–mapping layer (per-slot enable &amp; cooldown), mapper↔adapter hot-swap,
             Init-inheritance compliance checks, extended test-suite.
         </td></tr>
 
-    <tr><td><span class="tag" style="color:var(--v1)">0.0.8&nbsp;g</span></td>
+    <tr><td><span class="tag" style="color:var(--v1)">0.0.8&nbsp;G</span></td>
         <td>21&nbsp;June&nbsp;2025</td>
         <td>
             Cross-platform input framework (adapters + detectors), auto-main controller selection,
             rich identifiers &amp; unified events, full headless test-suite.
         </td></tr>
 
-    <tr><td><span class="tag" style="color:var(--v7)">0.0.7 f</span></td>
+    <tr><td><span class="tag" style="color:var(--v7)">0.0.7 F</span></td>
         <td>9&nbsp;June&nbsp;2025</td>
         <td>
               LazyProxy idle-time eviction & immortal flag;
@@ -94,23 +103,23 @@
               comprehensive tests added.
             </td></tr>
 
-    <tr><td><span class="tag" style="color:var(--v6)">0.0.6 e</span></td>
+    <tr><td><span class="tag" style="color:var(--v6)">0.0.6 E</span></td>
         <td>8&nbsp;June&nbsp;2025</td>
         <td>Trigger system, per-event &amp; global conditions, new tests.</td></tr>
 
-    <tr><td><span class="tag" style="color:var(--v5)">0.0.5 d</span></td>
+    <tr><td><span class="tag" style="color:var(--v5)">0.0.5 D</span></td>
         <td>6&nbsp;June&nbsp;2025</td>
         <td>Concurrent master-queue architecture, <code>EventException</code>, FileLogger integration &amp; full test-suite.</td></tr>
 
-    <tr><td><span class="tag" style="color:var(--v4)">0.0.4 c</span></td>
+    <tr><td><span class="tag" style="color:var(--v4)">0.0.4 C</span></td>
         <td>2&nbsp;June&nbsp;2025</td>
         <td>Core exception translation, CDI injection, CSV defaults &amp; connectivity test.</td></tr>
 
-    <tr><td><span class="tag" style="color:var(--v3)">0.0.3 b</span></td>
+    <tr><td><span class="tag" style="color:var(--v3)">0.0.3 B</span></td>
         <td>31&nbsp;May&nbsp;2025</td>
         <td>Full i18n tool-chain, DeepL auto-translation, enum auto-sort, rich Gradle UX.</td></tr>
 
-    <tr><td><span class="tag" style="color:var(--v2)">0.0.2 a</span></td>
+    <tr><td><span class="tag" style="color:var(--v2)">0.0.2 A</span></td>
         <td>26&nbsp;May&nbsp;2025</td>
         <td>Multi-sub-component system, big <code>ModuleClassLoader</code> refactor.</td></tr>
 
@@ -123,10 +132,64 @@
      Modular accordion – newest entry open by default
 ========================================================================== -->
 
-<!-- ---------- 0.0.10i --------------------------------------------------- -->
+<!-- ---------- 0.0.11J -------------------------------------------------- -->
 <details open>
+    <summary style="color:var(--v4)">
+        <span class="tag" style="color:var(--v4)">0.0.11 J</span>
+        <em style="flex:1">“Asset&nbsp;Pipeline” – released&nbsp;12&nbsp;July&nbsp;2025</em>
+    </summary>
+    <div class="entry-body">
+
+        <h3>📦 Remote Resource Sync</h3>
+        <ul>
+            <li><strong>updateResources</strong> Gradle task<br>
+                • Dropbox-friendly URL support with redirect-aware <code>HEAD</code> check.<br>
+                • Hash compare (ETag → MD5 → SHA-256 fallback) to skip redundant downloads.<br>
+                • Automatic unzip, temp-dir cleanup, and per-module <code>resources/</code> refresh.<br>
+                • Metadata (<code>&lt;module&gt;_url / _hash</code>) stored centrally in <code>root gradle.properties</code>.</li>
+        </ul>
+
+        <h3>🗂 Unified Asset Merge</h3>
+        <ul>
+            <li><strong>mergeAssets</strong> task<br>
+                • Collates every sub-project’s <code>resources/</code> into
+                <code>${assetsFinalDir}</code> under <code>bin/</code>.<br>
+                • Conflict resolution by <code>projectLevel</code> (highest wins).<br>
+                • Emits a single, alphabetised <code>assets.txt</code> for the game runtime.<br>
+                • Robust path normalisation – handles <code>../</code>, quotes, absolute targets.</li>
+        </ul>
+
+        <h3>🛠 Enum Generator Polish</h3>
+        <ul>
+            <li><strong>generateAssetEnums</strong><br>
+                • Cleans <code>src/com/gwngames/assets</code> before regeneration.<br>
+                • Root enum now <code>&lt;SubProject&gt;Assets</code> (<em>CoreAssets</em>, <em>Gw2dAssets</em>, …).<br>
+                • Smarter Pascal-case logic (acronyms stay uppercase: <em>GW2D</em>).<br>
+                • Tight 4-space formatting &amp; “<code>// GENERATED – DO NOT EDIT</code>” banner.</li>
+        </ul>
+
+        <h3>📝 FileLogger Enhancements</h3>
+        <ul>
+            <li>Relative log paths (<code>../log/…</code>) now resolve against <code>user.dir</code>.</li>
+            <li>Creates missing directories automatically; rotates after 10 000 lines.</li>
+            <li>NIO <code>Files</code> implementation for cross-platform reliability.</li>
+        </ul>
+
+        <h3>🔧 Build & Tooling</h3>
+        <ul>
+            <li><code>.gitignore</code>: ignores downloaded assets yet keeps
+                <code>translation/</code> and <code>assets.txt</code>.</li>
+            <li>Windows-safe ZIP handling via Ant, buffered stream copy fallback.</li>
+            <li>Pathing fixes for quoted <code>assetsFinalDir</code> values.</li>
+        </ul>
+
+    </div>
+</details>
+
+<!-- ---------- 0.0.10I --------------------------------------------------- -->
+<details>
     <summary style="color:var(--v3)">
-        <span class="tag" style="color:var(--v3)">0.0.10 i</span>
+        <span class="tag" style="color:var(--v3)">0.0.10 I</span>
         <em style="flex:1">“Press-Cycle&nbsp;Polish” – released&nbsp;8&nbsp;July&nbsp;2025</em>
     </summary>
     <div class="entry-body">
@@ -207,10 +270,10 @@
     </div>
 </details>
 
-<!-- ---------- 0.0.10e --------------------------------------------------- -->
+<!-- ---------- 0.0.10E --------------------------------------------------- -->
 <details>
     <summary style="color:var(--v3)">
-        <span class="tag" style="color:var(--v3)">0.0.10 e</span>
+        <span class="tag" style="color:var(--v3)">0.0.10 E</span>
         <em style="flex:1">“Combo&nbsp;Crafter” – released&nbsp;1&nbsp;July&nbsp;2025</em>
     </summary>
     <div class="entry-body">
@@ -283,10 +346,10 @@
     </div>
 </details>
 
-<!-- ---------- 0.0.9h ---------------------------------------------------- -->
+<!-- ---------- 0.0.9H ---------------------------------------------------- -->
 <details>
     <summary style="color:var(--v2)">
-        <span class="tag" style="color:var(--v2)">0.0.9 h</span>
+        <span class="tag" style="color:var(--v2)">0.0.9 H</span>
         <em style="flex:1">“Actions&nbsp;&amp;&nbsp;Mappings” – released&nbsp;22&nbsp;June&nbsp;2025</em>
     </summary>
     <div class="entry-body">
@@ -344,10 +407,10 @@
     </div>
 </details>
 
-<!-- ---------- 0.0.8g ---------------------------------------------------- -->
+<!-- ---------- 0.0.8G ---------------------------------------------------- -->
 <details>
     <summary style="color:var(--v1)">
-        <span class="tag" style="color:var(--v1)">0.0.8 g</span>
+        <span class="tag" style="color:var(--v1)">0.0.8 G</span>
         <em style="flex:1">“Plug-and-Play&nbsp;Input” – released&nbsp;21&nbsp;June&nbsp;2025</em>
     </summary>
     <div class="entry-body">
@@ -396,10 +459,10 @@
     </div>
 </details>
 
-<!-- ---------- 0.0.7f ---------------------------------------------------- -->
+<!-- ---------- 0.0.7F ---------------------------------------------------- -->
 <details>
     <summary style="color:var(--v7)">
-        <span class="tag" style="color:var(--v7)">0.0.7 f</span>
+        <span class="tag" style="color:var(--v7)">0.0.7 F</span>
         <em style="flex:1">“Framework&nbsp;Supercharged” – released&nbsp;9&nbsp;June&nbsp;2025</em>
     </summary>
     <div class="entry-body">
@@ -443,10 +506,10 @@
     </div>
 </details>
 
-<!-- ---------- 0.0.6e ---------------------------------------------------- -->
+<!-- ---------- 0.0.6E ---------------------------------------------------- -->
 <details>
     <summary style="color:var(--v6)">
-        <span class="tag" style="color:var(--v6)">0.0.6 e</span>
+        <span class="tag" style="color:var(--v6)">0.0.6 E</span>
         <em style="flex:1">“Triggers&nbsp;&amp;&nbsp;Conditions” – released&nbsp;8&nbsp;June&nbsp;2025</em>
     </summary>
     <div class="entry-body">
@@ -494,10 +557,10 @@
     </div>
 </details>
 
-<!-- ---------- 0.0.5d ---------------------------------------------------- -->
+<!-- ---------- 0.0.5D ---------------------------------------------------- -->
 <details>
     <summary style="color:var(--v5)">
-        <span class="tag" style="color:var(--v5)">0.0.5 d</span>
+        <span class="tag" style="color:var(--v5)">0.0.5 D</span>
         <em style="flex:1">“Event&nbsp;Pipeline&nbsp;Overhaul” – released&nbsp;6&nbsp;June&nbsp;2025</em>
     </summary>
     <div class="entry-body">
@@ -562,10 +625,10 @@
     </div>
 </details>
 
-<!-- ---------- 0.0.4c ---------------------------------------------------- -->
+<!-- ---------- 0.0.4C ---------------------------------------------------- -->
 <details>
     <summary style="color:var(--v4)">
-        <span class="tag" style="color:var(--v4)">0.0.4 c</span>
+        <span class="tag" style="color:var(--v4)">0.0.4 C</span>
         <em style="flex:1">“Connectivity &amp; Translation&nbsp;Boost” – released&nbsp;2&nbsp;June&nbsp;2025</em>
     </summary>
     <div class="entry-body">
@@ -607,10 +670,10 @@
 </details>
 
 
-<!-- ---------- 0.0.3b ---------------------------------------------------- -->
+<!-- ---------- 0.0.3B ---------------------------------------------------- -->
 <details>
     <summary style="color:var(--v3)">
-        <span class="tag" style="color:var(--v3)">0.0.3 b</span>
+        <span class="tag" style="color:var(--v3)">0.0.3 B</span>
         <em style="flex:1">“Localization&nbsp;Overdrive” – released&nbsp;31&nbsp;May&nbsp;2025</em>
     </summary>
     <div class="entry-body">
@@ -668,10 +731,10 @@
     </div>
 </details>
 
-<!-- ---------- 0.0.2a ---------------------------------------------------- -->
+<!-- ---------- 0.0.2A ---------------------------------------------------- -->
 <details>
     <summary style="color:var(--v2)">
-        <span class="tag" style="color:var(--v2)">0.0.2 a</span>
+        <span class="tag" style="color:var(--v2)">0.0.2 A</span>
         <em style="flex:1">“Modular Momentum” – released&nbsp;26&nbsp;May&nbsp;2025</em>
     </summary>
     <div class="entry-body">

@@ -81,7 +81,7 @@ public final class InputMapperTest extends BaseTest {
         /* ───── Frame 2 : idle (DL combo TTL expired) ───── */
         mapper.endFrame();                 // chain fires → DummyAction
         try {
-            Thread.sleep(10);
+            Thread.sleep(50);
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }

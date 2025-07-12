@@ -3,6 +3,8 @@
  * ========================================================================= */
 import groovy.json.JsonOutput
 import org.gradle.api.tasks.bundling.Compression
+import java.nio.file.Path as NioPath
+import java.nio.file.Paths
 
 /* ---------------- helper (needs buildVerOf from bump-version.gradle) -- */
 Provider<String> starterBuildVersion = project.provider { buildVerOf('gwstarter') }
@@ -39,9 +41,75 @@ tasks.register('injectProjectVersionIntoConfig') {
     }
 }
 
+/* =========================================================================
+ * Merge every <subproject>/resources/ tree into a single folder and
+ * produce one combined assets.txt, resolving clashes by projectLevel.
+ *
+ *  •  assetsFinalDir  (root gradle.properties) tells us *where* to copy
+ *     relative to  build/generatedConfig/<configSet>-<version>/bin/
+ *  •  ext.projectLevels  (set in dependency-graph.gradle) decides
+ *     precedence — highest level wins.
+ *  •  runs AFTER all individual assets.txt are written and AFTER the
+ *     bin/ folder exists, but BEFORE we package up the distribution.
+ * ========================================================================= */
+tasks.register('mergeAssets') {
+  group       = 'distribution'
+  description = 'Collect resources from all sub-projects into one folder with a unified assets.txt'
+
+  /* --- we need every sub-project’s assets.txt ready -------------------- */
+  dependsOn includedProjects.collect { it.tasks.named('generateAssetsTxt') }
+  dependsOn 'injectProjectVersionIntoConfig'   // guarantees binDir exists
+
+  doLast {
+    /* ---------- locate the final destination (handles .. and absolute) ---- */
+    NioPath binPath   = file("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin").toPath()
+    String userDir = (rootProject.findProperty('assetsFinalDir') ?: 'assets').trim()
+    NioPath finalPath = (Paths.get(userDir).isAbsolute()      // absolute → use as-is
+      ? Paths.get(userDir)
+      : binPath.resolve(userDir))          // relative → under bin
+      .normalize()
+    File finalDir  = finalPath.toFile()
+    finalDir.mkdirs()
+
+    println "📦  Merging resources into → $finalDir"
+
+    /* ---------- pick one “winning” asset for every path -------------- */
+    Map<String, Map> chosen = [:]   // path → [level: int, src: File]
+
+    includedProjects.each { Project p ->
+      int lvl = (rootProject.projectLevels[p.name] ?: 0) as int
+      File txt = file("${p.projectDir}/resources/assets.txt")
+      if (!txt.exists()) return
+
+      txt.eachLine { String relPath ->
+        File cand = file("${p.projectDir}/resources/$relPath")
+        if (!cand.exists()) return
+        Map prev = chosen[relPath]
+        if (prev == null || lvl > prev.level) {
+          chosen[relPath] = [ level: lvl, src: cand ]
+        }
+      }
+    }
+
+    /* ---------- copy winners and build the combined manifest -------------- */
+    chosen.each { String relPath, Map entry ->
+      NioPath destPath = finalPath.resolve(relPath).normalize()
+      File dest     = destPath.toFile()
+      dest.parentFile.mkdirs()
+      ant.copy(file: entry.src, tofile: dest, overwrite: true)
+    }
+
+    File mergedTxt = finalPath.resolve('assets.txt').toFile()
+    mergedTxt.text = chosen.keySet().sort().join('\n') + '\n'
+    println "📄  Combined assets.txt written → $mergedTxt"
+    println "✅  Copied ${chosen.size()} unique assets."
+  }
+}
+
 /* ---------------- prepareDistribution  -------------------------------- */
 tasks.register('prepareDistribution', Copy) {
     dependsOn project(':gwstarter').tasks.named('distZip'), 'injectProjectVersionIntoConfig'
+    dependsOn tasks.named('mergeAssets')
 
     from zipTree(project(':gwstarter').layout.buildDirectory.file("distributions/gwstarter-${projectVersion}.zip"))
     eachFile { FileCopyDetails fcd ->

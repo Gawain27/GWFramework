@@ -16,7 +16,9 @@
     <div class="container-fluid">
         <span class="navbar-brand">GWFramework – Translation Editor</span>
         <button id="grantBtn" class="btn btn-outline-light btn-sm">Grant access</button>
-        <select id="moduleSelect" class="form-select w-auto ms-3 d-none"></select>
+        <label for="moduleSelect"></label><select id="moduleSelect" class="form-select w-auto ms-3 d-none"></select>
+        <label for="searchInput"></label><input id="searchInput" class="form-control ms-3 w-auto"
+                                                style="min-width:180px" placeholder="🔍 Filter rows…">
     </div>
 </nav>
 
@@ -28,11 +30,11 @@
         <div class="card-body d-flex flex-wrap align-items-end gap-3">
             <div class="flex-grow-1">
                 <label class="form-label">DeepL API Key</label>
-                <input type="password" id="deeplKey" class="form-control">
+                <label for="deeplKey"></label><input type="password" id="deeplKey" class="form-control">
             </div>
             <div>
                 <label class="form-label d-block">Auto-translate column</label>
-                <select id="targetLocale" class="form-select w-auto d-inline me-2"></select>
+                <label for="targetLocale"></label><select id="targetLocale" class="form-select w-auto d-inline me-2"></select>
                 <button id="translateBtn" class="btn btn-outline-primary" disabled>Translate</button>
             </div>
         </div>
@@ -42,6 +44,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<script src="src/main/java/editor.js"></script>
+<script src="resources/editor.js"></script>
 </body>
 </html>

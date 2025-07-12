@@ -170,3 +170,4 @@ Thumbs.db
 !**/resources/assets.txt
 !**/resources/translation/
 !**/resources/translation/**
+!tools/**

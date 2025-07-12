@@ -3,6 +3,7 @@ package com.gw.editor;
 import javafx.application.Application;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.*;
+import javafx.collections.transformation.FilteredList;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.TextFieldTableCell;
@@ -49,6 +50,7 @@ public class EditorApp extends Application {
     }
 
     /* ───── UI state ───── */
+    private final TextField        filterField  = new TextField();
     private final ComboBox<String> moduleBox   = new ComboBox<>();
     private final ComboBox<String> localeBox   = new ComboBox<>();
     private final Button            translateBtn = new Button("🌍 Translate");
@@ -58,6 +60,12 @@ public class EditorApp extends Application {
     private List<String> header = List.of();
     private final Map<String, Path> moduleCsv = new TreeMap<>();
     private List<List<String>> snapshot = List.of();      // diff baseline
+
+    // member fields
+    private final ObservableList<ObservableList<String>> rowsRaw =
+        FXCollections.observableArrayList();
+    private final FilteredList<ObservableList<String>> rowsView =
+        new FilteredList<>(rowsRaw, r -> true);
 
     /* ───── start ───── */
     @Override public void start(Stage st){
@@ -70,6 +78,9 @@ public class EditorApp extends Application {
             loadCsv(nv);
         });
 
+        filterField.setPromptText("🔍 Filter…");
+        filterField.setPrefWidth(180);
+
         localeBox.setPromptText("Locale");
         localeBox.valueProperty().addListener((o,ov,nv)->{
             log(Lv.INFO,"Locale changed → "+nv);
@@ -81,8 +92,18 @@ public class EditorApp extends Application {
         saveBtn.setDisable(true);
         saveBtn.setOnAction(e -> saveCsv());
 
-        var bar = new ToolBar(moduleBox, localeBox, translateBtn,
-            new Separator(), saveBtn);
+        var bar = new ToolBar(
+            moduleBox, localeBox, translateBtn,
+            new Separator(), saveBtn,
+            new Separator(), filterField
+        );
+
+        filterField.textProperty().addListener((obs, oldText, newText) -> {
+            String needle = newText.toLowerCase().trim();
+            rowsView.setPredicate(row -> needle.isEmpty() ||
+                row.stream().anyMatch(cell -> cell.toLowerCase().contains(needle)));
+        });
+
         var scene = new Scene(new BorderPane(table, bar, null, null, null),
             960, 600);
         scene.getStylesheets().add(darculaCss());
@@ -189,22 +210,23 @@ public class EditorApp extends Application {
         if(mod==null) return;
         Path csv=moduleCsv.get(mod);
         log(Lv.INFO,"Loading CSV "+csv);
-        ObservableList<ObservableList<String>> rows=FXCollections.observableArrayList();
 
-        if(Files.isRegularFile(csv)){
-            try(BufferedReader br=Files.newBufferedReader(csv)){
-                String line; int n=0;
-                while((line=br.readLine())!=null){
-                    var cols = List.of(line.split(",",-1));
-                    if(n++==0) buildColumns(merge(cols));
-                    else rows.add(pad(cols));
+        rowsRaw.clear();
+        if (Files.isRegularFile(csv)) {
+            try (BufferedReader br = Files.newBufferedReader(csv)) {
+                String line; int n = 0;
+                while ((line = br.readLine()) != null) {
+                    var cols = List.of(line.split(",", -1));
+                    if (n++ == 0) buildColumns(merge(cols));
+                    else rowsRaw.add(pad(cols));
                 }
-            }catch(IOException ex){ log(Lv.WARN,"Read error "+ex); }
-        }else buildColumns(header);
+            } catch (IOException ex) { log(Lv.WARN, "Read error " + ex); }
+        } else buildColumns(header);
 
-        table.setItems(rows);
+        table.setItems(rowsView);            // <— bind FilteredList
+
         saveBtn.setDisable(false);
-        snapshot = rows.stream().map(l->new ArrayList<>(l)).collect(Collectors.toList());
+        snapshot = rowsRaw.stream().map(ArrayList::new).collect(Collectors.toList());
 
         /* refresh locale drop-down */
         localeBox.getItems().setAll(header.subList(1, header.size()));
@@ -310,15 +332,15 @@ public class EditorApp extends Application {
         try{Files.createDirectories(csv.getParent());}catch(IOException ignored){}
         try(BufferedWriter bw=Files.newBufferedWriter(csv)){
             bw.write(String.join(",",header));bw.newLine();
-            for(var r:table.getItems()) bw.write(csv(r)+"\n");
+            for(var r:rowsRaw) bw.write(csv(r)+"\n");
         }catch(IOException e){ log(Lv.WARN,"Save error "+e); }
 
         int changed=0;
-        for(int i=0;i<table.getItems().size();i++){
-            if(i>=snapshot.size() || !table.getItems().get(i).equals(snapshot.get(i))) changed++;
+        for(int i=0;i<rowsRaw.size();i++){
+            if(i>=snapshot.size() || !rowsRaw.get(i).equals(snapshot.get(i))) changed++;
         }
-        snapshot=table.getItems().stream().map(l->new ArrayList<>(l)).collect(Collectors.toList());
-        alert("Saved "+table.getItems().size()+" rows – "+changed+" updated.");
+        snapshot=rowsRaw.stream().map(ArrayList::new).collect(Collectors.toList());
+        alert("Saved "+rowsRaw.size()+" rows – "+changed+" updated.");
         log(Lv.INFO,"Save finished (“updated”="+changed+")");
     }
 

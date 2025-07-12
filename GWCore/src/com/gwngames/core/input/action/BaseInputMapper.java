@@ -97,7 +97,7 @@ public abstract class BaseInputMapper extends BaseComponent
     /* ═════════════════════════════════ endFrame() ═══════════════════ */
     public void endFrame(){
 
-        /* ① resolve combos pressed *this* frame ----------------------- */
+        /* resolve combos pressed *this* frame ----------------------- */
         if (!pressedThisFrame.isEmpty()){
             List<IInputCombo> combos = comboMgr.resolve(Set.copyOf(pressedThisFrame));
             if (!combos.isEmpty()){

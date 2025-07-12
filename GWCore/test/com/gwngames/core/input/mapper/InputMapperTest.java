@@ -80,7 +80,11 @@ public final class InputMapperTest extends BaseTest {
 
         /* ───── Frame 2 : idle (DL combo TTL expired) ───── */
         mapper.endFrame();                 // chain fires → DummyAction
-
+        try {
+            Thread.sleep(10);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
         /* ── verifications ─────────────────────────────── */
         Assertions.assertEquals(1, ACTION_CALLS.get(), "DummyAction must fire exactly once");
 

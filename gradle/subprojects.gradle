@@ -1,3 +1,5 @@
+import java.security.MessageDigest
+
 /* =========================================================================
  * Common sub-project convention (plugins, Java version, JAR naming)
  * ========================================================================= */
@@ -43,12 +45,109 @@ subprojects { Project subproj ->
     }
   }
 
+  /* ────────────────────────────────────────────────────────────────────────────
+  *  Keep <subproject>/resources in sync with the ZIP produced by a OneDrive
+  *  folder link stored in ROOT gradle.properties as <subproject>_url.
+  * ──────────────────────────────────────────────────────────────────────────── */
+  tasks.register('updateResources') {
+    group       = 'build'
+    description = 'Sync <subproject>/resources with the Dropbox archive defined in root gradle.properties'
+
+    /* ---------- shared gradle.properties at repo root ---------------------- */
+    File       rootPropsFile = rootProject.file('gradle.properties')
+    Properties rootProps     = new Properties().tap { rootPropsFile.withInputStream { load(it) } }
+
+    String urlKey  = "${project.name.toLowerCase()}_url"
+    String hashKey = "${project.name.toLowerCase()}_hash"
+
+    /* ---------- ensure the keys exist -------------------------------------- */
+    boolean mutated = false
+    if (!rootProps.containsKey(urlKey))  { rootProps[urlKey]  = 'null'; mutated = true }
+    if (!rootProps.containsKey(hashKey)) { rootProps[hashKey] = '';     mutated = true }
+    if (mutated) rootPropsFile.withOutputStream { rootProps.store(it, null) }
+
+    String remoteUrl = rootProps[urlKey]
+    if (!remoteUrl || remoteUrl == 'null') {
+      logger.lifecycle("No ${urlKey} configured – skipping download for ${project.path}")
+      return
+    }
+
+    /* ---------- make the task serialisable for parallel builds ------------- */
+    outputs.file(rootPropsFile)   // Gradle serialises tasks touching this file
+
+    String remoteHash = fetchRemoteHash(remoteUrl)
+    String localHash  = rootProps[hashKey]
+
+    if (remoteHash && remoteHash == localHash) {
+      logger.lifecycle("Resources for ${project.path} already up to date (hash $remoteHash)")
+      return
+    }
+
+    /* ---------- download the ZIP ------------------------------------------- */
+    File dlDir   = rootProject.file("$buildDir/downloads"); dlDir.mkdirs()
+    File archive = new File(dlDir, "${project.name}-resources.zip")
+    logger.lifecycle("Downloading updated resources for ${project.path} …")
+
+    new URL(remoteUrl).withInputStream { ins ->
+      archive.withOutputStream { out -> out << ins }        //  ◄─  Groovy-style copy
+    }
+
+    /* ---------- compute fallback SHA-256 if server gave no hash ------------ */
+    if (!remoteHash) {
+      remoteHash = archive.withInputStream { stream ->
+        MessageDigest md = MessageDigest.getInstance('SHA-256')
+        byte[] buf = new byte[8192]; int n
+        while ((n = stream.read(buf)) > 0) md.update(buf, 0, n)
+        md.digest().encodeHex().toString()
+      }
+    }
+
+    /* ---------- unpack & locate the resources folder ---------------------- */
+    File tmpDir = file("$buildDir/tmp/${project.name}-resources")
+    tmpDir.deleteDir(); tmpDir.mkdirs()
+
+    // Use Ant – it’s tolerant of weird encodings & huge ZIPs
+    ant.unzip(src: archive, dest: tmpDir, overwrite: 'true')
+
+    // Try <tmp>/resources first; if absent, look one level deeper
+    File srcRoot = new File(tmpDir, 'resources')
+    if (!srcRoot.exists()) {
+      File maybe = tmpDir.listFiles()
+        ?.find { new File(it, 'resources').exists() }
+        ?.with { new File(it, 'resources') }
+      srcRoot = maybe ?: srcRoot
+    }
+
+    if (!srcRoot.exists()) {
+      throw new GradleException(
+        "Archive for ${project.path} does not contain a 'resources/' directory"
+      )
+    }
+
+    /* ---------- copy new/changed files into the real resources dir -------- */
+    copy {
+      from srcRoot
+      into "$projectDir/resources"
+      includeEmptyDirs = false
+      duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    }
+    tmpDir.deleteDir()
+
+    /* ---------- persist the new hash back to root gradle.properties ------- */
+    rootProps[hashKey] = remoteHash
+    rootPropsFile.withOutputStream { rootProps.store(it, null) }
+
+    logger.lifecycle("✓  Synced resources for ${project.path}; stored hash ${remoteHash.take(10)}…")
+
+  }
+
   /* ------------------------------------------------------------ */
   /* 1)  Write assets.txt with a flat list of every resource file */
   /* ------------------------------------------------------------ */
   tasks.register('generateAssetsTxt') { Task t ->
     group       = 'build'
     description = 'List all files under resources into assets.txt'
+    dependsOn tasks.named('updateResources')
 
     inputs.files(sourceSets.main.resources)
     outputs.file("${projectDir}/resources/assets.txt")
@@ -109,9 +208,9 @@ subprojects { Project subproj ->
         String filePart= slash > -1 ? rel.substring(slash + 1) : rel
 
         List<String> tokens  = dirPart ? dirPart.tokenize('/') : []
-        String baseName      = tokens ? tokens[-1] : toPascal(project.name)
+        String baseName      = tokens ? tokens[-1] : ''
         String pkgSuffix     = dirPart ? '.' + dirPart.replace('/', '.') : ''
-        String cls           = toPascal(baseName) + 'Assets'
+        String cls           = toPascal(project.name) + toPascal(baseName) + 'Assets'
 
         buckets.computeIfAbsent([pkgSuffix, cls]) { [] }
           << [dirPart, filePart]
@@ -179,4 +278,31 @@ static String toPascal(String s) {
       }
     }
     .join('')
+}
+
+/* ---------- helper: follow redirects & grab ETag (or fallback) --------- */
+String fetchRemoteHash(String url, int depth = 0) {
+  if (depth > 5) throw new GradleException("Too many redirects for $url")
+
+  HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection()
+  c.instanceFollowRedirects = false      // we handle redirects manually
+  c.requestMethod  = 'HEAD'
+  c.connectTimeout = 15_000
+  c.readTimeout    = 15_000
+  c.setRequestProperty('User-Agent', 'GradleResourceSync/1.0')
+  c.connect()
+
+  int code = c.responseCode
+  if (code in [301, 302, 303, 307, 308]) {
+    String loc = c.getHeaderField('Location')
+    c.disconnect()
+    return fetchRemoteHash(loc, depth + 1)
+  }
+
+  String etag = c.getHeaderField('ETag')?.replace('"', '')
+  if (!etag) etag = c.getHeaderField('Content-MD5')
+  if (!etag) etag = c.getHeaderField('Last-Modified')
+  if (!etag) etag = c.getHeaderField('Content-Length')
+  c.disconnect()
+  return etag ?: ''
 }

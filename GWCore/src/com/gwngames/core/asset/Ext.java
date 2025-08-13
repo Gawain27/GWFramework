@@ -8,13 +8,9 @@ import com.gwngames.core.data.ModuleNames;
 public enum Ext implements IFileExtension {
     MP3("mp3"), OGG("ogg"), WAV("wav"),
     PNG("png"), JPG("jpg"), JPEG("jpeg"),
-    ATLAS("atlas");
+    ATLAS("atlas"),
+    JSON("json"), TXT("txt"), CSS("css");
     private final String e;
     Ext(String e){ this.e=e; }
     @Override public String ext(){ return e; }
-
-    @Override
-    public int getMultId() {
-        return this.ordinal();
-    }
 }

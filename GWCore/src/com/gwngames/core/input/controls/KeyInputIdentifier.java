@@ -2,13 +2,11 @@ package com.gwngames.core.input.controls;
 
 import com.badlogic.gdx.Input;
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.api.input.IInputIdentifier;
-import com.gwngames.core.base.BaseComponent;
+import com.gwngames.core.api.input.IKeyIdentifier;
 import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.SubComponentNames;
 
-@Init(module = ModuleNames.CORE, subComp = SubComponentNames.KEY_INPUT)
-public class KeyInputIdentifier extends BaseInputIdentifier {
+@Init(module = ModuleNames.CORE)
+public class KeyInputIdentifier extends BaseInputIdentifier implements IKeyIdentifier {
     private final int keycode;
 
     public KeyInputIdentifier(int keycode, boolean recordWhilePressed) {
@@ -16,6 +14,7 @@ public class KeyInputIdentifier extends BaseInputIdentifier {
         this.keycode = keycode;
     }
 
+    @Override
     public int getKeycode() {
         return keycode;
     }

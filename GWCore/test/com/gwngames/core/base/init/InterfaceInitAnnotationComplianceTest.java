@@ -3,6 +3,7 @@ package com.gwngames.core.base.init;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseTest;
+import com.gwngames.core.base.cfg.ModuleClassLoader;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.PlatformNames;
@@ -12,12 +13,8 @@ import org.junit.jupiter.api.Assertions;
 import java.util.List;
 
 /**
- * Verifies that every interface extending {@link IBaseComp} is correctly annotated.
- * <ul>
- *     <li>{@code module} must be {@code ModuleNames.INTERFACE}</li>
- *     <li>{@code component} must be != {@code ComponentNames.NONE}</li>
- *     <li>{@code platform} must remain at its default ({@code PlatformNames.ALL})</li>
- * </ul>
+ * Verifies that every interface extending {@link IBaseComp} is compliant
+ * when considering inherited @Init attributes (module/component/platform).
  */
 public class InterfaceInitAnnotationComplianceTest extends BaseTest {
 
@@ -30,11 +27,21 @@ public class InterfaceInitAnnotationComplianceTest extends BaseTest {
             if (!c.isInterface()) continue;
             if (!IBaseComp.class.isAssignableFrom(c)) continue;
 
-            Init ann = c.getAnnotation(Init.class);
-            Assertions.assertNotNull(ann, c + " is missing @Init annotation");
-            Assertions.assertEquals(ModuleNames.INTERFACE, ann.module(), c + " must declare module=INTERFACE");
-            Assertions.assertNotEquals(ComponentNames.NONE, ann.component(), c + " must declare a component value");
-            Assertions.assertEquals(PlatformNames.ALL, ann.platform(), c + " must not override platform");
+            // Use the merged/inherited view of @Init
+            Init init = ModuleClassLoader.resolvedInit(c);
+
+            Assertions.assertEquals(
+                ModuleNames.INTERFACE, init.module(),
+                c + " must inherit module=INTERFACE (directly or via parent)");
+
+            Assertions.assertNotEquals(
+                ComponentNames.NONE, init.component(),
+                c + " must declare/inherit a non-NONE component");
+
+            Assertions.assertEquals(
+                PlatformNames.ALL, init.platform(),
+                c + " must not override platform at interface level");
+
             checked++;
         }
 

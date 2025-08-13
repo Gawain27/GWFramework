@@ -3,23 +3,21 @@ package com.gwngames.core.base;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
+import com.gwngames.core.api.build.PostInject;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.LogFiles;
 import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.util.ClassUtils;
+import com.gwngames.core.util.ComponentUtils;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.lang.reflect.*;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 /**
+ *
  * Root-class for every non-enum GW-Framework component.
  *
  * <p><b>What’s new</b></p>
@@ -42,45 +40,61 @@ import java.util.function.Supplier;
  */
 public abstract class BaseComponent implements IBaseComp {
 
-    /* ────────────────────────── instance id ─────────────────────────── */
+    /** Identifier used reflectively (assigned once on construction). */
+    private final int multId = ComponentUtils.assign(this);
 
-    /** Thread-safe global counter – starts at 1 for nicer logs. */
-    private static final AtomicInteger ID_SEQ = new AtomicInteger(0);
-
-    /** Identifier that the ModuleClassLoader logs when the instance is created. */
-    private final int multId = ID_SEQ.incrementAndGet();
-
-    @Override public int getMultId() { return multId; }
-
-    /* ────────────────────────── singleton cache ─────────────────────── */
+    @Override
+    public void setMultId(int newId) { /* regular comps ignore external set */ }
 
     private static final FileLogger LOG = FileLogger.get(LogFiles.SYSTEM);
 
-    /**
-     * One cached instance for each <code>Component&nbsp;+&nbsp;SubComp</code>
-     * pair.  Key example: <code>"gw.SomeComponent#AUDIO"</code>
-     */
+    /** One cached instance for each Component + SubComp pair. */
     private static final Map<String, IBaseComp> INSTANCES = new ConcurrentHashMap<>();
 
-    /* ===== public lookup helpers ===================================== */
+    /* ===================== Public lookup helpers ===================== */
 
+    /** Default: cached singleton (SubComponentNames.NONE). */
     public static <T extends IBaseComp> T getInstance(Class<T> type) {
-        return getInstance(type, SubComponentNames.NONE);
+        return getInstance(type, SubComponentNames.NONE, false);
     }
 
+    /** Default: cached singleton for given sub-component. */
+    public static <T extends IBaseComp> T getInstance(Class<T> type, SubComponentNames sub) {
+        return getInstance(type, sub, false);
+    }
+
+    /**
+     * Optionally get a fresh (non-cached) instance. Equivalent to
+     * {@code getInstance(type, SubComponentNames.NONE, fresh)}.
+     */
+    public static <T extends IBaseComp> T getInstance(Class<T> type, boolean fresh) {
+        return getInstance(type, SubComponentNames.NONE, fresh);
+    }
+
+    /**
+     * Main entry: choose between cached singleton (fresh=false) or a brand-new
+     * instance (fresh=true). Fresh instances are NOT stored in the cache.
+     *
+     * @param type  interface annotated with @Init
+     * @param sub   sub-component (or NONE)
+     * @param fresh if true, always constructs a new instance and skips the cache
+     */
     @SuppressWarnings("unchecked")
     public static <T extends IBaseComp> T getInstance(Class<T> type,
-                                                      SubComponentNames sub) {
-        return (T) INSTANCES.computeIfAbsent(cacheKey(type, sub),
-            k -> createAndInject(type, sub));
+                                                      SubComponentNames sub,
+                                                      boolean fresh) {
+        if (!fresh) {
+            return (T) INSTANCES.computeIfAbsent(cacheKey(type, sub),
+                k -> createAndInject(type, sub));
+        }
+        // fresh instance – do not cache
+        return createAndInject(type, sub);
     }
 
-    /* ───────────────────── instantiation & @Inject ──────────────────── */
+    /* ================= instantiation & @Inject wiring ================= */
 
     private static <T extends IBaseComp> T createAndInject(Class<T> iface, SubComponentNames sub) {
-        Init meta = iface.getAnnotation(Init.class);
-        if (meta == null)
-            throw new IllegalStateException("Missing @Init on " + iface.getSimpleName());
+        Init meta = ModuleClassLoader.resolvedInit(iface);
 
         ModuleClassLoader loader = ModuleClassLoader.getInstance();
         T obj = (sub == SubComponentNames.NONE)
@@ -90,22 +104,23 @@ public abstract class BaseComponent implements IBaseComp {
         if (obj == null)
             throw new IllegalStateException("Cannot instantiate " + iface.getSimpleName());
 
-        /* ── wire @Inject fields (supports loadAll/createNew/immortal) ── */
+        // wire @Inject fields
         for (Field f : ClassUtils.getAnnotatedFields(obj.getClass(), Inject.class)) {
             f.setAccessible(true);
             Inject inj = f.getAnnotation(Inject.class);
 
-            if (inj.loadAll()) {                              // List<T> injection
+            if (inj.loadAll()) {
                 injectAllImplementations(f, obj);
-            } else {                                          // classic singleton / new
+            } else {
                 injectSingle(f, obj, inj);
             }
             f.setAccessible(false);
         }
+
+        runPostInject(obj);
         return obj;
     }
 
-    /* ===== helpers for @Inject processing ============================ */
     private static void injectAllImplementations(Field f, Object host) {
         if (!List.class.isAssignableFrom(f.getType()))
             throw new IllegalStateException("@Inject(loadAll=true) field must be a List : " + f);
@@ -135,8 +150,8 @@ public abstract class BaseComponent implements IBaseComp {
                     depType.getAnnotation(Init.class).component());
             }
             return sub == SubComponentNames.NONE
-                ? getInstance(depType)
-                : getInstance(depType, sub);
+                ? getInstance(depType)                      // cached
+                : getInstance(depType, sub);               // cached
         };
         Object proxy = LazyProxy.of(depType, create, inj.immortal());
         try { f.set(host, proxy); }
@@ -155,4 +170,37 @@ public abstract class BaseComponent implements IBaseComp {
     private static String cacheKey(Class<?> t, SubComponentNames sub) {
         return t.getName() + '#' + sub.name();
     }
+
+    private static void runPostInject(Object host) {
+        // Collect methods in superclass -> subclass order
+        Deque<Method> chain = new ArrayDeque<>();
+        Class<?> c = host.getClass();
+        while (c != null && c != Object.class) {
+            for (Method m : c.getDeclaredMethods()) {
+                if (m.isAnnotationPresent(PostInject.class)) {
+                    // Validate signature: non-static, void, no params
+                    if (Modifier.isStatic(m.getModifiers()))
+                        throw new IllegalStateException("@PostInject method must not be static: " + m);
+                    if (m.getParameterCount() != 0)
+                        throw new IllegalStateException("@PostInject method must have no parameters: " + m);
+                    if (m.getReturnType() != void.class)
+                        throw new IllegalStateException("@PostInject method must return void: " + m);
+                    chain.addFirst(m); // run superclass hooks first
+                }
+            }
+            c = c.getSuperclass();
+        }
+
+        // Invoke in order
+        for (Method m : chain) {
+            try {
+                m.setAccessible(true);
+                m.invoke(host);
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException("Error invoking @PostInject: " + m, e);
+            }
+        }
+    }
+
 }
+

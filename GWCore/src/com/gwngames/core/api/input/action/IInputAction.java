@@ -2,7 +2,7 @@ package com.gwngames.core.api.input.action;
 
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.api.event.IInputEvent;
+import com.gwngames.core.api.event.input.IInputEvent;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
 

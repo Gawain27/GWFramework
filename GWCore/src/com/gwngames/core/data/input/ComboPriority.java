@@ -1,4 +1,4 @@
-package com.gwngames.core.data;
+package com.gwngames.core.data.input;
 
 public enum ComboPriority {
     HIGH,        //   e.g. diagonals, supers

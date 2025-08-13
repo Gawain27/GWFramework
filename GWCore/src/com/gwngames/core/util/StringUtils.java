@@ -38,12 +38,23 @@ public class StringUtils {
      * @param str The input string
      * @return The cleaned string
      */
-    private static String removeInvisibleChars(String str) {
+    public static String removeInvisibleChars(String str) {
         if (str == null) return null;
         return str.replaceAll("[\\u200B\\u200C\\u200D\\uFEFF\\u00A0]", "");
     }
 
+    public static String extensionOf(String path) {
+        int idx = path.lastIndexOf('.');
+        return idx == -1 ? "" : path.substring(idx + 1);
+    }
     public static boolean isNotEmpty(String str) {
         return !isEmpty(str);
+    }
+
+    /**
+     * Escape entities
+     * */
+    public static String escape(Object o){
+        return org.jsoup.parser.Parser.unescapeEntities(String.valueOf(o),false);
     }
 }

@@ -1,15 +1,15 @@
 package com.gwngames.core.input.mapper;
 
-import com.gwngames.core.api.event.IInputEvent;
+import com.gwngames.core.api.event.input.IInputEvent;
 import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.api.input.action.IInputAction;
 import com.gwngames.core.api.input.action.IInputHistory;
 import com.gwngames.core.api.input.buffer.*;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.BaseTest;
-import com.gwngames.core.data.ComboPriority;
-import com.gwngames.core.data.IdentifierDefinition;
-import com.gwngames.core.data.InputContext;
+import com.gwngames.core.data.input.ComboPriority;
+import com.gwngames.core.data.input.IdentifierDefinition;
+import com.gwngames.core.data.input.InputContext;
 import com.gwngames.core.event.input.ButtonEvent;
 import com.gwngames.core.input.action.BaseInputMapper;
 import com.gwngames.core.input.action.InputHistory;

@@ -1,31 +1,46 @@
 package com.gwngames.core.base;
 
-import com.gwngames.core.data.ChainDefinition;
-import com.gwngames.core.data.ComboDefinition;
+import com.gwngames.core.base.cfg.ModuleClassLoader;
+import com.gwngames.core.data.input.ChainDefinition;
+import com.gwngames.core.data.input.ComboDefinition;
 import org.junit.jupiter.api.Assertions;
 
 /**
  * Enum mult-id behaviour.
- *   • Every constant inside the same enum must report the *same* id.
- *   • Different enum classes must have *different* ids.
- *   • The id must be stable across repeated invocations.
+ *   • Every constant inside the same enum must report a
+ *     *different* id.                                 <── spec clarified
+ *   • No two ids across *different* enum classes overlap.
+ *   • Ids are stable across repeated calls.
  */
-public class EnumMultIdTest extends BaseTest {
+public final class EnumMultIdTest extends BaseTest {
 
     @Override
     protected void runTest() {
 
-        /* ── same-enum equality ───────────────────────────────────────── */
-        int comboIdA = ComboDefinition.DOWN_LEFT.getMultId();
-        int comboIdB = ComboDefinition.RIGHT.getMultId();
-        Assertions.assertNotEquals(
-            comboIdA, comboIdB,
-            "All ComboDefinition constants should have different mult-id");
+        /* ── prime the loader so it assigns mult-ids to enum constants ── */
+        ModuleClassLoader.getInstance();   // walks enums, sets ids
 
-        int chainIdA = ChainDefinition.DASH.getMultId();
-        int chainIdB = ChainDefinition.PAUSE.getMultId();
+        /* ── same-enum: ids must be different ─────────────────────────── */
+        int downLeft = ComboDefinition.DOWN_LEFT.getMultId();
+        int right    = ComboDefinition.RIGHT.getMultId();
         Assertions.assertNotEquals(
-            chainIdA, chainIdB,
-            "All ChainDefinition constants should have different mult-id");
+            downLeft, right,
+            "Each ComboDefinition constant must have its own mult-id");
+
+        int dash  = ChainDefinition.DASH.getMultId();
+        int pause = ChainDefinition.PAUSE.getMultId();
+        Assertions.assertNotEquals(
+            dash, pause,
+            "Each ChainDefinition constant must have its own mult-id");
+
+        /* ── cross-enum: ids must never collide ───────────────────────── */
+        Assertions.assertNotEquals(
+            downLeft, dash,
+            "mult-ids must be unique across different enum classes");
+
+        /* ── stability check ───────────────────────────────────────────── */
+        Assertions.assertEquals(
+            downLeft, ComboDefinition.DOWN_LEFT.getMultId(),
+            "mult-id must stay the same across repeated invocations");
     }
 }

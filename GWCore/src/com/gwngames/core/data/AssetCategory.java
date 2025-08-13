@@ -6,5 +6,6 @@ package com.gwngames.core.data;
 public enum AssetCategory {
     AUDIO,
     TEXTURE,
+    DATA,
     MISC
 }

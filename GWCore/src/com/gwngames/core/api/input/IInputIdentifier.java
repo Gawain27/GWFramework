@@ -5,7 +5,7 @@ import com.gwngames.core.api.build.Init;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
 
-@Init(component = ComponentNames.INPUT_IDENTIFIER, module = ModuleNames.INTERFACE, allowMultiple = true, forceDefinition = true)
+@Init(component = ComponentNames.INPUT_IDENTIFIER, module = ModuleNames.INTERFACE, allowMultiple = true)
 public interface IInputIdentifier extends IBaseComp {
     /** e.g. "Keyboard", "Xbox Controller", "Touchscreen" */
     String getDeviceType();

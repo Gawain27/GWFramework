@@ -2,9 +2,10 @@ package com.gwngames.core.input.adapter;
 
 import com.badlogic.gdx.controllers.*;
 import com.gwngames.core.api.build.Init;
+import com.gwngames.core.api.input.IControllerAdapter;
 import com.gwngames.core.api.input.IInputAdapter;
 import com.gwngames.core.api.input.IInputIdentifier;
-import com.gwngames.core.data.IdentifierDefinition;
+import com.gwngames.core.data.input.IdentifierDefinition;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.event.input.AxisEvent;
@@ -26,10 +27,10 @@ import java.util.Map;
  *   <li>{@code axisId.get(axisCode)}</li>
  * </ul>
  */
-@Init(module = ModuleNames.CORE, subComp = SubComponentNames.CONTROLLER_ADAPTER)
+@Init(module = ModuleNames.CORE)
 public final class ControllerInputAdapter
     extends BaseInputAdapter
-    implements IInputAdapter, ControllerListener {
+    implements IControllerAdapter, ControllerListener {
 
     private static final float DEAD_ZONE = 0.10f;
 
@@ -68,6 +69,7 @@ public final class ControllerInputAdapter
         }
     }
 
+    @Override
     public Controller getController() { return controller; }
 
     @Override public void start() { Controllers.addListener(this); }

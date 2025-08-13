@@ -19,6 +19,22 @@ public enum ComponentNames {
     ASSET_SUBTYPE,
     FILE_EXTENSION,
 
+    // Input Identifiers
+    KEY_INPUT,
+    CONTROLLER_AXIS_INPUT,
+    CONTROLLER_BUTTON_INPUT,
+    TOUCH_INPUT,
+
+    // Event Types
+    TOUCH_EVENT,
+    BUTTON_EVENT,
+    AXIS_EVENT,
+
+    // Adapters
+    CONTROLLER_ADAPTER,
+    KEYBOARD_ADAPTER,
+    TOUCH_ADAPTER,
+
     // Input system – managers
     INPUT_ADAPTER_MANAGER,
     INPUT_CHAIN_MANAGER,
@@ -49,5 +65,5 @@ public enum ComponentNames {
     DEVICE_DETECTOR,
 
     // Special
-    NONE;
+    NONE, DASHBOARD_LAYER, DASHBOARD_ITEM, DASHBOARD, DASHBOARD_HEADER, DASHBOARD_CONTENT, DASHBOARD_ITEM_CATEGORY, DASHBOARD_CATEGORY, DASHBOARD_TABLE
 }

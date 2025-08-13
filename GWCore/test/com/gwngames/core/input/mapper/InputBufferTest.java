@@ -3,7 +3,7 @@ package com.gwngames.core.input.mapper;
 import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.api.input.buffer.*;
 import com.gwngames.core.base.BaseTest;
-import com.gwngames.core.data.ComboPriority;
+import com.gwngames.core.data.input.ComboPriority;
 import com.gwngames.core.input.buffer.SmartInputBuffer;
 import com.gwngames.core.input.controls.KeyInputIdentifier;
 import org.junit.jupiter.api.Assertions;

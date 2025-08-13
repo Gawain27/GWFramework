@@ -172,90 +172,133 @@ subprojects { Project subproj ->
   }
 
   /* ------------------------------------------------------------ */
-  /* 2)  Turn assets.txt into enum classes under src/…            */
+  /* 2)  Turn assets.txt into enum classes under src/… (+locales) */
   /* ------------------------------------------------------------ */
-  /* ---------------------------------------------------------------------------
- *  Clean + (re)generate enum classes that mirror the resources tree
- * --------------------------------------------------------------------------- */
   tasks.register('generateAssetEnums') {
     group       = 'build'
-    description = 'Create enum classes that mirror the resources tree'
+    description = 'Create enum classes that mirror the resources tree, ' +
+      'collapsing locale variants into a single constant'
     dependsOn   tasks.named('generateAssetsTxt')
 
-    /* ---- where “real” source files will live -------------------------------- */
     final File srcRoot = file("$projectDir/src/com/gwngames/assets")
 
-    /* ---- inputs & outputs for incremental builds --------------------------- */
+    /* ---- locale set ------------------------------------------------------- */
+    Properties p = new Properties()
+    p.load(file("$projectDir/gradle.properties").newInputStream())
+    Set<String> supportedLocales = new HashSet<>(p.getProperty('supportedLocales', '')
+      .tokenize(','))
+
+    /* ---- inputs & outputs ------------------------------------------------- */
     inputs.file  "${projectDir}/resources/assets.txt"
     outputs.dir  srcRoot
 
     doFirst {
-      /* fresh slate – remove *all* previously generated enums */
-      if (srcRoot.exists()) {
-        srcRoot.deleteDir()
-      }
+      if (srcRoot.exists()) srcRoot.deleteDir()
     }
 
     doLast {
       srcRoot.mkdirs()
 
-      /* bucket every resource entry by the folder it lives in */
-      Map<List<String>, List<List<String>>> buckets = [:]
+      /* key = [pkgSuffix, clsName, baseFileName] */
+      Map<List<String>, List<Map>> buckets = [:]
 
       file("${projectDir}/resources/assets.txt").eachLine { String rel ->
         int slash      = rel.lastIndexOf('/')
         String dirPart = slash > -1 ? rel.substring(0, slash) : ''
         String filePart= slash > -1 ? rel.substring(slash + 1) : rel
 
+        /* -------- locale detection ------------------------------------ */
+        String locale    = null
+        String basePart  = filePart
+        supportedLocales.each { loc ->
+          if (filePart.startsWith(loc + '_')) {
+            locale   = loc
+            basePart = filePart.substring(loc.length() + 1)   // strip "<loc>_"
+          }
+        }
+
         List<String> tokens  = dirPart ? dirPart.tokenize('/') : []
         String baseName      = tokens ? tokens[-1] : ''
         String pkgSuffix     = dirPart ? '.' + dirPart.replace('/', '.') : ''
         String cls           = toPascal(project.name) + toPascal(baseName) + 'Assets'
 
-        buckets.computeIfAbsent([pkgSuffix, cls]) { [] }
-          << [dirPart, filePart]
+        buckets.computeIfAbsent([pkgSuffix, cls, basePart]) { [] }
+          << [dir: dirPart,
+              file: filePart,
+              base: basePart,
+              locale: locale]
       }
 
-      /* emit one enum per bucket */
-      buckets.each { key, entries ->
-        String pkgSuffix = key[0]
-        String cls       = key[1]
+      /* -------- emit one enum per bucket --------------------------------- */
+      buckets.groupBy { it.key[0..1] }      // group by [pkgSuffix, cls]
+        .each { pcKey, groups ->
 
-        File outDir = new File(srcRoot, pkgSuffix.replace('.', '/'))
-        outDir.mkdirs()
+          String pkgSuffix = pcKey[0]
+          String cls       = pcKey[1]
 
-        File javaFile = new File(outDir, "${cls}.java")
+          File outDir = new File(srcRoot, pkgSuffix.replace('.', '/'))
+          outDir.mkdirs()
+          File javaFile = new File(outDir, "${cls}.java")
 
-        /* build the enum body – 4-space indent, no trailing blanks */
-        String enumConstants = entries.collect { e ->
-          String constName = e[1].replaceAll('[^A-Za-z0-9]', '_').toUpperCase()
-          "    ${constName}(\"${e[0] ? e[0] + '/' : ''}${e[1]}\")"
-        }.join(",\n")
+          String enumConstants = groups.collect { entry ->
+            List<Map> items   = entry.value
+            String constName  = entry.key[2].replaceAll('[^A-Za-z0-9]','_')
+              .toUpperCase()
 
-        javaFile.text =
-          """// *** GENERATED FILE – DO NOT EDIT ***
+            if (items*.locale.findAll().size() > 0) {         // at least one locale
+              String locMap = items.collect { i ->
+                "\"${i.locale ?: 'default'}\", \"${i.dir ? i.dir + '/' : ''}${i.file}\""
+              }.join(", ")
+              return """    ${constName}(\"${items[0].base}\", java.util.Map.of(${locMap}))"""
+            } else {                                          // non-localised
+              String path = "${items[0].dir ? items[0].dir + '/' : ''}${items[0].file}"
+              return "    ${constName}(\"${path}\")"
+            }
+          }.join(",\n")
+
+          javaFile.text = """// *** GENERATED FILE – DO NOT EDIT ***
 package com.gwngames.assets${pkgSuffix};
 
-public enum ${cls} {
+import java.util.*;
+import com.gwngames.core.api.asset.IAssetPath;
+
+public enum ${cls} implements IAssetPath {
 ${enumConstants};
 
-    public final String path;
+    private final String defaultPath;
+    private final Map<String,String> localePaths;
 
     ${cls}(String path) {
-        this.path = path;
+        this.defaultPath = path;
+        this.localePaths = Map.of();
+    }
+    ${cls}(String baseName, Map<String,String> localePaths) {
+        this.defaultPath = baseName;
+        this.localePaths = Collections.unmodifiableMap(localePaths);
     }
 
-    @Override
-    public String toString() {
-        return path;
+    /** path for the default (non-localised) resource */
+    public String path() { return defaultPath; }
+
+    /** path for a specific locale or fall back to default */
+    public String path(String locale) {
+        return localePaths.getOrDefault(locale, defaultPath);
     }
+
+    /** list of locales explicitly provided for this asset */
+    public List<String> locales() {
+        return List.copyOf(localePaths.keySet());
+    }
+
+    @Override public String toString() { return path(); }
 }
 """.stripIndent()
-      }
+        }
 
       logger.lifecycle("✅  Asset enums written to ${srcRoot}")
     }
   }
+
 
   /* ------------------------------------------------------------ */
   /* 3)  Wire tasks into the build                               */

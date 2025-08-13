@@ -1,13 +1,13 @@
 package com.gwngames.core.input.action;
 
 import com.gwngames.core.api.build.Inject;
-import com.gwngames.core.api.event.IInputEvent;
+import com.gwngames.core.api.event.input.IInputEvent;
 import com.gwngames.core.api.input.*;
 import com.gwngames.core.api.input.action.*;
 import com.gwngames.core.api.input.buffer.*;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.log.FileLogger;
-import com.gwngames.core.data.InputContext;
+import com.gwngames.core.data.input.InputContext;
 import com.gwngames.core.data.LogFiles;
 import com.gwngames.core.event.input.*;
 
@@ -108,7 +108,7 @@ public abstract class BaseInputMapper extends BaseComponent
             pressedThisFrame.clear();
         }
 
-        /* ② if oldest combo’s TTL expired → try chain match ---------- */
+        /* if oldest combo’s TTL expired → try chain match ---------- */
         buffer.peekOldest().ifPresent(old -> {
             if (frame - old.frame() < old.combo().activeFrames()) return;
 
@@ -130,7 +130,7 @@ public abstract class BaseInputMapper extends BaseComponent
             });
         });
 
-        /* ③ every-frame recording for “continuous” identifiers ------- */
+        /* every-frame recording for “continuous” identifiers ------- */
         for (IInputIdentifier id : held){
             if (id.isRecordWhilePressed()){
                 history.record(id);

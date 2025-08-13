@@ -4,7 +4,7 @@ import com.gwngames.core.data.AssetCategory;
 import com.gwngames.core.api.asset.IAssetSubType;
 import com.gwngames.core.api.asset.IAssetSubTypeRegistry;
 import com.gwngames.core.api.asset.IFileExtension;
-import com.gwngames.core.api.base.ILocale;
+import com.gwngames.core.api.base.cfg.ILocale;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.BaseTest;
@@ -36,7 +36,7 @@ public final class AssetSubTypeRegistryTest extends BaseTest {
         @Override public String        id()            { return "xyz-data"; }
         @Override public AssetCategory category()      { return AssetCategory.MISC; }
         @Override public Class<?>      libGdxClass()   { return null; }
-        @Override public List<IFileExtension> extensions() {
+        @Override public List<IFileExtension> extension() {
             return List.of(new XyzExt());
         }
     }
@@ -55,10 +55,10 @@ public final class AssetSubTypeRegistryTest extends BaseTest {
 
         Assertions.assertEquals(
             BuiltInSubTypes.REGION,
-            reg.byExtension("png", "region"));              // explicit
+            reg.byExtension("jpg", "region"));              // explicit
 
         Assertions.assertTrue(
-            reg.allByExtension("png").contains(BuiltInSubTypes.REGION));
+            reg.allByExtension("jpg").contains(BuiltInSubTypes.REGION));
 
         /* register custom --------------------------------------------- */
         IAssetSubType xyz = new XyzSubType();

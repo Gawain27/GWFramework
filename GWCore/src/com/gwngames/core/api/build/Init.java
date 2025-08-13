@@ -5,37 +5,40 @@ import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.PlatformNames;
 import com.gwngames.core.data.SubComponentNames;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import java.lang.annotation.*;
 
-/**
- * Annotation used to mark entities that must be auto-created from the last level in the hierarchy<p>
- * This is necessary to be able to inject singleton objects into the game components, since such logic
- * should be decoupled from the initialization of objects
- *
- * @author samlam
- * */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
 public @interface Init {
-    /** Specify the module (INTERFACE for interfaces) */
+    /** The module (INTERFACE for interfaces). */
     ModuleNames module() default ModuleNames.UNIMPLEMENTED;
-    /** Specify subcomponent id */
+
+    /** Component this class/interface belongs to. */
     ComponentNames component() default ComponentNames.NONE;
-    /** Specifies the platform */
+
+    /** Platform hint (interfaces typically ALL). */
     PlatformNames platform() default PlatformNames.ALL;
-    /** allows multiple concrete classes with same interface (still one instance per concrete class)*/
+
+    /** Whether the interface admits multiple concrete implementations. */
     boolean allowMultiple() default false;
-    /** Signals that concrete component should specify the platform for it (ANDROID, WEB, etc.)*/
+
+    /** If true, concrete component is platform-dependent. */
     boolean isPlatformDependent() default false;
-    /** Signals that concrete classes are enums */
+
+    /** If true, the concrete class is an enum. */
     boolean isEnum() default false;
-    /** Signals that a component must define sub component */
+
+    /** If true, a sub-component must be specified. */
     boolean forceDefinition() default false;
-    /** Specifies the subcomponent id */
+
+    /** Sub-component id (if any). */
     SubComponentNames subComp() default SubComponentNames.NONE;
+
+    /**
+     * If true on a **concrete class**, the instance must be obtained via
+     * a public static no-arg {@code getInstance()} method on that class.
+     * This flag is **only** read from the concrete class' own annotation
+     * (not inherited from ancestors).
+     */
+    boolean external() default false;
 }
-
-

@@ -2,14 +2,12 @@ package com.gwngames.core.input.controls;
 
 import com.badlogic.gdx.controllers.Controller;
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.api.input.IInputIdentifier;
-import com.gwngames.core.base.BaseComponent;
+import com.gwngames.core.api.input.IAxisIdentifier;
 import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.util.ControllerMappingUtil;
 
-@Init(module = ModuleNames.CORE, subComp = SubComponentNames.CONTROLLER_INPUT)
-public class ControllerAxisInputIdentifier extends BaseInputIdentifier {
+@Init(module = ModuleNames.CORE)
+public class ControllerAxisInputIdentifier extends BaseInputIdentifier implements IAxisIdentifier {
     private final Controller controller;
     private final int        axisCode;
 
@@ -19,10 +17,12 @@ public class ControllerAxisInputIdentifier extends BaseInputIdentifier {
         this.axisCode   = axisCode;
     }
 
+    @Override
     public Controller getController() {
         return controller;
     }
 
+    @Override
     public int getAxisCode() {
         return axisCode;
     }

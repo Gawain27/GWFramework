@@ -1,6 +1,6 @@
 package com.gwngames.core.api.ex;
 
-import com.gwngames.core.api.base.ILocale;
+import com.gwngames.core.api.base.cfg.ILocale;
 import com.gwngames.core.api.base.ITranslationService;
 import com.gwngames.core.api.build.ITranslatable;
 import com.gwngames.core.api.build.Inject;
@@ -8,7 +8,6 @@ import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.LogFiles;
 import com.gwngames.core.util.Cdi;
 
-import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 

@@ -17,7 +17,8 @@ public enum ModuleNames {
     NEEDLE_OF_SILVER("NeedleOfSilver", 100),
 
     // Starter
-    STARTER("Starter", 1000)
+    STARTER("Starter", 1000),
+    TEST("Test", 9999)
     ;
 
     public final String moduleName;

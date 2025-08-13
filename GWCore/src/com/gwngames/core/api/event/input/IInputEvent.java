@@ -1,7 +1,8 @@
-package com.gwngames.core.api.event;
+package com.gwngames.core.api.event.input;
 
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
+import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.api.input.InputType;
 import com.gwngames.core.api.input.action.IInputAction;
 import com.gwngames.core.data.ComponentNames;
@@ -10,11 +11,12 @@ import com.gwngames.core.data.ModuleNames;
 /**
  * Common contract for every low-level input event (button, axis, touch, …).
  */
-@Init(component = ComponentNames.INPUT_EVENT, module = ModuleNames.INTERFACE, allowMultiple = true, forceDefinition = true)
+@Init(component = ComponentNames.INPUT_EVENT, module = ModuleNames.INTERFACE, allowMultiple = true)
 public interface IInputEvent extends IBaseComp {
 
     /** What kind of physical change happened (button down, axis move, …). */
     InputType getType();
+    IInputIdentifier getControl();
 
     /** Which {@code IInputAdapter} slot (0…3) produced the event. */
     int getSlot();
@@ -25,4 +27,5 @@ public interface IInputEvent extends IBaseComp {
     /** The action assigned at runtime to the input type */
     IInputAction getAssignedAction();
     void assignAction(IInputAction action);
+
 }

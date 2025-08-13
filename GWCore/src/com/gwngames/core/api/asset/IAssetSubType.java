@@ -6,7 +6,7 @@ import com.gwngames.core.data.AssetCategory;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
 
-import java.util.Collection;
+import java.util.List;
 
 /**
  *  one instance per “loader strategy” – e.g. Music, Sound, TextureAtlas<p>
@@ -17,5 +17,8 @@ public interface IAssetSubType extends IBaseComp {
     String               id();          // "music", "sound", "atlas", …
     AssetCategory category();    // AUDIO, …
     Class<?>             libGdxClass(); // Music.class, Texture.class, …
-    Collection<IFileExtension> extensions();
+    /**
+     * ONLY ONE EXTENSION! Maintaining a list is too costly...
+     */
+    List<IFileExtension> extension();
 }

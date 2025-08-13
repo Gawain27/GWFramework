@@ -1,5 +1,7 @@
 package com.gwngames.core.asset;
 
+import com.gwngames.core.api.asset.IAssetManager;
+import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.BaseTest;
 import org.junit.jupiter.api.Assertions;
 
@@ -38,7 +40,7 @@ public class ReferenceCountProtectionTest extends BaseTest {
         final String PATH = "foo/bar.dummy";
 
         /* fresh manager + custom AssetManager stub -------------------- */
-        ModularAssetManager mgr = new ModularAssetManager();
+        IAssetManager mgr = BaseComponent.getInstance(IAssetManager.class);
 
         /* swap the internal gdx field with our stub --------------------- */
         Field gdxF = ModularAssetManager.class.getDeclaredField("gdx");

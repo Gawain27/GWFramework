@@ -1,6 +1,6 @@
 package com.gwngames.core.build.check;
 
-import com.gwngames.core.api.base.IConfig;
+import com.gwngames.core.api.base.cfg.IConfig;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.api.ex.BaseException;

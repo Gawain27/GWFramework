@@ -1,4 +1,4 @@
-package com.gwngames.core.data;
+package com.gwngames.core.data.input;
 
 import com.badlogic.gdx.Input.Keys;
 import com.gwngames.core.api.input.IInputIdentifier;

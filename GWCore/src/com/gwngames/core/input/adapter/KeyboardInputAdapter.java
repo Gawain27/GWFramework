@@ -3,11 +3,10 @@ package com.gwngames.core.input.adapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputProcessor;
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.api.input.IInputAdapter;
 import com.gwngames.core.api.input.IInputIdentifier;
-import com.gwngames.core.data.IdentifierDefinition;
+import com.gwngames.core.api.input.IKeyboardAdapter;
+import com.gwngames.core.data.input.IdentifierDefinition;
 import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.event.input.ButtonEvent;
 import com.gwngames.core.input.BaseInputAdapter;
 import com.gwngames.core.input.controls.KeyInputIdentifier;
@@ -18,9 +17,9 @@ import java.util.Map;
 /**
  * Keyboard → GW events adapter with zero allocations at run-time.
  */
-@Init(module = ModuleNames.CORE, subComp = SubComponentNames.KEYBOARD_ADAPTER)
+@Init(module = ModuleNames.CORE)
 public final class KeyboardInputAdapter
-    extends BaseInputAdapter implements IInputAdapter, InputProcessor {
+    extends BaseInputAdapter implements IKeyboardAdapter, InputProcessor {
 
     private final Map<Integer, KeyInputIdentifier> keyId = new HashMap<>();
 

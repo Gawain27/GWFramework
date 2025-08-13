@@ -5,6 +5,7 @@ import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.math.Vector2;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.input.IInputAdapter;
+import com.gwngames.core.api.input.ITouchAdapter;
 import com.gwngames.core.api.input.InputType;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.SubComponentNames;
@@ -19,10 +20,9 @@ import java.util.Map;
  * Touch-screen adapter – keeps one identifier per pointer index so that
  * equality & history work as expected across frames.
  */
-@Init(module = ModuleNames.CORE, subComp = SubComponentNames.TOUCH_ADAPTER)
-public final class TouchInputAdapter
-    extends BaseInputAdapter
-    implements IInputAdapter, InputProcessor {
+@Init(module = ModuleNames.CORE)
+public final class TouchInputAdapter extends BaseInputAdapter
+    implements ITouchAdapter, InputProcessor {
 
     private final Map<Integer, TouchInputIdentifier> pointerId = new HashMap<>();
 

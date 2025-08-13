@@ -1,6 +1,7 @@
 package com.gwngames.core.event.input;
 
 import com.gwngames.core.api.build.Init;
+import com.gwngames.core.api.event.input.IButtonEvent;
 import com.gwngames.core.api.input.InputType;
 import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.data.ModuleNames;
@@ -11,8 +12,8 @@ import com.gwngames.core.data.SubComponentNames;
  * For game-controller triggers you can use {@code pressure} to
  * convey the analog value (0‥1).  Keyboard keys simply use 0 or 1.
  */
-@Init(module = ModuleNames.CORE, subComp = SubComponentNames.BUTTON_EVENT)
-public class ButtonEvent extends InputEvent {
+@Init(module = ModuleNames.CORE)
+public class ButtonEvent extends InputEvent implements IButtonEvent {
 
     /** Which physical control generated the event. */
     private final IInputIdentifier control;
@@ -38,8 +39,11 @@ public class ButtonEvent extends InputEvent {
 
     /* ───── accessors ───── */
 
+    @Override
     public IInputIdentifier getControl() { return control; }
+    @Override
     public boolean          isPressed()  { return pressed; }
+    @Override
     public float            getPressure(){ return pressure; }
 
     @Override

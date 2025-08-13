@@ -14,6 +14,7 @@ gradle-app.setting
 /headless/build/
 /server/build/
 /shared/build/
+/tools/translation-editor/build/
 
 ## Java:
 *.class

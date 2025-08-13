@@ -1,7 +1,7 @@
 package com.gwngames.core.input.mapper;
 
 import com.gwngames.core.api.input.IInputIdentifier;
-import com.gwngames.core.data.ComboPriority;
+import com.gwngames.core.data.input.ComboPriority;
 import com.gwngames.core.api.input.buffer.IInputCombo;
 import com.gwngames.core.base.BaseTest;
 import com.gwngames.core.input.buffer.SmartComboManager;

@@ -1,16 +1,72 @@
 package com.gwngames.core.api.base;
 
+import com.gwngames.core.base.log.FileLogger;
+import com.gwngames.core.data.LogFiles;
+import com.gwngames.core.util.ComponentUtils;
+
+import java.lang.reflect.Field;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * Root marker for every framework component (including enums).
  */
 public interface IBaseComp {
+    FileLogger log = FileLogger.get(LogFiles.SYSTEM);
+
+    /** mult-ids for enum constants (populated by ModuleClassLoader via setMultId). */
+    Map<IBaseComp, Integer> ENUM_IDS = new ConcurrentHashMap<>();
+
+    /** Usual call site: never assigns as a fallback. */
+    default int getMultId() { return getMultId(false); }
 
     /**
-     * Monotonically-increasing identifier that the framework assigns
-     * <strong>per instance&nbsp;/ enum constant</strong>.
-     * * Components that extend {@code BaseComponent} get this for free.
-     * * Enum components should simply return {@code ordinal()} (or any other
-     *   constant you prefer).
+     * @param assignIfMissing if true and this is an enum whose id wasn't assigned yet,
+     *                        assign one now via {@link ComponentUtils#assignEnum(IBaseComp)}.
      */
-    int getMultId();
+    default int getMultId(boolean assignIfMissing){
+        // Enums: id is injected by the loader (or on-demand if explicitly allowed)
+        if (getClass().isEnum()) {
+            Integer id = ENUM_IDS.get(this);
+            if (id == null) {
+                if (assignIfMissing) {
+                    int newId = ComponentUtils.assignEnum(this);
+                    ENUM_IDS.put(this, newId);
+                    return newId;
+                }
+                throw new IllegalStateException(
+                    "Enum multId not set for " + getClass().getSimpleName()
+                        + " – ensure ModuleClassLoader has been initialised");
+            }
+            return id;
+        }
+
+        // Normal components: reflectively read BaseComponent's multId field
+        try {
+            Class<?> cur = getClass();
+            while (cur != null && cur != Object.class) {
+                try {
+                    Field f = cur.getDeclaredField("multId");
+                    f.setAccessible(true);
+                    int id = (int) f.get(this);
+                    f.setAccessible(false);
+                    return id;
+                } catch (NoSuchFieldException ignored) {
+                    cur = cur.getSuperclass();
+                }
+            }
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("Cannot access multId on " + getClass().getSimpleName(), e);
+        }
+        throw new IllegalStateException("No multId field found on " + getClass().getSimpleName()
+            + " – did you extend BaseComponent?");
+    }
+
+    /** Loader/Test path to set enum ids. Has no effect for normal components. */
+    default void setMultId(int newId) {
+        if (getClass().isEnum()) {
+            ENUM_IDS.put(this, newId);
+        }
+        // Non-enums ignore: BaseComponent assigns at construction time.
+    }
 }

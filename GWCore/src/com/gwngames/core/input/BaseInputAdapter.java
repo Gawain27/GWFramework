@@ -1,6 +1,6 @@
 package com.gwngames.core.input;
 
-import com.gwngames.core.api.event.IInputEvent;
+import com.gwngames.core.api.event.input.IInputEvent;
 import com.gwngames.core.api.input.IInputAdapter;
 import com.gwngames.core.api.input.IInputListener;
 import com.gwngames.core.base.BaseComponent;

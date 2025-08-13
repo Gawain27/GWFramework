@@ -1,6 +1,6 @@
 package com.gwngames.core.input.action;
 
-import com.gwngames.core.api.event.IInputEvent;
+import com.gwngames.core.api.event.input.IInputEvent;
 import com.gwngames.core.api.input.action.IInputAction;
 import com.gwngames.core.base.BaseTest;
 import org.junit.jupiter.api.Assertions;

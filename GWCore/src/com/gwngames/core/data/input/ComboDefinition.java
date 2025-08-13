@@ -1,9 +1,10 @@
-package com.gwngames.core.data;
+package com.gwngames.core.data.input;
 
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.api.input.buffer.IInputCombo;
 import com.gwngames.core.api.input.buffer.IInputComboManager;
+import com.gwngames.core.data.ModuleNames;
 
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -71,8 +72,4 @@ public enum ComboDefinition implements IInputCombo {
         for (ComboDefinition c : values()) mgr.register(c);
     }
 
-    @Override
-    public int getMultId() {
-        return this.ordinal();
-    }
 }

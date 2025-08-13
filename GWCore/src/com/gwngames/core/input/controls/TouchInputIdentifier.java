@@ -2,6 +2,7 @@ package com.gwngames.core.input.controls;
 
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.input.IInputIdentifier;
+import com.gwngames.core.api.input.ITouchIdentifier;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.SubComponentNames;
@@ -10,8 +11,8 @@ import com.gwngames.core.data.SubComponentNames;
  * Identifier for a particular touch pointer (finger or stylus).
  * Pointer index comes directly from LibGDX InputProcessor callbacks.
  */
-@Init(module = ModuleNames.CORE, subComp = SubComponentNames.TOUCH_INPUT)
-public class TouchInputIdentifier extends BaseInputIdentifier {
+@Init(module = ModuleNames.CORE)
+public class TouchInputIdentifier extends BaseInputIdentifier implements ITouchIdentifier {
 
     private final int pointer;  // LibGDX pointer index (0,1,2...)
 
@@ -20,6 +21,7 @@ public class TouchInputIdentifier extends BaseInputIdentifier {
         this.pointer = pointer;
     }
 
+    @Override
     public int getPointer() { return pointer; }
 
     /* ------------- IInputIdentifier metadata ------------- */

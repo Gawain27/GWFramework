@@ -7,85 +7,73 @@ import com.gwngames.core.base.BaseTest;
 import com.gwngames.core.data.AssetCategory;
 import org.junit.jupiter.api.Assertions;
 
-import java.util.Collection;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Verifies that AssetSubTypeRegistry is safe under heavy concurrent
- * register / lookup traffic.
- *  • 8 worker threads
- *  • each thread registers 1 000 synthetic sub-types
- *  • in between, threads call byExtension() and allByExtension()
- *  • the test succeeds when:
- *      – no exceptions are thrown
- *      – the registry reports exactly 8 000 sub-types for the ".jpg" extension
+ * register / lookup traffic, with built-ins preloaded.
  */
 public class RegistryThreadSafetyTest extends BaseTest {
 
     /** Tiny stub subtype with only id / extension. */
     private record StubType(String id) implements IAssetSubType {
-        @Override public String                id()         { return id;           }
-
-        @Override
-        public AssetCategory category() {
-            return null;
-        }
-
-        @Override
-        public Class<?> libGdxClass() {
-            return null;
-        }
-
-        @Override public Collection<IFileExtension> extensions() { return Set.of(ext); }
-        private static final Ext ext = Ext.JPG;
-
-        @Override
-        public int getMultId() {
-            return 0;
-        }
+        @Override public String id() { return id; }
+        @Override public AssetCategory category() { return AssetCategory.MISC; }
+        @Override public Class<?> libGdxClass() { return Object.class; }
+        @Override public List<IFileExtension> extension() { return List.of(Ext.JPG); }
+        @Override public int getMultId() { return 0; } // not used by the registry
     }
 
     @Override protected void runTest() throws Exception {
-
-        setupApplication();                                      // LibGDX stubs
+        setupApplication(); // LibGDX stubs (if your registry touches Files, etc.)
 
         IAssetSubTypeRegistry reg = new AssetSubTypeRegistry();
 
+        // 1) Preload built-ins
+        for (var t : BuiltInSubTypes.values()) {
+            reg.register(t);
+        }
+
+        // Count only built-ins that map to JPG (with or without dot).
+        int builtinJpgCount = (int) java.util.Arrays.stream(BuiltInSubTypes.values())
+            .filter(t -> t.extension().stream().anyMatch(ext -> {
+                String s = ext.ext().toLowerCase();
+                return "jpg".equals(s) || ".jpg".equals(s);
+            }))
+            .count();
+
+        // 2) Hammer the registry concurrently
         final int THREADS = 8;
         final int PER_THREAD = 1_000;
-        CountDownLatch ready = new CountDownLatch(THREADS);
+        var pool  = Executors.newFixedThreadPool(THREADS);
+        var ready = new CountDownLatch(THREADS);
 
-        var pool = Executors.newFixedThreadPool(THREADS);
         for (int t = 0; t < THREADS; t++) {
             final int idx = t;
             pool.submit(() -> {
                 for (int i = 0; i < PER_THREAD; i++) {
-                    String id = "T" + idx + "-" + i;
-                    reg.register(new StubType(id));
+                    reg.register(new StubType("T" + idx + "-" + i));
 
-                    // quick mixed look-ups
+                    // quick mixed look-ups during writes
                     reg.byExtension("jpg");
-                    List<IAssetSubType> all = reg.allByExtension("jpg");
-                    if (all.isEmpty())
-                        throw new IllegalStateException("Registry lost data!");
+                    var all = reg.allByExtension("jpg");
+                    if (all.isEmpty()) throw new IllegalStateException("Registry lost data!");
                 }
                 ready.countDown();
             });
         }
 
-        /* Wait max 10 s for all work to finish */
         boolean ok = ready.await(10, TimeUnit.SECONDS);
         pool.shutdownNow();
-
         Assertions.assertTrue(ok, "Threads timed out – possible dead-lock!");
 
-        // 8 000 = 8 threads × 1 000 stub types, *plus* the Built-ins
-        int expected = THREADS * PER_THREAD + 1;
-        Assertions.assertTrue(expected < reg.allByExtension("jpg").size(),
-            "Registry must hold every concurrently registered subtype");
+        // 3) Expect exactly built-ins(JPG) + 8*1000 stubs
+        int expected = 1 + builtinJpgCount + THREADS * PER_THREAD;
+        int actual   = reg.allByExtension("jpg").size();
+        Assertions.assertEquals(expected, actual,
+            "Registry must hold every concurrently registered subtype + built-ins");
     }
 }

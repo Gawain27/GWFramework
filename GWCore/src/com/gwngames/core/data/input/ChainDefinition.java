@@ -1,9 +1,10 @@
-package com.gwngames.core.data;
+package com.gwngames.core.data.input;
 
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.input.buffer.IInputChain;
 import com.gwngames.core.api.input.buffer.IInputChainManager;
 import com.gwngames.core.api.input.buffer.IInputCombo;
+import com.gwngames.core.data.ModuleNames;
 
 import java.util.*;
 
@@ -72,11 +73,6 @@ public enum ChainDefinition implements IInputChain {
     public static void registerAll(IInputChainManager mgr, boolean enabled){
         for (ChainDefinition c : values())
             mgr.register(c, enabled);
-    }
-
-    @Override
-    public int getMultId() {
-        return this.ordinal();
     }
 }
 

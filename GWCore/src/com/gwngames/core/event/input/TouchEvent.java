@@ -2,19 +2,18 @@ package com.gwngames.core.event.input;
 
 import com.badlogic.gdx.math.Vector2;
 import com.gwngames.core.api.build.Init;
+import com.gwngames.core.api.event.input.ITouchEvent;
 import com.gwngames.core.api.input.InputType;
 import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.SubComponentNames;
-import com.gwngames.core.event.base.AbstractEvent;
 
 /**
  * A rich event representing any touchscreen pointer activity
  * (down, up, drag).  It carries a pointer-specific identifier
  * plus absolute screen coordinates and optional pressure.
  */
-@Init(module = ModuleNames.CORE, subComp = SubComponentNames.TOUCH_EVENT)
-public final class TouchEvent extends InputEvent {
+@Init(module = ModuleNames.CORE)
+public final class TouchEvent extends InputEvent implements ITouchEvent {
 
     /** Which logical pointer (0‥N) this event came from. */
     private final IInputIdentifier control;
@@ -38,13 +37,17 @@ public final class TouchEvent extends InputEvent {
 
     /* ---------------- getters ---------------- */
 
+    @Override
     public IInputIdentifier getControl()  { return control; }
+    @Override
     public Vector2          getPosition() { return position; }
+    @Override
     public float            getPressure() { return pressure; }
 
     /* ---------------- convenience ---------------- */
 
-    @Override public String toString() {
+    @Override
+    public String toString() {
         return "%s %s @(%d,%d) p=%.2f".formatted(
             getType(), control,
             (int) position.x, (int) position.y,

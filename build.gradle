@@ -65,4 +65,28 @@ tasks.register('clean', Delete) {
   delete layout.buildDirectory
 }
 
+// ===================================================================
+//  🔄  refreshAssets – download & regenerate asset meta only
+// ===================================================================
+tasks.register('refreshAssets') {
+  group       = 'build'
+  description = 'Download remote resource ZIPs and regenerate assets.txt + enum classes.'
+
+  // collect the 3 task providers from every participating sub-project
+  def updates  = subprojects.collectMany { p ->
+    p.tasks.matching { it.name == 'updateResources' }
+  }
+  def txts     = subprojects.collectMany { p ->
+    p.tasks.matching { it.name == 'generateAssetsTxt' }
+  }
+  def enums    = subprojects.collectMany { p ->
+    p.tasks.matching { it.name == 'generateAssetEnums' }
+  }
+
+  dependsOn updates
+  dependsOn txts
+  dependsOn enums
+}
+
+
 println '✅  root build.gradle loaded – high-level tasks configured'

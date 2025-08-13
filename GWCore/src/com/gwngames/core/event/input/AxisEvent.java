@@ -1,6 +1,7 @@
 package com.gwngames.core.event.input;
 
 import com.gwngames.core.api.build.Init;
+import com.gwngames.core.api.event.input.IAxisEvent;
 import com.gwngames.core.api.input.InputType;
 import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.data.ModuleNames;
@@ -11,8 +12,8 @@ import com.gwngames.core.data.SubComponentNames;
  * {@code rawValue} is the platform-specific reading; {@code normalizedValue}
  * is post-processed (e.g., dead-zone removed, clamped −1‥1) for gameplay use.
  */
-@Init(module = ModuleNames.CORE, subComp = SubComponentNames.AXIS_EVENT)
-public final class AxisEvent extends InputEvent {
+@Init(module = ModuleNames.CORE)
+public final class AxisEvent extends InputEvent implements IAxisEvent {
 
     private final IInputIdentifier control;
 
@@ -35,8 +36,11 @@ public final class AxisEvent extends InputEvent {
 
     /* ───── accessors ───── */
 
+    @Override
     public IInputIdentifier getControl()        { return control; }
+    @Override
     public float            getRawValue()       { return rawValue; }
+    @Override
     public float            getNormalizedValue(){ return normalizedValue; }
 
     @Override

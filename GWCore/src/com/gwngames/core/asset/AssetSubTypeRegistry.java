@@ -2,13 +2,14 @@ package com.gwngames.core.asset;
 
 import com.gwngames.core.api.asset.IAssetSubType;
 import com.gwngames.core.api.asset.IAssetSubTypeRegistry;
-import com.gwngames.core.api.base.ILocale;
+import com.gwngames.core.api.base.cfg.ILocale;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
+import com.gwngames.core.util.StringUtils;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -37,7 +38,7 @@ public class AssetSubTypeRegistry extends BaseComponent implements IAssetSubType
     @Override
     public void register(IAssetSubType st) {
         Locale loc = locale == null ? Locale.ENGLISH : locale.getLocale();
-        st.extensions().forEach(ext -> {
+        st.extension().forEach(ext -> {
             String key = ext.ext().toLowerCase(loc);
             byExt.computeIfAbsent(key, k -> new ConcurrentLinkedQueue<>()).add(st);
         });
@@ -46,6 +47,8 @@ public class AssetSubTypeRegistry extends BaseComponent implements IAssetSubType
     /** Falls back to BuiltinSubtypes.MISC */
     @Override
     public IAssetSubType byExtension(String ext) {
+        if (StringUtils.isEmpty(ext))
+            return null;
         Collection<IAssetSubType> c =
             byExt.get(ext.toLowerCase(locale.getLocale()));
         return (c == null || c.isEmpty())
@@ -56,6 +59,8 @@ public class AssetSubTypeRegistry extends BaseComponent implements IAssetSubType
     /** Sub-type with the given ID, or null if not present. */
     @Override
     public IAssetSubType byExtension(String ext, String id) {
+        if (StringUtils.isEmpty(ext) || StringUtils.isEmpty(id))
+            return null;
         Collection<IAssetSubType> c =
             byExt.get(ext.toLowerCase(locale.getLocale()));
         if (c == null) return null;
@@ -69,6 +74,8 @@ public class AssetSubTypeRegistry extends BaseComponent implements IAssetSubType
     /** All registered sub-types for that extension (unmodifiable). */
     @Override
     public List<IAssetSubType> allByExtension(String ext) {
+        if (StringUtils.isEmpty(ext))
+            return List.of();
         Collection<IAssetSubType> c =
             byExt.get(ext.toLowerCase(locale.getLocale()));
         return c == null ? List.of() : List.copyOf(c);

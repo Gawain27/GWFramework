@@ -3,8 +3,10 @@ package com.gwngames.core.asset;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.utils.Disposable;
 import com.gwngames.core.api.asset.IAssetManager;
+import com.gwngames.core.api.asset.IAssetPath;
 import com.gwngames.core.api.asset.IAssetSubType;
 import com.gwngames.core.api.asset.IAssetSubTypeRegistry;
+import com.gwngames.core.api.base.cfg.ILocale;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.base.BaseComponent;
@@ -12,6 +14,7 @@ import com.gwngames.core.base.cfg.ModuleClassLoader;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.LogFiles;
 import com.gwngames.core.data.ModuleNames;
+import com.gwngames.core.util.StringUtils;
 
 import java.io.*;
 import java.util.Map;
@@ -48,6 +51,9 @@ public final class ModularAssetManager extends BaseComponent implements IAssetMa
     @Inject
     private IAssetSubTypeRegistry reg;
 
+    @Inject
+    private ILocale locale;
+
     /** LibGDX core manager (handles reference counting, async IO, etc.). */
     private final AssetManager gdx = new AssetManager();
 
@@ -61,6 +67,7 @@ public final class ModularAssetManager extends BaseComponent implements IAssetMa
     public ModularAssetManager() {
         if (reg == null) {
             reg = BaseComponent.getInstance(IAssetSubTypeRegistry.class);
+            locale = BaseComponent.getInstance(ILocale.class);
         }
         scanAllAssetsTxt();
     }
@@ -69,11 +76,30 @@ public final class ModularAssetManager extends BaseComponent implements IAssetMa
 
     // ────────────────────────── public API ────────────────────────────
     @Override
-    public <T> T get(String path, Class<T> as) {
+    public <T> T get(String path, Class<T> as) {          // same as today
         ensureScheduled(path, as);
-        gdx.finishLoadingAsset(path);       // blocks only for this asset
+        gdx.finishLoadingAsset(path);
         touch(path);
         return gdx.get(path, as);
+    }
+
+    /** New – caller gives just an asset enum, class is inferred. */
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T> T get(IAssetPath asset) {
+        String path = choosePath(asset);                  // locale aware
+        IAssetSubType st = subtypeOf(path);
+        if (st == null)
+            throw new IllegalArgumentException("Unknown asset: " + path);
+
+        Class<T> as = (Class<T>) st.libGdxClass();         // whatever your
+        return get(path, as);                             // registry exposes
+    }
+
+    /** New – caller gives asset enum *and* explicit class (rarely needed). */
+    @Override
+    public <T> T get(IAssetPath asset, Class<T> as) {
+        return get(choosePath(asset), as);
     }
 
     @Override
@@ -128,7 +154,7 @@ public final class ModularAssetManager extends BaseComponent implements IAssetMa
                             assert reg != null;
                             discovered.put(
                                 path,
-                                reg.byExtension(extensionOf(path)));
+                                reg.byExtension(StringUtils.extensionOf(path)));
                         });
                 }
 
@@ -139,8 +165,14 @@ public final class ModularAssetManager extends BaseComponent implements IAssetMa
         LOG.info("Discovered {} assets (lazy mode on)", discovered.size());
     }
 
-    private static String extensionOf(String path) {
-        int idx = path.lastIndexOf('.');
-        return idx == -1 ? "" : path.substring(idx + 1);
+    private String choosePath(IAssetPath asset) {
+        // use current locale if the asset actually carries that variant
+        String locId = locale != null ? locale.getLocale().toString() : null;   // e.g. "es_ES"
+        if (locId != null && asset.path(locId) != null
+            && !asset.path(locId).equals(asset.path()))
+            return asset.path(locId);
+
+        return asset.path();          // default
     }
+
 }

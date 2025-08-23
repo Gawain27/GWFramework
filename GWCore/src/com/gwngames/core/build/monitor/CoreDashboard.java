@@ -33,50 +33,40 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
     @Inject(loadAll = true) private List<IDashboardItem> injectedItems;
     @Inject(loadAll = true) private List<IDashboardLayer> injectedLayers;
 
-    // Scopes
     private enum SysTable      { SYSTEM }
     private enum TelemetryCat  { CPU, RAM, IO }
     private enum TelemetryICat { DEFAULT }
 
-    // Template tree
     private final Map<Enum<?>, DashboardTableTemplate<?, ?>> tables = new HashMap<>();
 
-    // Server lifecycle
     private final AtomicReference<Javalin> serverRef = new AtomicReference<>();
     private volatile Integer boundPort = null;
     private volatile Thread shutdownHook = null;
 
     @PostInject
     private void postInject() {
-        // Built-ins (sub-components, not concrete classes)
         registerBuiltin(null, SubComponentNames.DASHBOARD_CPU_CONTENT, TelemetryCat.CPU);
         registerBuiltin(null, SubComponentNames.DASHBOARD_IO_CONTENT,  TelemetryCat.IO);
         registerBuiltin(null, SubComponentNames.DASHBOARD_RAM_CONTENT, TelemetryCat.RAM);
-
-        // User-supplied items
         if (injectedItems != null) for (IDashboardItem it : injectedItems) register(it);
     }
 
-    /** Start using configured port if not prod. */
     public void maybeStart() {
         Integer port = config.get(BuildParameters.DASHBOARD_PORT);
         if (port == null) { log.debug("Dashboard port not configured; skipping start."); return; }
         maybeStart(port);
     }
 
-    /** Start (or restart if port changed) when not in prod. */
     public synchronized void maybeStart(int port) {
         Boolean isProd = config.get(BuildParameters.PROD_ENV);
         if (Boolean.TRUE.equals(isProd)) { log.debug("Dashboard disabled in production mode."); return; }
         ensureServerOn(port);
     }
 
-    /** Public shutdown API. */
     public synchronized void shutdown() { stopServer(); }
-
     @Override public void close() { shutdown(); }
 
-    // ───────────────────────── internals ─────────────────────────
+    /* ───────────────────────── internals ───────────────────────── */
 
     private void ensureServerOn(int port) {
         Javalin current = serverRef.get();
@@ -112,7 +102,7 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
             try { stopServer(); } catch (Throwable t) { log.error("Dashboard shutdown hook error", t); }
         }, "DashboardShutdownHook");
         try { Runtime.getRuntime().addShutdownHook(shutdownHook); }
-        catch (IllegalStateException ignored) { /* JVM already shutting down */ }
+        catch (IllegalStateException ignored) {}
     }
 
     private void removeShutdownHook() {
@@ -120,14 +110,14 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
         shutdownHook = null;
         if (hook != null) {
             try { Runtime.getRuntime().removeShutdownHook(hook); }
-            catch (IllegalStateException ignored) { /* JVM already shutting down */ }
+            catch (IllegalStateException ignored) {}
         }
     }
 
-    // ───────────────────── rendering & registry ─────────────────────
+    /* ───────────────────── rendering & registry ───────────────────── */
 
     private String render() {
-        // CSS
+        // CSS (fall back if asset missing)
         String css = null;
         try {
             FileHandle cssFile = assetManager.get(GwcoreCssAssets.DASHBOARD_DARK_CSS);
@@ -138,12 +128,13 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
         if (css == null) {
             css = """
             body{background:#0b0d10;color:#e6eef8;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;}
-            .chart{width:100%;height:220px;display:block}
+            .page{max-width:1280px;margin:0 auto;padding:0 1.2rem}
+            section.tbl{margin-top:2.4rem}
+            details.cat,details.icat{background:#101010;border-radius:.75rem;padding:1.2rem;margin-top:1.2rem;box-shadow:0 3px 8px #0008}
+            details.cat>summary,details.icat>summary{list-style:none;cursor:pointer;font-size:1.05rem;color:#00bcd4;margin-bottom:.4rem}
+            details.cat>summary::-webkit-details-marker,details.icat>summary::-webkit-details-marker{display:none}
             .legend{font-size:.9rem;opacity:.7;margin:.25rem 0 .35rem}
-            .cat>.hdr{cursor:pointer;user-select:none}
-            .hdr::after{content:"\\25BE";margin-left:.4rem;opacity:.6;font-size:.9em}
-            .hdr.collapsed::after{content:"\\25B8"}
-            .cat.collapsed>.cat-body{display:none}
+            .chart{width:100%;height:220px;display:block;border-radius:.75rem}
             .kv{display:flex;justify-content:space-between;padding:.18rem .4rem;border-radius:6px}
             .kv:hover{background:rgba(0,188,212,.12);outline:1px solid rgba(0,188,212,.25)}
             canvas[data-series]:not([data-hydrated]){background:linear-gradient(90deg,#222 25%,#2a2a2a 37%,#222 63%);background-size:400% 100%;animation:loading 2.2s infinite ease;border-radius:.75rem}
@@ -155,56 +146,56 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
             .append("<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>")
             .append("<title>Dashboard</title><style>").append(css).append("</style></head><body>");
 
-        // Body root
         sb.append(renderRoot());
-
-        // Hydrator JS (charts + collapse + live updates)
         sb.append(SCRIPT_BLOCK);
-
         return sb.append("</body></html>").toString();
     }
 
-    /** Returns ONLY the #dash-root wrapper (used by /dashboard/fragment). */
-    private String renderRootOnly() {
-        return renderRoot().toString();
-    }
+    private String renderRootOnly() { return renderRoot().toString(); }
 
-    /** Builds the complete dashboard body inside a stable wrapper. */
+    /** Build body inside a stable wrapper and use <details> for collapsers. */
     private StringBuilder renderRoot() {
         StringBuilder sb = new StringBuilder(16384);
-        sb.append("<div id='dash-root'>");
+        sb.append("<div id='dash-root' class='page'>");
 
-        // ── Overview
+        // Overview
         sb.append("<section class='tbl'>");
-        DashboardTemplateRegistry.render("header", Map.of("text", "System Overview"), sb);
+        sb.append("<details class='cat' open data-idx='sys'>");
+        DashboardTemplateRegistry.render("summary", Map.of("text", "System Overview"), sb);
+        sb.append("<div class='cat-body'>");
         DashboardTemplateRegistry.render("kv", systemOverview(), sb);
+        sb.append("</div></details>");
         sb.append("</section>");
 
-        // ── Free-floating layers (if any)
+        // Free-floating layers (optional)
         if (injectedLayers != null && !injectedLayers.isEmpty()) {
             for (IDashboardLayer l : injectedLayers) {
                 sb.append("<section class='tbl'>");
-                if (l.getName() != null) {
-                    DashboardTemplateRegistry.render("header", Map.of("text", l.getName()), sb);
-                }
+                sb.append("<details class='cat' open>");
+                DashboardTemplateRegistry.render("summary",
+                    Map.of("text", l.getName() == null ? "Layer" : l.getName()), sb);
+                sb.append("<div class='cat-body'>");
                 l.getContents().forEach(c -> renderBlock(c, sb));
+                sb.append("</div></details>");
                 sb.append("</section>");
             }
         }
 
-        // ── Templated tables with collapsible categories
+        // Tables (categories + item-categories)
         for (DashboardTableTemplate<?, ?> t : tables.values()) {
             sb.append("<section class='tbl'>");
+            int idx = 0;
             for (var cat : t.allCategories()) {
-                sb.append("<div class='cat'>");
-                renderBlock(cat.header, sb);            // <h3 class='hdr'>...</h3>
+                sb.append("<details class='cat' open data-idx='").append(idx++).append("'>");
+                renderSummary(cat.header, sb);
                 sb.append("<div class='cat-body'>");
                 renderBlock(cat.stats, sb);
 
                 for (var ic : cat.allItemCategories()) {
-                    sb.append("<article class='icat'>");
-                    renderBlock(ic.header, sb);
-                    renderBlock(ic.stats,  sb);
+                    sb.append("<details class='icat' open>");
+                    renderSummary(ic.header, sb);
+                    sb.append("<div class='icat-body'>");
+                    renderBlock(ic.stats, sb);
 
                     for (IDashboardItem it : ic.items()) {
                         IDashboardContent content =
@@ -213,17 +204,17 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
                             ? content.templateId() : it.templateId();
                         DashboardTemplateRegistry.render(tpl, content.model(), sb);
                     }
-                    sb.append("</article>");
+                    sb.append("</div></details>");
                 }
-                sb.append("</div></div>"); // .cat-body / .cat
+
+                sb.append("</div></details>");
             }
             sb.append("</section>");
         }
 
-        return sb.append("</div>"); // #dash-root
+        return sb.append("</div>");
     }
 
-    /** Overview info shown at the top. */
     private Map<String, Object> systemOverview() {
         Runtime rt = Runtime.getRuntime();
         int cores  = rt.availableProcessors();
@@ -238,10 +229,10 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
         long pid    = ProcessHandle.current().pid();
 
         return Map.of(
-            "PID", pid,
-            "OS", os + " (" + arch + ")",
-            "Uptime", up,
             "CPU cores", cores,
+            "Uptime", up,
+            "OS", os + " (" + arch + ")",
+            "PID", pid,
             "JVM", jvm
         );
     }
@@ -256,9 +247,18 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
 
     private void renderBlock(Object blk, StringBuilder sb) {
         if (blk instanceof IDashboardHeader h) {
-            DashboardTemplateRegistry.render(h.templateId(), h.model(), sb);
+            DashboardTemplateRegistry.render("h3", h.model(), sb); // plain header when not in <details>
         } else if (blk instanceof IDashboardContent c) {
             DashboardTemplateRegistry.render(c.templateId(), c.model(), sb);
+        }
+    }
+
+    private void renderSummary(Object header, StringBuilder sb) {
+        if (header instanceof IDashboardHeader h) {
+            DashboardTemplateRegistry.render("summary", h.model(), sb);
+        } else {
+            DashboardTemplateRegistry.render("summary",
+                Map.of("text", header == null ? "" : header.toString()), sb);
         }
     }
 
@@ -298,21 +298,44 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
         return injectedLayers == null ? List.of() : List.copyOf(injectedLayers);
     }
 
-    // One script that: draws charts, wires collapsibles, and live-updates the root.
+    /**
+     * Charts + live refresh. Percent axes auto-scale to 0..100 even if series are 0..1.
+     * Preserves open state for both category <details.cat> and item <details.icat>.
+     * Ignores empty/non-numeric data-ymin/ymax attributes.
+     */
     private static final String SCRIPT_BLOCK = """
 <script>
 (() => {
   const ROOT = '#dash-root';
   const PX = v => Math.round(v);
 
-  function parseSeries(attr){ try { return JSON.parse(attr); } catch { return []; } }
+  const parseSeries = (attr) => { try { return JSON.parse(attr); } catch { return []; } };
+
+  // Treat missing/empty/non-numeric attribute as null (so we can fall back)
+  const numAttr = (el, name) => {
+    const raw = el.getAttribute(name);
+    if (raw == null) return null;
+    const s = String(raw).trim();
+    if (!s) return null;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  };
 
   function drawChart(canvas) {
-    const raw = canvas.getAttribute('data-series') || '[]';
-    const label = canvas.getAttribute('data-label') || '';
-    const yminAttr = canvas.getAttribute('data-ymin');
-    const ymaxAttr = canvas.getAttribute('data-ymax');
-    const series = parseSeries(raw);
+    const raw   = canvas.getAttribute('data-series') || '[]';
+    const label = (canvas.getAttribute('data-label') || '').toLowerCase();
+
+    const yMinAttr = numAttr(canvas, 'data-ymin');
+    const yMaxAttr = numAttr(canvas, 'data-ymax');
+
+    const seriesRaw = parseSeries(raw);
+    const maxRaw = seriesRaw.reduce((m,v) => Math.max(m, +v || 0), -Infinity);
+
+    const isPct = label.includes('%');
+    const looksFractional = maxRaw <= 1.0000001;
+    const values = (isPct && looksFractional)
+        ? seriesRaw.map(v => (+v || 0) * 100)
+        : seriesRaw.map(v => +v || 0);
 
     const rect = canvas.getBoundingClientRect();
     const dpr  = window.devicePixelRatio || 1;
@@ -327,10 +350,11 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
 
     const W=Wcss, H=Hcss, padL=36, padR=12, padT=18, padB=24;
 
-    let lo = Number.isFinite(+yminAttr) ? +yminAttr : Math.min(0, ...series);
-    let hi = Number.isFinite(+ymaxAttr) ? +ymaxAttr : Math.max(1, ...series);
-    if (!isFinite(lo)) lo = 0;
-    if (!isFinite(hi) || hi <= lo) hi = lo + 1;
+    // Bounds: prefer explicit, else 0..100 for %, else data-driven
+    let lo = (yMinAttr != null) ? yMinAttr : (isPct ? 0   : Math.min(0, ...values));
+    let hi = (yMaxAttr != null) ? yMaxAttr : (isPct ? 100 : Math.max(1, ...values));
+    if (!Number.isFinite(lo)) lo = 0;
+    if (!Number.isFinite(hi) || hi <= lo) hi = lo + 1;
 
     ctx.clearRect(0,0,W,H);
 
@@ -347,26 +371,26 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
       ctx.fillText(v.toFixed(0), 4, y+4);
     }
 
-    // X ticks
+    // X ticks (seconds)
     ctx.textAlign = 'center';
     ctx.fillText('0s', padL, H-6);
-    ctx.fillText((series.length/2|0)+'s', (padL+W-padR)/2, H-6);
-    ctx.fillText(series.length+'s', W - padR, H-6);
+    ctx.fillText((values.length/2|0)+'s', (padL+W-padR)/2, H-6);
+    ctx.fillText(values.length+'s', W - padR, H-6);
     ctx.textAlign = 'left';
 
     // Legend
     if (label) { ctx.fillStyle = '#e7e7e7'; ctx.fillText(label, padL, padT - 6); }
 
     // Line
-    if (series.length) {
+    if (values.length) {
       ctx.strokeStyle = '#00bcd4';
       ctx.lineWidth = 2;
       ctx.beginPath();
       const innerW = W - padL - padR;
       const innerH = H - padT - padB;
-      for (let i=0;i<series.length;i++) {
-        const x = padL + innerW * (i / Math.max(1, series.length-1));
-        const yNorm = (series[i] - lo) / (hi - lo);
+      for (let i=0;i<values.length;i++) {
+        const x = padL + innerW * (i / Math.max(1, values.length-1));
+        const yNorm = (values[i] - lo) / (hi - lo);
         const y = padT + innerH * (1 - yNorm);
         if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
       }
@@ -376,52 +400,41 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
     canvas.setAttribute('data-hydrated','1');
   }
 
-  function wireCollapsibles(root) {
-    // Category wrappers: toggle body + caret
-    root.querySelectorAll('.cat > .hdr').forEach(h => {
-      h.onclick = () => {
-        const cat = h.parentElement;
-        const collapsed = cat.classList.toggle('collapsed');
-        h.classList.toggle('collapsed', collapsed);
-      };
-    });
-
-    // Optional generic collapsibles (headers not inside .cat)
-    root.querySelectorAll('h3.hdr[data-collapsible]').forEach(h => {
-      if (h.matches('.cat > .hdr')) return;
-      h.onclick = () => {
-        const collapsed = h.classList.toggle('collapsed');
-        let n = h.nextElementSibling;
-        while (n && !(n.tagName === 'H3' && n.classList.contains('hdr'))) {
-          n.style.display = collapsed ? 'none' : '';
-          n = n.nextElementSibling;
-        }
-      };
-    });
-  }
-
   function hydrateAll() {
     const root = document.querySelector(ROOT);
     if (!root) return;
     requestAnimationFrame(() => {
-      root.querySelectorAll('canvas.chart[data-series]:not([data-hydrated])')
-          .forEach(drawChart);
-      root.querySelectorAll('canvas[data-series]:not([data-hydrated]):not(.chart)')
-          .forEach(drawChart);
+      root.querySelectorAll('canvas.chart[data-series]:not([data-hydrated])').forEach(drawChart);
+      root.querySelectorAll('canvas[data-series]:not([data-hydrated]):not(.chart)').forEach(drawChart);
     });
-    wireCollapsibles(root);
   }
 
+  // Live updates; preserve <details> open state
   async function refreshFragment() {
     try {
+      const oldRoot = document.querySelector(ROOT);
+      if (!oldRoot) return;
+
+      const catOpen = Array.from(oldRoot.querySelectorAll('details.cat')).map(d => d.open);
+      const icatOpenByCat = Array.from(oldRoot.querySelectorAll('details.cat')).map(cat =>
+        Array.from(cat.querySelectorAll('details.icat')).map(d => d.open)
+      );
+
       const res = await fetch('/dashboard/fragment', { cache:'no-store' });
       if (!res.ok) return;
       const html = await res.text();
       const tmp = document.createElement('div');
       tmp.innerHTML = html.trim();
       const newRoot = tmp.querySelector(ROOT);
-      const oldRoot = document.querySelector(ROOT);
-      if (newRoot && oldRoot) {
+      if (newRoot) {
+        const newCats = newRoot.querySelectorAll('details.cat');
+        catOpen.forEach((isOpen, i) => { if (newCats[i]) newCats[i].open = isOpen; });
+        newCats.forEach((cat, i) => {
+          const states = icatOpenByCat[i] || [];
+          const icats  = cat.querySelectorAll('details.icat');
+          states.forEach((isOpen, j) => { if (icats[j]) icats[j].open = isOpen; });
+        });
+
         oldRoot.replaceWith(newRoot);
         hydrateAll();
       }

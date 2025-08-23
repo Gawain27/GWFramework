@@ -1,14 +1,18 @@
 package com.gwngames.core.asset;
 
 import com.badlogic.gdx.assets.AssetManager;
+import com.badlogic.gdx.assets.loaders.resolvers.AbsoluteFileHandleResolver;
+import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.utils.Disposable;
 import com.gwngames.core.api.asset.IAssetManager;
 import com.gwngames.core.api.asset.IAssetPath;
 import com.gwngames.core.api.asset.IAssetSubType;
 import com.gwngames.core.api.asset.IAssetSubTypeRegistry;
 import com.gwngames.core.api.base.cfg.ILocale;
+import com.gwngames.core.api.build.IPathResolver;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
+import com.gwngames.core.api.build.PostInject;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
 import com.gwngames.core.base.log.FileLogger;
@@ -16,163 +20,245 @@ import com.gwngames.core.data.LogFiles;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.util.StringUtils;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.file.*;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Lazy-loading, time-cached asset manager.
- *
- * <ul>
- *   <li>Assets are scheduled & loaded on first request</li>
- *   <li>Every successful {@link #get(String, Class)} call “touches” the asset</li>
- *   <li>{@link #update(float)} must be invoked each frame (or periodically)
- *       – it drives asynchronous loading *and* evicts stale entries</li>
- *   <li>Eviction is safe because we unload only when LibGDX’s reference
- *       count is 1 (ours) <em>and</em> the TTL has expired</li>
- * </ul>
- * FIXME paths must be converted based on config of assets!
- */
 @Init(module = ModuleNames.CORE)
 public final class ModularAssetManager extends BaseComponent implements IAssetManager, Disposable {
 
-    // ───────────────────────── configuration ──────────────────────────
     /** Idle-time before an unused asset is evicted (milliseconds). */
-    private static volatile long TTL_MS =
-        Long.getLong("gw.asset.ttl", 5 * 60_000);
+    private static volatile long TTL_MS = Long.getLong("gw.asset.ttl", 5 * 60_000);
+    public static void setTtl(long millis) { TTL_MS = millis; }
 
-    /** Tests (or the game) can tweak the TTL at runtime. */
-    public static void setTtl(long millis) {
-        TTL_MS = millis;
-    }// TODO : to config
     private static final FileLogger LOG = FileLogger.get(LogFiles.ASSET);
 
-    // ────────────────────────── DI & runtime state ────────────────────
-    @Inject
-    private IAssetSubTypeRegistry reg;
+    // DI
+    @Inject private IAssetSubTypeRegistry reg;
+    @Inject private ILocale              locale;
+    @Inject private IPathResolver        paths;
 
-    @Inject
-    private ILocale locale;
+    /** LibGDX manager using absolute paths. */
+    private final AssetManager gdx = new AssetManager(new AbsoluteFileHandleResolver());
 
-    /** LibGDX core manager (handles reference counting, async IO, etc.). */
-    private final AssetManager gdx = new AssetManager();
-
-    /** All paths discovered while parsing every assets.txt. */
+    /** Logical path -> subtype discovered via assets.txt (or lazily). */
     private final Map<String, IAssetSubType> discovered = new ConcurrentHashMap<>();
-
-    /** Last “touch” timestamp [ms] for each loaded asset. */
+    /** ABS path -> last touch time. */
     private final Map<String, Long> lastUsed = new ConcurrentHashMap<>();
+    /** logical -> ABS cache. */
+    private final Map<String, String> absCache = new ConcurrentHashMap<>();
 
-    // ────────────────────────── lifecycle ─────────────────────────────
-    public ModularAssetManager() {
-        if (reg == null) {
-            reg = BaseComponent.getInstance(IAssetSubTypeRegistry.class);
-            locale = BaseComponent.getInstance(ILocale.class);
-        }
+    /** Filesystem root for assets. */
+    private Path assetsRoot;
+
+    @PostInject
+    private void init() {
+        assetsRoot = paths.assetsDir();
+        LOG.info("Assets root resolved to: {}", assetsRoot);
+
         scanAllAssetsTxt();
+
+        // IMPORTANT: register a working loader for FileHandle
+        gdx.setLoader(FileHandle.class, new FileHandleLoader(gdx.getFileHandleResolver()));
+        LOG.debug("Registered FileHandleLoader for AssetManager");
     }
 
     @Override public void dispose() { gdx.dispose(); }
 
-    // ────────────────────────── public API ────────────────────────────
+    // ───────────────────────── public API ─────────────────────────
+
     @Override
-    public <T> T get(String path, Class<T> as) {          // same as today
-        ensureScheduled(path, as);
-        gdx.finishLoadingAsset(path);
-        touch(path);
-        return gdx.get(path, as);
+    public <T> T get(String path, Class<T> as) {
+        final String abs = toAbsolute(path);
+
+        if (!java.nio.file.Files.exists(java.nio.file.Path.of(abs))) {
+            throw new IllegalArgumentException("Asset file not found on disk: " + abs);
+        }
+
+        ensureScheduled(abs, as);
+        gdx.finishLoadingAsset(abs); // will block until that specific asset is loaded
+        touch(abs);
+
+        // DEBUG: assert loaded
+        if (!gdx.isLoaded(abs)) {
+            throw new com.badlogic.gdx.utils.GdxRuntimeException("Asset not loaded after finish: " + abs);
+        }
+        return gdx.get(abs, as);
     }
 
-    /** New – caller gives just an asset enum, class is inferred. */
     @SuppressWarnings("unchecked")
     @Override
     public <T> T get(IAssetPath asset) {
-        String path = choosePath(asset);                  // locale aware
-        IAssetSubType st = subtypeOf(path);
-        if (st == null)
-            throw new IllegalArgumentException("Unknown asset: " + path);
+        String rel = choosePath(asset); // e.g. css/dashboard-dark.css
 
-        Class<T> as = (Class<T>) st.libGdxClass();         // whatever your
-        return get(path, as);                             // registry exposes
+        IAssetSubType st = discovered.get(rel);
+        if (st == null) {
+            String ext = StringUtils.extensionOf(rel);
+            st = reg.byExtension(ext);
+            if (st != null) {
+                discovered.put(rel, st);
+                LOG.debug("Subtype lazily resolved for '{}': {} -> {}", rel, ext, st.id());
+            }
+        }
+        if (st == null) {
+            LOG.debug("Unknown asset (not discovered + no subtype): '{}'", rel);
+            throw new IllegalArgumentException("Unknown asset: " + rel);
+        }
+
+        String abs = toAbsolute(rel);
+        Class<T> as = (Class<T>) st.libGdxClass();
+        LOG.debug("Asset request -> enum={}, rel='{}', abs='{}', class={}",
+            asset, rel, abs, as.getSimpleName());
+
+        return get(rel, as);
     }
 
-    /** New – caller gives asset enum *and* explicit class (rarely needed). */
     @Override
     public <T> T get(IAssetPath asset, Class<T> as) {
         return get(choosePath(asset), as);
     }
 
     @Override
-    public IAssetSubType subtypeOf(String path) { return discovered.get(path); }
+    public IAssetSubType subtypeOf(String path) {
+        return discovered.get(toLogical(path));
+    }
 
-    /**
-     * Drive asynchronous loading and evict assets whose TTL has expired.
-     * Call this once per frame (or at a regular interval).
-     *
-     * @param delta seconds since last call – forwarded to {@link AssetManager#update(int)}
-     * @return {@code true} if LibGDX has nothing left to load
-     */
+    @Override
     public boolean update(float delta) {
         boolean done = gdx.update((int)(delta * 1000));
         evictStale();
         return done;
     }
 
-    // ───────────────────────── internal helpers ───────────────────────
-    private void ensureScheduled(String path, Class<?> as) {
-        if (!gdx.isLoaded(path) && gdx.getReferenceCount(path) == 0) {
-            gdx.load(path, as);
+    // ───────────────────────── internals ─────────────────────────
+
+    private void ensureScheduled(String absPath, Class<?> as) {
+        if (gdx.isLoaded(absPath)) {
+            LOG.debug("Already loaded: {}", absPath);
+            return;
         }
+        // Always (re)schedule when not loaded. If it was already queued,
+        // AssetManager will simply increase ref-count and still finish correctly.
+        LOG.debug("Scheduling load: {} ({})", absPath, as.getSimpleName());
+        gdx.load(absPath, as);
     }
 
-    private void touch(String path) { lastUsed.put(path, System.currentTimeMillis()); }
+    private void touch(String absPath) {
+        lastUsed.put(absPath, System.currentTimeMillis());
+    }
 
     /** Unload assets that have not been used for {@link #TTL_MS}. */
     private void evictStale() {
         long now = System.currentTimeMillis();
-        lastUsed.forEach((path, ts) -> {
-            if (now - ts < TTL_MS) return;            // still fresh
-            if (gdx.getReferenceCount(path) > 1) return; // shared elsewhere
-            gdx.unload(path);
-            lastUsed.remove(path);
-            LOG.debug("Evicted asset {}", path);
+        lastUsed.forEach((abs, ts) -> {
+            long age = now - ts;
+            if (age < TTL_MS) return;
+            int refs = gdx.getReferenceCount(abs);
+            if (refs > 1) return;
+            gdx.unload(abs);
+            lastUsed.remove(abs);
+            LOG.debug("Evicted asset '{}' (age={}ms, refs={})", abs, age, refs);
         });
     }
 
-    /** Parse every module’s assets.txt – <em>no</em> loading is triggered here. */
     private void scanAllAssetsTxt() {
-        for (ModuleClassLoader.ProjectLoader pl
-            : ModuleClassLoader.getInstance().getClassLoaders()) {
+        discovered.clear();
+        scanFromClasspathAssetsTxt();
+        scanFromFilesystemAssetsTxt();
+        LOG.info("Discovered {} assets (lazy mode on)", discovered.size());
+    }
 
+    private void scanFromClasspathAssetsTxt() {
+        for (ModuleClassLoader.ProjectLoader pl : ModuleClassLoader.getInstance().getClassLoaders()) {
             try (InputStream in = pl.cl().getResourceAsStream("assets.txt")) {
                 if (in == null) continue;
-
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(in))) {
                     br.lines()
-                        .filter(s -> !s.isBlank())
-                        .forEach(path -> {
-                            assert reg != null;
-                            discovered.put(
-                                path,
-                                reg.byExtension(StringUtils.extensionOf(path)));
-                        });
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty() && !s.startsWith("#"))
+                        .forEach(this::discoverPath);
                 }
-
             } catch (IOException e) {
                 LOG.error("assets.txt error in {}: {}", pl.cl(), e.toString());
             }
         }
-        LOG.info("Discovered {} assets (lazy mode on)", discovered.size());
     }
 
+    private void scanFromFilesystemAssetsTxt() {
+        try {
+            Path file = paths.assetsDir().resolve("assets.txt");
+            if (!Files.isRegularFile(file)) return;
+            Files.lines(file)
+                .map(String::trim)
+                .filter(s -> !s.isEmpty() && !s.startsWith("#"))
+                .forEach(this::discoverPath);
+        } catch (Exception e) {
+            LOG.error("assets.txt filesystem scan failed: {}", e.toString());
+        }
+    }
+
+    private void discoverPath(String relPath) {
+        String ext = StringUtils.extensionOf(relPath);
+        IAssetSubType st = reg.byExtension(ext);
+        if (st == null) {
+            LOG.debug("No subtype for '{}' (ext='{}')", relPath, ext);
+            return;
+        }
+        // Avoid noisy duplicates
+        if (discovered.putIfAbsent(relPath, st) == null) {
+            LOG.debug("Discovered asset '{}' (ext='{}', subtype='{}' -> class={})",
+                relPath, ext, st.id(), st.libGdxClass().getSimpleName());
+        }
+    }
+
+    /** Locale-aware logical path selection. */
     private String choosePath(IAssetPath asset) {
-        // use current locale if the asset actually carries that variant
-        String locId = locale != null ? locale.getLocale().toString() : null;   // e.g. "es_ES"
-        if (locId != null && asset.path(locId) != null
-            && !asset.path(locId).equals(asset.path()))
-            return asset.path(locId);
+        String locId = (locale != null && locale.getLocale() != null)
+            ? locale.getLocale().toString() : null;
 
-        return asset.path();          // default
+        if (locId != null) {
+            String locPath = asset.path(locId);
+            if (locPath != null && !locPath.equals(asset.path())) {
+                return normalizeLogical(locPath);
+            }
+        }
+        return normalizeLogical(asset.path());
     }
 
+    private String normalizeLogical(String p) {
+        return p.replace('\\', '/');
+    }
+
+    /** Convert logical or absolute to absolute path string (OS format). */
+    private String toAbsolute(String logicalOrAbsolute) {
+        Path p = Paths.get(logicalOrAbsolute);
+        if (p.isAbsolute()) return p.normalize().toString();
+
+        String logical = normalizeLogical(logicalOrAbsolute);
+        return absCache.computeIfAbsent(logical, l -> {
+            String abs = assetsRoot.resolve(l).normalize().toString();
+            LOG.debug("Asset path resolve: '{}' -> '{}'", l, abs);
+            return abs;
+        });
+    }
+
+    /** Convert absolute (under assetsRoot) to logical; otherwise return normalized logical. */
+    private String toLogical(String path) {
+        Path p = Paths.get(path).normalize();
+        if (p.isAbsolute() && p.startsWith(assetsRoot)) {
+            Path rel = assetsRoot.relativize(p);
+            return normalizeLogical(rel.toString());
+        }
+        return normalizeLogical(path);
+    }
+
+    private static Throwable rootCause(Throwable t) {
+        Throwable cur = t;
+        while (cur.getCause() != null && cur.getCause() != cur) cur = cur.getCause();
+        return cur;
+    }
 }

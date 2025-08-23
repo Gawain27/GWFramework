@@ -6,7 +6,7 @@ import com.gwngames.core.base.BaseTest;
 import org.junit.jupiter.api.Assertions;
 
 import java.lang.reflect.Field;
-import java.util.Map;
+import java.lang.reflect.Method;
 
 /**
  * • Step-1  : load dummy asset  → ref-count == 2  → NOT evicted
@@ -20,65 +20,62 @@ public class ReferenceCountProtectionTest extends BaseTest {
 
     /** Custom stub that lets us spoof reference-counts. */
     public static final class RefCountingStub extends StubAssetManager {
-        private final String watch;
+        private final String watchAbs;
         private volatile int forced = 2;              // start with 2 refs
 
-        RefCountingStub(String watch){ this.watch = watch; }
+        RefCountingStub(String watchAbs){ this.watchAbs = watchAbs; }
 
         void setRefCount(int v){ this.forced = v; }
 
         @Override public int getReferenceCount(String n){
-            return watch.equals(n) ? forced : super.getReferenceCount(n);
+            return watchAbs.equals(n) ? forced : super.getReferenceCount(n);
         }
     }
 
     @Override
     protected void runTest() throws Exception {
-        /* Headless LibGDX scaffolding ----------------------------------- */
         setupApplication();
 
-        final String PATH = "foo/bar.dummy";
+        final String REL = "foo/bar.dummy";
 
-        /* fresh manager + custom AssetManager stub -------------------- */
-        IAssetManager mgr = BaseComponent.getInstance(IAssetManager.class);
+        // Use the real manager via DI and reflect its absolute-path resolver
+        IAssetManager api = BaseComponent.getInstance(IAssetManager.class);
+        ModularAssetManager mgr = (ModularAssetManager) api;
 
-        /* swap the internal gdx field with our stub --------------------- */
+        Method toAbs = ModularAssetManager.class.getDeclaredMethod("toAbsolute", String.class);
+        toAbs.setAccessible(true);
+        final String ABS = (String) toAbs.invoke(mgr, REL);
+
+        // Swap internal AssetManager for our ref-counting stub (watching ABS)
         Field gdxF = ModularAssetManager.class.getDeclaredField("gdx");
         gdxF.setAccessible(true);
-
-        RefCountingStub stub = new RefCountingStub(PATH);
+        RefCountingStub stub = new RefCountingStub(ABS);
         gdxF.set(mgr, stub);
-        stub.setRefCount(0);
-        /* pretend to discover the asset ------------------------------- */
-        Field discF = ModularAssetManager.class.getDeclaredField("discovered");
-        discF.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        Map<String,Object> disc = (Map<String,Object>) discF.get(mgr);
-        disc.put(PATH, BuiltInSubTypes.MISC);          // use a real subtype
 
-        /* schedule + obtain the asset (first reference) -------------- */
-        mgr.get(PATH, DummyAsset.class);             // schedules a load
-        // schedule triggers StubAssetManager.load(..)
+        // Start with 0 until load finishes, then bump to 2 to protect from eviction
+        stub.setRefCount(0);
+
+        // Load once (manager will call load/get using ABS under the hood)
+        mgr.get(REL, DummyAsset.class);
         stub.setRefCount(2);
 
-        /* mark as TTL-expired right away ----------------------------- */
+        // Backdate last-used so it’s TTL-expired
         Field lastF = ModularAssetManager.class.getDeclaredField("lastUsed");
         lastF.setAccessible(true);
         @SuppressWarnings("unchecked")
-        Map<String,Long> last = (Map<String,Long>) lastF.get(mgr);
-        long expired = System.currentTimeMillis() -
-            600_001 /* DEFAULT_TTL_MS (5 min) + 1ms */;
-        last.put(PATH, expired);
+        var last = (java.util.Map<String,Long>) lastF.get(mgr);
+        long expired = System.currentTimeMillis() - (5 * 60_000 + 1); // default TTL + ε
+        last.put(ABS, expired);
 
-        /* FIRST update – ref-count forced to 2  → NOT evicted -------- */
+        // First update: ref-count forced to 2 → must NOT evict
         mgr.update(0);
-        Assertions.assertTrue(stub.isLoaded(PATH),
+        Assertions.assertTrue(stub.isLoaded(ABS),
             "asset must survive while reference-count > 1");
 
-        /* drop extra reference, second update – should evict --------- */
-        stub.setRefCount(1);                         // simulate releasing the hold
+        // Drop extra reference and update again → should evict
+        stub.setRefCount(1);
         mgr.update(0);
-        Assertions.assertFalse(stub.isLoaded(PATH),
+        Assertions.assertFalse(stub.isLoaded(ABS),
             "asset must be evicted once ref-count returns to 1");
     }
 }

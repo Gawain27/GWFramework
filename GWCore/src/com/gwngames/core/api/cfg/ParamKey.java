@@ -4,7 +4,9 @@ import com.gwngames.core.util.ParamRegistry;
 
 import java.util.Objects;
 
-/** Default implementation of a typed parameter key. */
+/** Default implementation of a typed parameter key.<br>
+ * DO NOT USE ParamKey arbitrarily, resort to IParam, if possible
+ * */
 public final class ParamKey<T> implements IParam<T> {
     private final String name;
     private final Class<T> type;

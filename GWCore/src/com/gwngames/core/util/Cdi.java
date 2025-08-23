@@ -3,88 +3,130 @@ package com.gwngames.core.util;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
+import com.gwngames.core.api.build.PostInject;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
+import com.gwngames.core.data.SubComponentNames;
 
-import java.lang.reflect.Field;
+import java.lang.reflect.*;
+import java.util.Collections;
 import java.util.List;
 
 /**
- * A very minimal “CDI‐style” injector.  Call
- *     Cdi.inject(myObject);
- * on any POJO that has fields annotated with {@link Inject}.
+ * A very minimal “CDI‐style” injector.
+ * Call {@code Cdi.inject(myObject);} on any POJO that has fields annotated with {@link Inject}.
+ *
+ * Supports:
+ *  - createNew: true/false (uses BaseComponent.getInstance(..., newInstance))
+ *  - subComp: choose a specific sub-component
+ *  - loadAll: List<T> with all available implementations (fully injected + post-injected)
+ *  - post-injection hook: @PostInject void someMethod()
  */
-public class Cdi {
+public final class Cdi {
 
-    /**
-     * Scan 'injectTo' for fields annotated @Inject, then either:
-     *  - if inject.createNew() == true:
-     *       • look up the field’s type for an @Init(...) annotation
-     *       • ask ModuleClassLoader to create a new instance of that component
-     *  - otherwise:
-     *       • assume the field’s type extends BaseComponent (implements IBaseComp)
-     *       • ask BaseComponent.getInstance(...) for the singleton
-     */
+    private Cdi() {}
+
     @SuppressWarnings("unchecked")
-    public static void inject(Object injectTo) {
-        if (injectTo == null) return;
+    public static void inject(Object target) {
+        if (target == null) return;
 
-        // Find every field in injectTo’s class (and superclasses) marked @Inject:
-        List<Field> fields = ClassUtils.getAnnotatedFields(injectTo.getClass(), Inject.class);
-
+        // 1) Wire @Inject fields
+        List<Field> fields = ClassUtils.getAnnotatedFields(target.getClass(), Inject.class);
         for (Field f : fields) {
-            boolean wasAccessible = f.canAccess(injectTo);
+            boolean restore = f.canAccess(target);
             try {
                 f.setAccessible(true);
-                Inject annotation = f.getAnnotation(Inject.class);
+                Inject inj = f.getAnnotation(Inject.class);
 
-                Class<?> fieldType = f.getType();
+                if (inj.loadAll()) {
+                    // ===== List<T> injection (all implementations) =====
+                    if (!List.class.isAssignableFrom(f.getType())) {
+                        throw new IllegalStateException("@Inject(loadAll=true) field must be a List: " + f);
+                    }
 
-                Object valueToInject;
-                if (annotation.createNew()) {
-                    // 1) If createNew == true, we must create a fresh instance via ModuleClassLoader.
-                    //    We expect the fieldType to be annotated with @Init(component="…")
-                    Init initMeta = fieldType.getAnnotation(Init.class);
-                    if (initMeta == null) {
-                        throw new IllegalStateException(
-                            "@Inject(createNew=true) found on field “" + f.getName() +
-                                "” of “" + injectTo.getClass().getSimpleName() +
-                                "” but “" + fieldType.getSimpleName() + "” is not annotated @Init"
-                        );
+                    Class<?> elemType = resolveListElementType(f);
+                    if (!IBaseComp.class.isAssignableFrom(elemType)) {
+                        throw new IllegalStateException("List element type must implement IBaseComp: " + f);
                     }
-                    // Ask ModuleClassLoader to create a brand‐new instance of that component
-                    valueToInject = ModuleClassLoader
-                        .getInstance()
-                        .tryCreate(initMeta.component(), fieldType);
 
-                    if (valueToInject == null) {
-                        throw new IllegalStateException(
-                            "ModuleClassLoader could not create a new instance of “" +
-                                fieldType.getSimpleName() + "” (component='" + initMeta.component() + "')"
-                        );
+                    Init meta = elemType.getAnnotation(Init.class);
+                    if (meta == null || !meta.allowMultiple()) {
+                        throw new IllegalStateException("Component does not allow multiple: " + elemType.getName());
                     }
-                } else {
-                    // 2) If createNew == false, we expect fieldType to be a subclass of BaseComponent.
-                    if (!IBaseComp.class.isAssignableFrom(fieldType)) {
-                        throw new IllegalStateException(
-                            "@Inject(createNew=false) found on field “" + f.getName() +
-                                "” of “" + injectTo.getClass().getSimpleName() +
-                                "” but “" + fieldType.getSimpleName() + "” does not extend BaseComponent"
-                        );
+
+                    // Create all implementations; ensure they are injected as well
+                    List<?> all = ModuleClassLoader.getInstance().tryCreateAll(meta.component());
+                    for (Object o : all) {
+                        // recursively inject dependencies + post-inject on each element
+                        Cdi.inject(o);
                     }
-                    //noinspection unchecked
-                    Class<? extends IBaseComp> componentClass = (Class<? extends IBaseComp>) fieldType;
-                    valueToInject = BaseComponent.getInstance(componentClass);
+                    f.set(target, Collections.unmodifiableList(all));
+                    continue;
                 }
 
-                f.set(injectTo, valueToInject);
+                // ===== Single injection (singleton or fresh) =====
+                Class<?> fieldType = f.getType();
+                if (!IBaseComp.class.isAssignableFrom(fieldType)) {
+                    throw new IllegalStateException("@Inject on non-IBaseComp field: " + f);
+                }
+
+                SubComponentNames sub = inj.subComp();
+                boolean newInstance = inj.createNew();
+
+                Object wired;
+                if (sub == SubComponentNames.NONE) {
+                    // interface/class default impl
+                    wired = newInstance
+                        ? BaseComponent.getInstance((Class<? extends IBaseComp>) fieldType, true)
+                        : BaseComponent.getInstance((Class<? extends IBaseComp>) fieldType);
+                } else {
+                    // specific sub-component
+                    wired = newInstance
+                        ? BaseComponent.getInstance((Class<? extends IBaseComp>) fieldType, sub, true)
+                        : BaseComponent.getInstance((Class<? extends IBaseComp>) fieldType, sub);
+                }
+
+                f.set(target, wired);
 
             } catch (IllegalAccessException e) {
-                throw new RuntimeException("Failed to inject field “" + f.getName()
-                    + "” into instance of “" + injectTo.getClass().getSimpleName() + "”", e);
+                throw new RuntimeException("Injection failed for field " + f + " on " + target.getClass().getName(), e);
             } finally {
-                f.setAccessible(wasAccessible);
+                f.setAccessible(restore);
             }
         }
+
+        // 2) Run @PostInject hooks (void, no-arg) after all fields are wired
+        runPostInject(target);
+    }
+
+    private static void runPostInject(Object target) {
+        Class<?> c = target.getClass();
+        while (c != null && c != Object.class) {
+            for (Method m : c.getDeclaredMethods()) {
+                if (!m.isAnnotationPresent(PostInject.class)) continue;
+                if (m.getParameterCount() != 0 || m.getReturnType() != void.class) {
+                    throw new IllegalStateException("@PostInject method must be void and no-arg: " + m);
+                }
+                boolean restore = m.canAccess(target);
+                try {
+                    m.setAccessible(true);
+                    m.invoke(target);
+                } catch (InvocationTargetException | IllegalAccessException e) {
+                    throw new RuntimeException("Failed to invoke @PostInject: " + m, e);
+                } finally {
+                    m.setAccessible(restore);
+                }
+            }
+            c = c.getSuperclass();
+        }
+    }
+
+    private static Class<?> resolveListElementType(Field listField) {
+        Type g = listField.getGenericType();
+        if (g instanceof ParameterizedType pt) {
+            Type a = pt.getActualTypeArguments()[0];
+            if (a instanceof Class<?> c) return c;
+        }
+        throw new IllegalStateException("Cannot resolve List element type for " + listField);
     }
 }

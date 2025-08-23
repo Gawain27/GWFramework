@@ -4,6 +4,7 @@ public class LogFiles {
     // TODO log dir to config
     public static final String DEFAULT = "../log/root.log";
     public static final String SYSTEM = "../log/system.log";
+    public static final String EXT = "../log/ext.log";
     public static final String CONFIG = "../log/cfg/configuration.log";
     public static final String ERROR = "../log/error.log";
     public static final String TEST = "../log/test/test.log";

@@ -233,7 +233,7 @@ subprojects { Project subproj ->
       buckets.groupBy { it.key[0..1] }      // group by [pkgSuffix, cls]
         .each { pcKey, groups ->
 
-          String pkgSuffix = pcKey[0]
+          String pkgSuffix = pcKey[0].replace('-', '')
           String cls       = pcKey[1]
 
           File outDir = new File(srcRoot, pkgSuffix.replace('.', '/'))

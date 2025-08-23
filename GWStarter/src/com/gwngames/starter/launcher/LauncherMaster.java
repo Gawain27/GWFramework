@@ -54,6 +54,7 @@ public class LauncherMaster extends BaseComponent implements ILauncherMaster {
         log.info("Preparing launcher: {}", launcher.getVersion());
         context.put(IContext._DIRECTOR, this);
 
+        //FIXME this actually freezes until application dies, do async
         Application game = launcher.createApplication();
         context.put(IContext.APPLICATION, game);
         log.info("Created application: {}", game.getVersion());

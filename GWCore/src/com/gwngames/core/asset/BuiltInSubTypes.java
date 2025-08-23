@@ -39,7 +39,6 @@ public enum BuiltInSubTypes implements IAssetSubType {
     /* TEXTURE ---------------------------------------------------- */
     TEXTURE("texture", AssetCategory.TEXTURE, Texture.class,     Ext.PNG),
     ATLAS  ("atlas",   AssetCategory.TEXTURE, TextureAtlas.class,Ext.ATLAS),
-    REGION ("region",  AssetCategory.TEXTURE, TextureRegion.class, Ext.JPG),
 
     /* DATA ------------------------------------------------------- */
     JSON   ("json", AssetCategory.DATA, FileHandle.class, Ext.JSON),

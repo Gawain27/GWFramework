@@ -3,17 +3,19 @@ package com.gwngames.core.api.base.cfg;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.cfg.IParam;
+import com.gwngames.core.api.cfg.ParamKey;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
+import com.gwngames.core.util.ParamRegistry;
 
-import java.util.Collections;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Init(component = ComponentNames.CONFIGURATION, module = ModuleNames.INTERFACE)
 public interface IConfig extends IBaseComp {
-    /** Implementations should call registerParameters() once with defaults. */
+    /** Loads parameters and eventually sets defaults.<br>
+     * Implementations should call registerParameters() once with required defaults. */
     void registerParameters();
 
     /* default storage with strict typing */
@@ -63,4 +65,19 @@ public interface IConfig extends IBaseComp {
 
     default boolean has(IParam<?> key) { return _values.containsKey(key); }
     default Map<IParam<?>, Object> snapshotAll() { return Collections.unmodifiableMap(_values); }
+
+    /** Call after {@link #registerParameters()} to enforce required params. */
+    default void validateAllParamsFilled() {
+        List<IParam<?>> missing = new ArrayList<>();
+        for (IParam<?> k : ParamRegistry.all()) {
+            if (!k.nullable() && !this.has(k)) {
+                missing.add(k);
+            }
+        }
+        if (!missing.isEmpty()) {
+            String msg = "Missing required configuration parameters: " +
+                missing.stream().map(IParam::key).collect(Collectors.joining(", "));
+            throw new IllegalStateException(msg);
+        }
+    }
 }

@@ -71,7 +71,7 @@ public class RegistryThreadSafetyTest extends BaseTest {
         Assertions.assertTrue(ok, "Threads timed out – possible dead-lock!");
 
         // 3) Expect exactly built-ins(JPG) + 8*1000 stubs
-        int expected = 1 + builtinJpgCount + THREADS * PER_THREAD;
+        int expected = builtinJpgCount + THREADS * PER_THREAD;
         int actual   = reg.allByExtension("jpg").size();
         Assertions.assertEquals(expected, actual,
             "Registry must hold every concurrently registered subtype + built-ins");

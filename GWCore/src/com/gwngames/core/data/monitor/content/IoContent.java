@@ -1,42 +1,55 @@
 package com.gwngames.core.data.monitor.content;
 
 import com.gwngames.core.api.base.monitor.IDashboardContent;
+import com.gwngames.core.api.build.Init;
+import com.gwngames.core.base.BaseComponent;
+import com.gwngames.core.data.ModuleNames;
+import com.gwngames.core.data.SubComponentNames;
 
 import java.nio.file.FileStore;
 import java.nio.file.FileSystems;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/**
- * Aggregated disk I/O counters (bytes read / written since boot)
- * for every mounted {@link FileStore}.
- *
- * <p>Relies on the JVM’s <code>FileStore#getAttribute("totalReadBytes")</code>
- * and <code>"totalWriteBytes"</code> support.  On platforms where the
- * attribute is missing the store is ignored, so the content degrades
- * gracefully.</p>
- */
-public final class IoContent implements IDashboardContent {
+@Init(module = ModuleNames.CORE, subComp = SubComponentNames.DASHBOARD_IO_CONTENT)
+public final class IoContent extends BaseComponent implements IDashboardContent {
 
-    private static final List<FileStore> STORES =
-        List.copyOf((java.util.Collection<? extends FileStore>) FileSystems.getDefault().getFileStores());
+    // Build an unmodifiable list from the Iterable (no Collection cast!)
+    private static final List<FileStore> STORES;
+    static {
+        List<FileStore> tmp = new ArrayList<>();
+        for (FileStore fs : FileSystems.getDefault().getFileStores()) {
+            tmp.add(fs);
+        }
+        STORES = Collections.unmodifiableList(tmp);
+    }
 
     @Override public String templateId() { return "kv"; }
 
     @Override public Object model() {
-        long r = 0, w = 0;
+        long read = 0, write = 0;
         for (FileStore fs : STORES) {
-            try {
-                r += (Long) fs.getAttribute("totalReadBytes");
-                w += (Long) fs.getAttribute("totalWriteBytes");
-            } catch (UnsupportedOperationException ignored) { }
-            catch (Exception e) { /* log if desired */ }
+            read  += getLongAttr(fs, "totalReadBytes");
+            write += getLongAttr(fs, "totalWriteBytes");
         }
         return Map.of(
-            "Read",  human(r),
-            "Write", human(w)
+            "Read",  human(read),
+            "Write", human(write)
         );
+    }
+
+    private static long getLongAttr(FileStore fs, String name) {
+        try {
+            Object v = fs.getAttribute(name);
+            return (v instanceof Long) ? (Long) v : 0L;
+        } catch (UnsupportedOperationException ignored) {
+            return 0L; // attribute not supported on this FS
+        } catch (Exception ignored) {
+            return 0L; // be resilient
+        }
     }
 
     private static String human(long bytes){

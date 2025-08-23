@@ -7,6 +7,7 @@ import com.gwngames.core.base.cfg.ModuleClassLoader;
 import org.junit.jupiter.api.*;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -67,7 +68,8 @@ public final class ModularAssetManagerTest extends BaseTest {
         ModularAssetManager.setTtl(150);         // 150 ms
 
         // Obtain manager via DI and replace its internal AssetManager
-        IAssetManager mgr = BaseComponent.getInstance(IAssetManager.class);
+        IAssetManager api = BaseComponent.getInstance(IAssetManager.class);
+        ModularAssetManager mgr = (ModularAssetManager) api; // concrete instance
 
         // Swap out the real AssetManager for the stub (no file I/O)
         Field gdxF = ModularAssetManager.class.getDeclaredField("gdx");
@@ -76,21 +78,25 @@ public final class ModularAssetManagerTest extends BaseTest {
         gdxF.set(mgr, stub);
         gdxF.setAccessible(false);
 
+        // We must assert against the absolute path the manager uses internally
+        final String REL = "dummy.data";
+        Method toAbs = ModularAssetManager.class.getDeclaredMethod("toAbsolute", String.class);
+        toAbs.setAccessible(true);
+        final String ABS = (String) toAbs.invoke(mgr, REL);
+
         /* ── lazy-load → keep → evict sequence ─────────────────────── */
 
-        final String ASSET = "dummy.data";
+        Assertions.assertFalse(stub.isLoaded(ABS));
 
-        Assertions.assertFalse(stub.isLoaded(ASSET));
-
-        mgr.get(ASSET, Object.class);            // schedules & loads lazily
-        Assertions.assertTrue(stub.isLoaded(ASSET));
+        mgr.get(REL, Object.class);              // schedules & loads lazily (records ABS)
+        Assertions.assertTrue(stub.isLoaded(ABS));
 
         mgr.update(0.05f);                       // 50 ms  (< TTL) – still loaded
-        Assertions.assertTrue(stub.isLoaded(ASSET));
+        Assertions.assertTrue(stub.isLoaded(ABS));
 
         Thread.sleep(200);                       // > TTL
         mgr.update(0.1f);                        // eviction pass
-        Assertions.assertFalse(stub.isLoaded(ASSET),
+        Assertions.assertFalse(stub.isLoaded(ABS),
             "asset was not evicted after TTL elapsed and single ref-count");
     }
 }

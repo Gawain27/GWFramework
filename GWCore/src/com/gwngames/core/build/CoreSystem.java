@@ -20,5 +20,6 @@ public class CoreSystem extends BaseComponent implements ISystem {
     @Override
     public void loadContext() {
         config.registerParameters();
+        config.validateAllParamsFilled();
     }
 }

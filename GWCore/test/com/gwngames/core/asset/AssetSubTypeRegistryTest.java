@@ -54,11 +54,11 @@ public final class AssetSubTypeRegistryTest extends BaseTest {
             reg.byExtension("png"));                        // default = first
 
         Assertions.assertEquals(
-            BuiltInSubTypes.REGION,
-            reg.byExtension("jpg", "region"));              // explicit
+            BuiltInSubTypes.ATLAS,
+            reg.byExtension("atlas", "atlas"));              // explicit
 
         Assertions.assertTrue(
-            reg.allByExtension("jpg").contains(BuiltInSubTypes.REGION));
+            reg.allByExtension("atlas").contains(BuiltInSubTypes.ATLAS));
 
         /* register custom --------------------------------------------- */
         IAssetSubType xyz = new XyzSubType();

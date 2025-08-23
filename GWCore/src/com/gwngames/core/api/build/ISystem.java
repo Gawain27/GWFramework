@@ -12,7 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Denotes a system (e.g. the component that setups the whole game application)
+ * Denotes the system (e.g. the component that setups the whole game application)
  *
  * @author samlam
  * */

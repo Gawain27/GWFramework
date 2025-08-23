@@ -1,7 +1,14 @@
 package com.gwngames.core.data.monitor.content;
 
+import com.badlogic.gdx.utils.compression.lzma.Base;
 import com.gwngames.core.api.base.monitor.IDashboardContent;
+import com.gwngames.core.api.build.Init;
+import com.gwngames.core.base.BaseComponent;
+import com.gwngames.core.data.ModuleNames;
+import com.gwngames.core.data.SubComponentNames;
 import com.sun.management.OperatingSystemMXBean;
+
+import java.lang.annotation.Inherited;
 import java.lang.management.ManagementFactory;
 import java.util.Locale;
 import java.util.Map;
@@ -12,7 +19,8 @@ import java.util.Map;
  * <p>Uses the <kbd>kv</kbd> template &rarr; the renderer prints one
  * <code>key: value</code> line per map entry.</p>
  */
-public final class RamContent implements IDashboardContent {
+@Init(module = ModuleNames.CORE, subComp = SubComponentNames.DASHBOARD_RAM_CONTENT)
+public class RamContent extends BaseComponent implements IDashboardContent {
 
     private static final OperatingSystemMXBean OS =
         (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();

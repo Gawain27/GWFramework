@@ -1,3 +1,4 @@
+META-INF/services/org.slf4j.spi.SLF4JServiceProvider
 assets.txt
 css/dashboard-dark.css
 translation/messages.csv

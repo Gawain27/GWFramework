@@ -12,8 +12,8 @@ public class CoreConfiguration extends BaseComponent implements IConfig {
     public void registerParameters() {
         // Make sure param classes are loaded so keys auto-register globally (optional)
         // ParamUtils.ensureLoaded(BuildParameters.class);
-        // TODO save and load param values, do not set defaults always
-        setDefault(BuildParameters.PROD_ENV, Boolean.FALSE);
+        // TODO save and load param values, so set defaults will do nothing
+        setDefault(BuildParameters.PROD_ENV, Boolean.FALSE); // TODO: set true
         setDefault(BuildParameters.DASHBOARD_PORT, 10_707);
     }
 }

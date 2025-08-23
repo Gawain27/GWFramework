@@ -6,6 +6,9 @@ import com.gwngames.core.base.BaseTest;
 import org.junit.jupiter.api.Assertions;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 
 /**
@@ -14,66 +17,72 @@ import java.util.Map;
  */
 public class TouchTimestampUpdateTest extends BaseTest {
 
-    /** Injects our StubAssetManager + dummy subtype registry. */
+    /** Build a manager with stub internals suitable for unit testing. */
     private static ModularAssetManager newTestManager() throws Exception {
-
-        /* make TTL tiny so the real value doesn't matter for this test */
-        System.setProperty("gw.asset.ttl", "60000");          // 60 s – any value OK
+        System.setProperty("gw.asset.ttl", "60000"); // TTL not important for this test
 
         ModularAssetManager mng = new ModularAssetManager();
 
-        /* swap the internal AssetManager with our in-memory stub ------- */
+        // 1) Provide a fake assets root (normally set in @PostInject via IPathResolver)
+        Field rootF = ModularAssetManager.class.getDeclaredField("assetsRoot");
+        rootF.setAccessible(true);
+        Path tmpRoot = Files.createTempDirectory("mam-test-root");
+        rootF.set(mng, tmpRoot);
+
+        // 2) Swap the internal AssetManager with an in-memory stub (no file IO)
         Field gdxF = ModularAssetManager.class.getDeclaredField("gdx");
         gdxF.setAccessible(true);
-        gdxF.set(mng, new StubAssetManager());                // no real file IO
-        gdxF.setAccessible(false);
+        gdxF.set(mng, new StubAssetManager());
 
-        /* plug a simple subtype registry (maps every ext to itself) ----- */
+        // 3) Plug a minimal subtype registry (not actually used by get(String, Class))
         Field regF = ModularAssetManager.class.getDeclaredField("reg");
         regF.setAccessible(true);
         regF.set(mng, new IAssetSubTypeRegistry() {
-            @Override public void register(IAssetSubType st)                           {}
-            @Override public IAssetSubType byExtension(String ext)                     { return null; }
-            @Override public IAssetSubType byExtension(String ext, String id)          { return null; }
-            @Override public java.util.List<IAssetSubType> allByExtension(String ext)  { return java.util.List.of(); }
-            @Override public int getMultId()                                           { return 0; }
+            @Override public void register(IAssetSubType st) {}
+            @Override public IAssetSubType byExtension(String ext) { return null; }
+            @Override public IAssetSubType byExtension(String ext, String id) { return null; }
+            @Override public java.util.List<IAssetSubType> allByExtension(String ext) { return java.util.List.of(); }
+            @Override public int getMultId() { return 0; }
         });
-        regF.setAccessible(false);
 
         return mng;
     }
 
     @SuppressWarnings("unchecked")
-    @Override protected void runTest() throws Exception {
+    @Override
+    protected void runTest() throws Exception {
+        setupApplication(); // LibGDX stubs
 
-        setupApplication();                                      // LibGDX stubs
         ModularAssetManager mam = newTestManager();
 
-        final String PATH = "dummy/hero.dat";
+        final String REL = "dummy/hero.dat";
+
+        // Resolve absolute path key (the manager uses absolute keys internally)
+        Method toAbs = ModularAssetManager.class.getDeclaredMethod("toAbsolute", String.class);
+        toAbs.setAccessible(true);
+        final String ABS = (String) toAbs.invoke(mam, REL);
 
         /* ---------- 1st get() creates + touches asset ---------------- */
-        mam.get(PATH, Object.class);
+        mam.get(REL, Object.class);
 
         Field lastF = ModularAssetManager.class.getDeclaredField("lastUsed");
         lastF.setAccessible(true);
         Map<String,Long> last = (Map<String, Long>) lastF.get(mam);
-        long t1 = last.get(PATH);
+        Long t1 = last.get(ABS);
+        Assertions.assertNotNull(t1, "first get() must record a lastUsed entry");
 
         /* little pause, then fetch again ------------------------------ */
-        Thread.sleep(60);          // > a few ms to guarantee delta
-        mam.get(PATH, Object.class);
+        Thread.sleep(60);
+        mam.get(REL, Object.class);
 
-        long t2 = last.get(PATH);
-        Assertions.assertTrue(t2 > t1,
-            "Second get() must refresh the lastUsed timestamp");
+        Long t2 = last.get(ABS);
+        Assertions.assertNotNull(t2, "second get() must record a lastUsed entry");
+        Assertions.assertTrue(t2 > t1, "second get() must refresh the lastUsed timestamp");
 
-        /* sanity: no unexpected unload triggered ---------------------- */
+        /* sanity: asset still loaded ---------------------------------- */
         Field gdxF = ModularAssetManager.class.getDeclaredField("gdx");
-        gdxF.setAccessible(true);                      // <-- FIX: allow access
+        gdxF.setAccessible(true);
         StubAssetManager stub = (StubAssetManager) gdxF.get(mam);
-        gdxF.setAccessible(false);                     // restore flag
-
-        Assertions.assertTrue(stub.isLoaded(PATH),
-            "Asset should still be loaded");
+        Assertions.assertTrue(stub.isLoaded(ABS), "Asset should still be loaded");
     }
 }

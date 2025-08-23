@@ -515,8 +515,6 @@ public final class ModuleClassLoader extends ClassLoader {
     /*  Reflection convenience                                              */
     /* ==================================================================== */
     public Object createInstance(Class<?> clazz, Object... params) {
-        Init meta = resolvedInit(clazz);
-
         // If the concrete class says “external”, always use its own factory.
         if (clazz.getAnnotation(Init.class).external()) {
             return newViaExternalFactory(clazz);

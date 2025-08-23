@@ -3,6 +3,7 @@ package com.gwngames.core.api.base.monitor;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
+import com.gwngames.core.data.SubComponentNames;
 
 /**
  * <h2>{@code IDashboardItem}</h2>
@@ -26,9 +27,9 @@ import com.gwngames.core.data.ModuleNames;
  * <h3>3&nbsp;&mdash;&nbsp;Visualisation</h3>
  * <ul>
  *   <li>{@link #templateId()} – logical identifier that the
- *       {@link com.gwngames.core.dashboard.template.TemplateRegistry TemplateRegistry}
+ *       {@link com.gwngames.core.data.monitor.template.DashboardTemplateRegistry}
  *       maps to an HTML snippet.</li>
- *   <li>{@link #model()} – <strong>class object</strong> of an
+ *   <li>{@link #contentSubComp()} – <strong>class object</strong> of an
  *       {@link IDashboardContent} implementation.
  *       The framework obtains an instance (via its injector or reflection)
  *       and then calls {@link IDashboardContent#templateId()} /
@@ -53,14 +54,9 @@ public non-sealed interface IDashboardItem extends IDashboardNode {
 
     /* ───────────────────── visualisation of the item ───────────────── */
 
-    /** Logical key into {@link com.gwngames.core.dashboard.template.TemplateRegistry}. */
+    /** Logical key into {@link com.gwngames.core.data.monitor.template.DashboardTemplateRegistry}. */
     String templateId();
 
-    /**
-     * Implementation <em>class</em> of an {@link IDashboardContent} that knows
-     * how to supply the actual numbers/series for the template.
-     *
-     * @return never {@code null}
-     */
-    Class<? extends IDashboardContent> model();
+    /** Resolve the content via ModuleClassLoader using this sub-component. */
+    SubComponentNames contentSubComp();
 }

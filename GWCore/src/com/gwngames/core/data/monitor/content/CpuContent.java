@@ -1,6 +1,10 @@
 package com.gwngames.core.data.monitor.content;
 
 import com.gwngames.core.api.base.monitor.IDashboardContent;
+import com.gwngames.core.api.build.Init;
+import com.gwngames.core.base.BaseComponent;
+import com.gwngames.core.data.ModuleNames;
+import com.gwngames.core.data.SubComponentNames;
 import com.sun.management.OperatingSystemMXBean;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayDeque;
@@ -16,7 +20,8 @@ import java.util.List;
  * <code>toString()</code> which yields a JSON-compatible array syntax
  * <code>[12.3, 15.7, …]</code>.</p>
  */
-public final class CpuContent implements IDashboardContent {
+@Init(module = ModuleNames.CORE, subComp = SubComponentNames.DASHBOARD_CPU_CONTENT)
+public class CpuContent extends BaseComponent implements IDashboardContent {
 
     private static final OperatingSystemMXBean OS =
         (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();

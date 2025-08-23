@@ -6,39 +6,83 @@ import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.SubComponentNames;
 import com.sun.management.OperatingSystemMXBean;
-import java.lang.management.ManagementFactory;
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.List;
 
-/**
- * Live CPU usage of <em>this JVM process</em> (graph over the last 60&nbsp;s).
- *
- * <p>Returns template&nbsp;<kbd>graph-line</kbd> and as its {@code model()}
- * a {@link List}&lt;Double&gt; of percentage values.  The default
- * {@code graph-line} template serialises that list into
- * <code>toString()</code> which yields a JSON-compatible array syntax
- * <code>[12.3, 15.7, …]</code>.</p>
- */
+import java.lang.management.ManagementFactory;
+import java.util.*;
+import java.util.concurrent.*;
+
 @Init(module = ModuleNames.CORE, subComp = SubComponentNames.DASHBOARD_CPU_CONTENT)
-public class CpuContent extends BaseComponent implements IDashboardContent {
+public final class CpuContent extends BaseComponent implements IDashboardContent {
 
     private static final OperatingSystemMXBean OS =
         (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
 
-    /** Sliding window – 60 samples ≈ last minute at 1 Hz. */
-    private final Deque<Double> series = new ArrayDeque<>(60);
+    private static final int WINDOW = 60;
 
-    @Override public String templateId() { return "graph-line"; }
+    private final Deque<Double> processSeries = new ArrayDeque<>(WINDOW);
+    private final Deque<Double> systemSeries  = new ArrayDeque<>(WINDOW);
 
-    @Override public Object model() {
-        double process = round(OS.getProcessCpuLoad() * 100);
+    private final ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "Dash-CPU");
+        t.setDaemon(true);
+        return t;
+    });
 
-        if (series.size() == 60) series.removeFirst();
-        series.addLast(process);
-
-        return List.copyOf(series);              // immutable snapshot
+    public CpuContent() {
+        exec.scheduleAtFixedRate(() -> {
+            try { sample(); } catch (Throwable ignored) { /* keep sampling */ }
+        }, 0, 1, TimeUnit.SECONDS);
     }
 
-    private static double round(double d) { return Math.round(d * 10) / 10.0; }
+    @Override public String templateId() { return "panel-kv-dualline"; }
+
+    @Override
+    public Object model() {
+        Map<String, Object> kv = new LinkedHashMap<>();
+        double proc = clampPct(OS.getProcessCpuLoad() * 100.0);
+        double sys  = clampPct(OS.getSystemCpuLoad()   * 100.0);
+        int cores   = Runtime.getRuntime().availableProcessors();
+        double load = Optional.ofNullable(ManagementFactory.getOperatingSystemMXBean().getSystemLoadAverage())
+            .orElse(-1.0);
+
+        kv.put("Process CPU", fmtPct(proc));
+        kv.put("System CPU",  fmtPct(sys));
+        kv.put("Cores",       cores);
+        kv.put("Load avg (1m)", load >= 0 ? String.format(Locale.US, "%.2f", load) : "n/a");
+
+        synchronized (this) {
+            return Map.of(
+                "kv", kv,
+                "a",  List.copyOf(processSeries),
+                "b",  List.copyOf(systemSeries),
+                "alabel", "Process %",
+                "blabel", "System %"
+            );
+        }
+    }
+
+    /* ── internals ─────────────────────────────────────────────── */
+
+    private void sample() {
+        double proc = clampPct(OS.getProcessCpuLoad() * 100.0);
+        double sys  = clampPct(OS.getSystemCpuLoad()   * 100.0);
+        synchronized (this) {
+            push(processSeries, proc);
+            push(systemSeries,  sys);
+        }
+    }
+
+    private static void push(Deque<Double> dq, double v) {
+        if (dq.size() == WINDOW) dq.removeFirst();
+        dq.addLast(round1(v));
+    }
+
+    private static double clampPct(double v) {
+        if (Double.isNaN(v) || v < 0) return 0.0;
+        if (v > 100) return 100.0;
+        return v;
+    }
+
+    private static double round1(double d) { return Math.round(d * 10.0) / 10.0; }
+    private static String fmtPct(double d) { return String.format(Locale.US, "%.1f %%", d); }
 }

@@ -13,101 +13,124 @@ public final class DashboardTemplateRegistry {
     private static final Map<String, Renderer> REG = new ConcurrentHashMap<>();
 
     static {
-        registerDefaults();
-    }
+        // no-op
+        register("none", (m, sb) -> sb);
 
-    private DashboardTemplateRegistry() { }
-
-    /* ========================== Public API ========================== */
-
-    public static void register(String id, Renderer renderer) {
-        Objects.requireNonNull(renderer, "renderer");
-        if (id == null || id.isBlank()) {
-            throw new IllegalArgumentException("templateId must be non-blank");
-        }
-        REG.put(id, renderer);
-    }
-
-    public static void unregister(String id) {
-        REG.remove(id);
-    }
-
-    public static void render(String id, Object model, StringBuilder sb) {
-        Renderer r = REG.get(id);
-        if (r == null) {
-            sb.append("<!-- unknown template id=")
-                .append(esc(id))
-                .append(" model=")
-                .append(esc(model))
-                .append(" -->");
-            return;
-        }
-        r.apply(model, sb);
-    }
-
-    /* ====================== Built-in Templates ====================== */
-
-    private static void registerDefaults() {
-        // Header: expects { "text": String } or falls back to model.toString()
+        // header: model = { text: String }
         register("header", (m, sb) -> {
-            Object text = (m instanceof Map<?,?> map) ? get(map, "text", "") : m;
+            String text = safeMap(m).getOrDefault("text", "").toString();
             return sb.append("<h3 class='hdr'>").append(esc(text)).append("</h3>");
         });
 
-        // Count: expects { "value": Number } (alias of "number")
-        register("count", DashboardTemplateRegistry::renderNumberLike);
-        register("number", DashboardTemplateRegistry::renderNumberLike);
-
-        // Key/Value: either {key,value} one-liner OR render all entries of a map
-        register("kv", (m, sb) -> {
-            if (m instanceof Map<?,?> map) {
-                boolean hasPair = map.containsKey("key") || map.containsKey("value");
-                if (hasPair) {
-                    Object k = get(map, "key", "");
-                    Object v = get(map, "value", "");
-                    return kvRow(sb, k, v);
-                }
-                // Generic map → render all entries
-                for (Map.Entry<?,?> e : map.entrySet()) {
-                    kvRow(sb, e.getKey(), e.getValue());
-                }
-                return sb;
-            }
-            // Fallback: print raw model
-            return kvRow(sb, null, m);
+        // count badge: model = { value: Number }
+        register("count", (m, sb) -> {
+            Object v = safeMap(m).getOrDefault("value", "");
+            return sb.append("<span class='num'>").append(esc(v)).append("</span>");
         });
 
-        // Simple inline sparkline placeholder: model is serialized into data attribute
+        // kv list: model = Map<String, Object>
+        register("kv", (m, sb) -> {
+            Map<?, ?> map = asMap(m);
+            map.forEach((k, v) -> sb
+                .append("<div class='kv'><span class='k'>").append(esc(k))
+                .append("</span><span class='v'>").append(esc(v))
+                .append("</span></div>"));
+            return sb;
+        });
+
+        // simple spark-line: model = [numbers...]
         register("graph-line", (m, sb) ->
             sb.append("<canvas data-series='").append(esc(m)).append("'></canvas>"));
+
+        // panel-kv-line: model = { kv: Map<String,Object>, series: List<Double>, label?: String }
+        register("panel-kv-line", (m, sb) -> {
+            Map<String, Object> mm = safeMap(m);
+            Map<String, Object> kv = safeMap(mm.get("kv"));
+
+            kv.forEach((k, v) -> sb.append("<div class='kv'><span class='k'>")
+                .append(esc(k)).append("</span><span class='v'>").append(esc(v))
+                .append("</span></div>"));
+
+            Object series = mm.get("series");
+            Object label  = mm.getOrDefault("label", "");
+
+            sb.append("<div style='margin-top:.6rem'>")
+                .append("<div style='font-size:.85rem;opacity:.7;margin-bottom:.2rem'>")
+                .append(esc(label)).append("</div>")
+                .append("<canvas data-series='").append(esc(series)).append("'></canvas>")
+                .append("</div>");
+            return sb;
+        });
+
+        // panel-kv-dualline: model = { kv: Map<String,Object>, a: List<Double>, b: List<Double>, alabel?: String, blabel?: String }
+        register("panel-kv-dualline", (m, sb) -> {
+            Map<String, Object> mm = safeMap(m);
+            Map<String, Object> kv = safeMap(mm.get("kv"));
+
+            kv.forEach((k, v) -> sb.append("<div class='kv'><span class='k'>")
+                .append(esc(k)).append("</span><span class='v'>").append(esc(v))
+                .append("</span></div>"));
+
+            Object a  = mm.get("a");
+            Object b  = mm.get("b");
+            Object la = mm.getOrDefault("alabel", "");
+            Object lb = mm.getOrDefault("blabel", "");
+
+            sb.append("<div class='grid' style='grid-template-columns:1fr 1fr;gap:0.8rem;margin-top:.6rem'>")
+                .append("<div><div style='font-size:.85rem;opacity:.7;margin-bottom:.2rem'>")
+                .append(esc(la)).append("</div>")
+                .append("<canvas data-series='").append(esc(a)).append("'></canvas></div>")
+                .append("<div><div style='font-size:.85rem;opacity:.7;margin-bottom:.2rem'>")
+                .append(esc(lb)).append("</div>")
+                .append("<canvas data-series='").append(esc(b)).append("'></canvas></div>")
+                .append("</div>");
+            return sb;
+        });
     }
 
-    /* ========================= Renderers ============================ */
+    private DashboardTemplateRegistry() {}
 
-    private static StringBuilder renderNumberLike(Object m, StringBuilder sb) {
-        Object v = (m instanceof Map<?,?> map) ? get(map, "value", m) : m;
-        return sb.append("<span class='num'>").append(esc(v)).append("</span>");
+    public static void register(String id, Renderer renderer) {
+        Objects.requireNonNull(renderer, "renderer");
+        if (id == null || id.isBlank())
+            throw new IllegalArgumentException("templateId must be non-blank");
+        REG.put(id, renderer);
     }
 
-    private static StringBuilder kvRow(StringBuilder sb, Object k, Object v) {
-        sb.append("<div class='kv'>");
-        if (k != null && !Objects.toString(k, "").isBlank()) {
-            sb.append("<span class='k'>").append(esc(k)).append("</span>");
+    public static void unregister(String id) { REG.remove(id); }
+
+    public static void render(String id, Object model, StringBuilder sb) {
+        Renderer r = REG.get(id);
+        if (r == null) r = DashboardTemplateRegistry::unknown;
+        r.apply(model, sb);
+    }
+
+    /* ── helpers ─────────────────────────────────────────────── */
+
+    private static StringBuilder unknown(Object m, StringBuilder sb) {
+        return sb.append("<!-- unknown template ").append(esc(m)).append(" -->");
+    }
+
+    /** Best-effort cast to Map<String,Object>, returns empty map on mismatch/null. */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> safeMap(Object m) {
+        if (m instanceof Map<?, ?> mm) {
+            try { return (Map<String, Object>) mm; }
+            catch (ClassCastException ignored) { /* fallthrough */ }
         }
-        sb.append("<span class='v'>").append(esc(v)).append("</span></div>");
-        return sb;
+        return Map.of();
     }
 
-    /* ========================== Helpers ============================= */
-
-    /** Safe getter for wildcarded maps (avoids getOrDefault capture issue). */
-    private static Object get(Map<?,?> map, String key, Object defVal) {
-        Object v = map.get(key);
-        return (v != null) ? v : defVal;
+    /** Lossy view for iteration where defaulting is not needed. */
+    private static Map<?, ?> asMap(Object m) {
+        return (m instanceof Map<?, ?> mm) ? mm : Map.of();
     }
 
     private static String esc(Object o) {
         return Objects.toString(o, "")
-            .replace("&","&amp;").replace("<","&lt;").replace(">","&gt;");
+            .replace("&","&amp;")
+            .replace("<","&lt;")
+            .replace(">","&gt;")
+            .replace("\"","&quot;");
     }
 }

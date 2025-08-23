@@ -11,24 +11,37 @@ public final class DashboardDefaults {
     /** Simple section header. Template expects: { "text": String } */
     public static IDashboardHeader header(String title) {
         return new IDashboardHeader() {
-            @Override public String templateId() { return "header"; } // <- not "kv"
+            @Override public String templateId() { return "header"; }
             @Override public Object model()      { return Map.of("text", title); }
         };
     }
 
-    /** Big number stat. Template expects: { "value": Number } */
-    public static IDashboardContent count(int n) {
+    /** Optional empty block (renders nothing). */
+    public static IDashboardContent none() {
         return new IDashboardContent() {
-            @Override public String templateId() { return "count"; }  // <- not "number"
+            @Override public String templateId() { return "none"; }
+            @Override public Object model()      { return null; }
+        };
+    }
+
+    /** Big number stat. Template expects: { "value": Number } */
+    public static IDashboardContent count(Number n) {
+        return new IDashboardContent() {
+            @Override public String templateId() { return "count"; }
             @Override public Object model()      { return Map.of("value", n); }
         };
     }
 
-    /** Key/Value snippet. Template expects: { "key": String, "value": any } */
-    public static IDashboardContent kv(String key, Object value) {
+    /** Key/Value snippet. Template expects a map of label->value */
+    public static IDashboardContent kv(Map<String, ?> pairs) {
         return new IDashboardContent() {
             @Override public String templateId() { return "kv"; }
-            @Override public Object model()      { return Map.of("key", key, "value", value); }
+            @Override public Object model()      { return pairs; }
         };
+    }
+
+    /** Single KV row convenience. */
+    public static IDashboardContent kv(String key, Object value) {
+        return kv(Map.of(key, value));
     }
 }

@@ -52,6 +52,7 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
         registerBuiltin(null, SubComponentNames.DASHBOARD_CPU_CONTENT, TelemetryCat.CPU);
         registerBuiltin(null, SubComponentNames.DASHBOARD_IO_CONTENT,  TelemetryCat.IO);
         registerBuiltin(null, SubComponentNames.DASHBOARD_RAM_CONTENT, TelemetryCat.RAM);
+
         // User-supplied items
         if (injectedItems != null) for (IDashboardItem it : injectedItems) register(it);
     }
@@ -88,7 +89,9 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
         log.info("Starting dashboard on port {}", port);
         Javalin s = Javalin.create(cfg -> cfg.http.defaultContentType = "text/html")
             .get("/dashboard", ctx -> ctx.result(render()))
+            .get("/dashboard/fragment", ctx -> ctx.result(renderRootOnly()))
             .start(port);
+
         serverRef.set(s);
         boundPort = port;
         installShutdownHook();
@@ -133,32 +136,68 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
             log.debug("Dashboard CSS not available – using fallback: {}", t.toString());
         }
         if (css == null) {
-            css = "body{background:#0b0d10;color:#e6eef8;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;}";
+            css = """
+            body{background:#0b0d10;color:#e6eef8;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;}
+            .chart{width:100%;height:220px;display:block}
+            .legend{font-size:.9rem;opacity:.7;margin:.25rem 0 .35rem}
+            .cat>.hdr{cursor:pointer;user-select:none}
+            .hdr::after{content:"\\25BE";margin-left:.4rem;opacity:.6;font-size:.9em}
+            .hdr.collapsed::after{content:"\\25B8"}
+            .cat.collapsed>.cat-body{display:none}
+            .kv{display:flex;justify-content:space-between;padding:.18rem .4rem;border-radius:6px}
+            .kv:hover{background:rgba(0,188,212,.12);outline:1px solid rgba(0,188,212,.25)}
+            canvas[data-series]:not([data-hydrated]){background:linear-gradient(90deg,#222 25%,#2a2a2a 37%,#222 63%);background-size:400% 100%;animation:loading 2.2s infinite ease;border-radius:.75rem}
+            @keyframes loading{0%{background-position:100% 0}100%{background-position:0 0}}
+            """;
         }
 
         StringBuilder sb = new StringBuilder(16384)
             .append("<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>")
-            .append("<title>Dashboard</title><style>")
-            .append(css)
-            // tiny additions for collapse + kv styling
-            .append(".cat>.hdr{cursor:pointer} .cat.collapsed>.cat-body{display:none}")
-            .append(".kv{display:flex;justify-content:space-between;padding:.13rem 0;font-size:.94rem;color:#8a8a8a}")
-            .append("</style></head><body>");
+            .append("<title>Dashboard</title><style>").append(css).append("</style></head><body>");
 
-        // ── Intro block: system overview
+        // Body root
+        sb.append(renderRoot());
+
+        // Hydrator JS (charts + collapse + live updates)
+        sb.append(SCRIPT_BLOCK);
+
+        return sb.append("</body></html>").toString();
+    }
+
+    /** Returns ONLY the #dash-root wrapper (used by /dashboard/fragment). */
+    private String renderRootOnly() {
+        return renderRoot().toString();
+    }
+
+    /** Builds the complete dashboard body inside a stable wrapper. */
+    private StringBuilder renderRoot() {
+        StringBuilder sb = new StringBuilder(16384);
+        sb.append("<div id='dash-root'>");
+
+        // ── Overview
         sb.append("<section class='tbl'>");
         DashboardTemplateRegistry.render("header", Map.of("text", "System Overview"), sb);
         DashboardTemplateRegistry.render("kv", systemOverview(), sb);
         sb.append("</section>");
+
+        // ── Free-floating layers (if any)
+        if (injectedLayers != null && !injectedLayers.isEmpty()) {
+            for (IDashboardLayer l : injectedLayers) {
+                sb.append("<section class='tbl'>");
+                if (l.getName() != null) {
+                    DashboardTemplateRegistry.render("header", Map.of("text", l.getName()), sb);
+                }
+                l.getContents().forEach(c -> renderBlock(c, sb));
+                sb.append("</section>");
+            }
+        }
 
         // ── Templated tables with collapsible categories
         for (DashboardTableTemplate<?, ?> t : tables.values()) {
             sb.append("<section class='tbl'>");
             for (var cat : t.allCategories()) {
                 sb.append("<div class='cat'>");
-                // clickable header
-                renderBlock(cat.header, sb);
-
+                renderBlock(cat.header, sb);            // <h3 class='hdr'>...</h3>
                 sb.append("<div class='cat-body'>");
                 renderBlock(cat.stats, sb);
 
@@ -176,19 +215,12 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
                     }
                     sb.append("</article>");
                 }
-                sb.append("</div>"); // .cat-body
-                sb.append("</div>"); // .cat
+                sb.append("</div></div>"); // .cat-body / .cat
             }
             sb.append("</section>");
         }
 
-        // ── Hydration JS: collapse + sparkline
-        sb.append("<script>")
-            .append(JS_TOGGLE)
-            .append(JS_SPARK)
-            .append("</script>");
-
-        return sb.append("</body></html>").toString();
+        return sb.append("</div>"); // #dash-root
     }
 
     /** Overview info shown at the top. */
@@ -206,11 +238,11 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
         long pid    = ProcessHandle.current().pid();
 
         return Map.of(
-            "OS", os + " (" + arch + ")",
-            "CPU cores", cores,
-            "JVM", jvm,
             "PID", pid,
-            "Uptime", up
+            "OS", os + " (" + arch + ")",
+            "Uptime", up,
+            "CPU cores", cores,
+            "JVM", jvm
         );
     }
 
@@ -250,12 +282,12 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
         DashboardCategoryTemplate<?> cat = ((DashboardTableTemplate) table).category(
             it.categoryKey(),
             orDefault(it.categoryHeader(),     DashboardDefaults.header(it.categoryKey().name())),
-            orDefault(it.categoryStatistics(), DashboardDefaults.none()));   // ← no more “1”
+            orDefault(it.categoryStatistics(), DashboardDefaults.none()));
 
         DashboardItemCategoryTemplate ic = cat.itemCategory(
             it.itemCategoryKey(),
             orDefault(it.itemCategoryHeader(), DashboardDefaults.header(it.itemCategoryKey().name())),
-            orDefault(it.itemCategoryStats(),  DashboardDefaults.none()));   // ← no more “1”
+            orDefault(it.itemCategoryStats(),  DashboardDefaults.none()));
 
         ic.addItem(it);
     }
@@ -266,10 +298,141 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
         return injectedLayers == null ? List.of() : List.copyOf(injectedLayers);
     }
 
-    // ── tiny inline scripts
-    private static final String JS_TOGGLE =
-        "document.addEventListener('click',e=>{const h=e.target.closest('.cat>.hdr');if(!h)return;h.parentElement.classList.toggle('collapsed');});";
+    // One script that: draws charts, wires collapsibles, and live-updates the root.
+    private static final String SCRIPT_BLOCK = """
+<script>
+(() => {
+  const ROOT = '#dash-root';
+  const PX = v => Math.round(v);
 
-    private static final String JS_SPARK =
-        "(function(){function draw(c){try{const ctx=c.getContext('2d');const w=c.width=c.clientWidth||260;const h=c.height=48;c.setAttribute('data-hydrated','');let d=c.getAttribute('data-series');if(!d)return;let a=JSON.parse(d);if(a.length<2)a=[a[0]||0,a[0]||0];const min=Math.min.apply(null,a),max=Math.max.apply(null,a);const pad=4;ctx.clearRect(0,0,w,h);ctx.beginPath();for(let i=0;i<a.length;i++){const x=pad+(w-2*pad)*(i/(a.length-1));const y=pad+(h-2*pad)*(1-(a[i]-min)/((max-min)||1));if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.lineWidth=2;ctx.strokeStyle='rgba(0,188,212,0.9)';ctx.stroke();}catch(_){} }document.querySelectorAll('canvas[data-series]:not([data-hydrated])').forEach(draw);})();";
+  function parseSeries(attr){ try { return JSON.parse(attr); } catch { return []; } }
+
+  function drawChart(canvas) {
+    const raw = canvas.getAttribute('data-series') || '[]';
+    const label = canvas.getAttribute('data-label') || '';
+    const yminAttr = canvas.getAttribute('data-ymin');
+    const ymaxAttr = canvas.getAttribute('data-ymax');
+    const series = parseSeries(raw);
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr  = window.devicePixelRatio || 1;
+    const Wcss = rect.width  || 260;
+    const Hcss = rect.height || 120;
+    const ctx  = canvas.getContext('2d');
+    if (!ctx) return;
+
+    canvas.width  = PX(Wcss * dpr);
+    canvas.height = PX(Hcss * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+
+    const W=Wcss, H=Hcss, padL=36, padR=12, padT=18, padB=24;
+
+    let lo = Number.isFinite(+yminAttr) ? +yminAttr : Math.min(0, ...series);
+    let hi = Number.isFinite(+ymaxAttr) ? +ymaxAttr : Math.max(1, ...series);
+    if (!isFinite(lo)) lo = 0;
+    if (!isFinite(hi) || hi <= lo) hi = lo + 1;
+
+    ctx.clearRect(0,0,W,H);
+
+    // grid + Y ticks
+    ctx.strokeStyle = '#2a2a2a';
+    ctx.lineWidth = 1;
+    ctx.font = '11px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif';
+    ctx.fillStyle = '#8a8a8a';
+    const ticksY = 4;
+    for (let i=0;i<=ticksY;i++) {
+      const y = padT + (H - padT - padB) * (i/ticksY);
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+      const v = hi - (hi-lo) * (i/ticksY);
+      ctx.fillText(v.toFixed(0), 4, y+4);
+    }
+
+    // X ticks
+    ctx.textAlign = 'center';
+    ctx.fillText('0s', padL, H-6);
+    ctx.fillText((series.length/2|0)+'s', (padL+W-padR)/2, H-6);
+    ctx.fillText(series.length+'s', W - padR, H-6);
+    ctx.textAlign = 'left';
+
+    // Legend
+    if (label) { ctx.fillStyle = '#e7e7e7'; ctx.fillText(label, padL, padT - 6); }
+
+    // Line
+    if (series.length) {
+      ctx.strokeStyle = '#00bcd4';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      const innerW = W - padL - padR;
+      const innerH = H - padT - padB;
+      for (let i=0;i<series.length;i++) {
+        const x = padL + innerW * (i / Math.max(1, series.length-1));
+        const yNorm = (series[i] - lo) / (hi - lo);
+        const y = padT + innerH * (1 - yNorm);
+        if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    }
+
+    canvas.setAttribute('data-hydrated','1');
+  }
+
+  function wireCollapsibles(root) {
+    // Category wrappers: toggle body + caret
+    root.querySelectorAll('.cat > .hdr').forEach(h => {
+      h.onclick = () => {
+        const cat = h.parentElement;
+        const collapsed = cat.classList.toggle('collapsed');
+        h.classList.toggle('collapsed', collapsed);
+      };
+    });
+
+    // Optional generic collapsibles (headers not inside .cat)
+    root.querySelectorAll('h3.hdr[data-collapsible]').forEach(h => {
+      if (h.matches('.cat > .hdr')) return;
+      h.onclick = () => {
+        const collapsed = h.classList.toggle('collapsed');
+        let n = h.nextElementSibling;
+        while (n && !(n.tagName === 'H3' && n.classList.contains('hdr'))) {
+          n.style.display = collapsed ? 'none' : '';
+          n = n.nextElementSibling;
+        }
+      };
+    });
+  }
+
+  function hydrateAll() {
+    const root = document.querySelector(ROOT);
+    if (!root) return;
+    requestAnimationFrame(() => {
+      root.querySelectorAll('canvas.chart[data-series]:not([data-hydrated])')
+          .forEach(drawChart);
+      root.querySelectorAll('canvas[data-series]:not([data-hydrated]):not(.chart)')
+          .forEach(drawChart);
+    });
+    wireCollapsibles(root);
+  }
+
+  async function refreshFragment() {
+    try {
+      const res = await fetch('/dashboard/fragment', { cache:'no-store' });
+      if (!res.ok) return;
+      const html = await res.text();
+      const tmp = document.createElement('div');
+      tmp.innerHTML = html.trim();
+      const newRoot = tmp.querySelector(ROOT);
+      const oldRoot = document.querySelector(ROOT);
+      if (newRoot && oldRoot) {
+        oldRoot.replaceWith(newRoot);
+        hydrateAll();
+      }
+    } catch {}
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    hydrateAll();
+    setInterval(refreshFragment, 2000);
+  });
+})();
+</script>
+""";
 }

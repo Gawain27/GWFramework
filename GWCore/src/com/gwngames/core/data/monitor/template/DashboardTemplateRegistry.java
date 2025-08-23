@@ -16,74 +16,99 @@ public final class DashboardTemplateRegistry {
         // no-op
         register("none", (m, sb) -> sb);
 
-        // header: model = { text: String }
         register("header", (m, sb) -> {
             String text = safeMap(m).getOrDefault("text", "").toString();
-            return sb.append("<h3 class='hdr'>").append(esc(text)).append("</h3>");
+            return sb.append("<h3 class='hdr' data-collapsible='1'>")
+                .append(esc(text))
+                .append("</h3>");
         });
 
-        // count badge: model = { value: Number }
         register("count", (m, sb) -> {
             Object v = safeMap(m).getOrDefault("value", "");
             return sb.append("<span class='num'>").append(esc(v)).append("</span>");
         });
 
-        // kv list: model = Map<String, Object>
         register("kv", (m, sb) -> {
-            Map<?, ?> map = asMap(m);
+            Map<?,?> map = asMap(m);
             map.forEach((k, v) -> sb
-                .append("<div class='kv'><span class='k'>").append(esc(k))
-                .append("</span><span class='v'>").append(esc(v))
-                .append("</span></div>"));
+                .append("<div class='kv' tabindex='0'>")
+                .append("<span class='k'>").append(esc(k)).append("</span>")
+                .append("<span class='v'>").append(esc(v)).append("</span>")
+                .append("</div>"));
             return sb;
         });
 
-        // simple spark-line: model = [numbers...]
-        register("graph-line", (m, sb) ->
-            sb.append("<canvas data-series='").append(esc(m)).append("'></canvas>"));
+        // Single series line with optional label + y-range
+        // Accepts either: model = [numbers...]  or
+        // model = { series: [..], label?: "...", ymin?: num, ymax?: num }
+        register("graph-line", (m, sb) -> {
+            Map<String,Object> mm = safeMap(m);
+            Object series = mm.isEmpty() ? m : mm.get("series");
+            String label  = Objects.toString(mm.getOrDefault("label", ""), "");
+            String ymin   = Objects.toString(mm.getOrDefault("ymin", ""), "");
+            String ymax   = Objects.toString(mm.getOrDefault("ymax", ""), "");
+            return sb.append("<canvas class='chart' ")
+                .append("data-series='").append(esc(series)).append("' ")
+                .append("data-label='").append(esc(label)).append("' ")
+                .append("data-ymin='").append(esc(ymin)).append("' ")
+                .append("data-ymax='").append(esc(ymax)).append("'></canvas>");
+        });
 
-        // panel-kv-line: model = { kv: Map<String,Object>, series: List<Double>, label?: String }
+        // KV + one sparkline
+        // model = { kv: Map<String,Object>, series: [..], label?: "...", ymin?: num, ymax?: num }
         register("panel-kv-line", (m, sb) -> {
-            Map<String, Object> mm = safeMap(m);
-            Map<String, Object> kv = safeMap(mm.get("kv"));
-
-            kv.forEach((k, v) -> sb.append("<div class='kv'><span class='k'>")
+            Map<String,Object> mm = safeMap(m);
+            Map<String,Object> kv = safeMap(mm.get("kv"));
+            kv.forEach((k, v) -> sb.append("<div class='kv' tabindex='0'><span class='k'>")
                 .append(esc(k)).append("</span><span class='v'>").append(esc(v))
                 .append("</span></div>"));
 
-            Object series = mm.get("series");
-            Object label  = mm.getOrDefault("label", "");
+            String label = Objects.toString(mm.getOrDefault("label", ""), "");
+            String ymin  = Objects.toString(mm.getOrDefault("ymin", ""), "");
+            String ymax  = Objects.toString(mm.getOrDefault("ymax", ""), "");
 
-            sb.append("<div style='margin-top:.6rem'>")
-                .append("<div style='font-size:.85rem;opacity:.7;margin-bottom:.2rem'>")
-                .append(esc(label)).append("</div>")
-                .append("<canvas data-series='").append(esc(series)).append("'></canvas>")
+            return sb.append("<div class='chart-wrap'>")
+                .append("<div class='legend'>").append(esc(label)).append("</div>")
+                .append("<canvas class='chart' ")
+                .append("data-series='").append(esc(mm.get("series"))).append("' ")
+                .append("data-label='").append(esc(label)).append("' ")
+                .append("data-ymin='").append(esc(ymin)).append("' ")
+                .append("data-ymax='").append(esc(ymax)).append("'></canvas>")
                 .append("</div>");
-            return sb;
         });
 
-        // panel-kv-dualline: model = { kv: Map<String,Object>, a: List<Double>, b: List<Double>, alabel?: String, blabel?: String }
+        // KV + two sparklines side-by-side with labels
+        // model = { kv: Map, a:[..], b:[..], alabel?: "...", blabel?: "...", ymin?: num, ymax?: num }
         register("panel-kv-dualline", (m, sb) -> {
-            Map<String, Object> mm = safeMap(m);
-            Map<String, Object> kv = safeMap(mm.get("kv"));
-
-            kv.forEach((k, v) -> sb.append("<div class='kv'><span class='k'>")
+            Map<String,Object> mm = safeMap(m);
+            Map<String,Object> kv = safeMap(mm.get("kv"));
+            kv.forEach((k, v) -> sb.append("<div class='kv' tabindex='0'><span class='k'>")
                 .append(esc(k)).append("</span><span class='v'>").append(esc(v))
                 .append("</span></div>"));
 
-            Object a  = mm.get("a");
-            Object b  = mm.get("b");
-            Object la = mm.getOrDefault("alabel", "");
-            Object lb = mm.getOrDefault("blabel", "");
+            String ymin = Objects.toString(mm.getOrDefault("ymin", ""), "");
+            String ymax = Objects.toString(mm.getOrDefault("ymax", ""), "");
+            String la   = Objects.toString(mm.getOrDefault("alabel", ""), "");
+            String lb   = Objects.toString(mm.getOrDefault("blabel", ""), "");
 
-            sb.append("<div class='grid' style='grid-template-columns:1fr 1fr;gap:0.8rem;margin-top:.6rem'>")
-                .append("<div><div style='font-size:.85rem;opacity:.7;margin-bottom:.2rem'>")
-                .append(esc(la)).append("</div>")
-                .append("<canvas data-series='").append(esc(a)).append("'></canvas></div>")
-                .append("<div><div style='font-size:.85rem;opacity:.7;margin-bottom:.2rem'>")
-                .append(esc(lb)).append("</div>")
-                .append("<canvas data-series='").append(esc(b)).append("'></canvas></div>")
+            sb.append("<div class='grid chart-grid'>");
+            sb.append("<div class='chart-wrap'>")
+                .append("<div class='legend'>").append(esc(la)).append("</div>")
+                .append("<canvas class='chart' data-series='").append(esc(mm.get("a")))
+                .append("' data-label='").append(esc(la))
+                .append("' data-ymin='").append(esc(ymin))
+                .append("' data-ymax='").append(esc(ymax)).append("'></canvas>")
                 .append("</div>");
+
+            sb.append("<div class='chart-wrap'>")
+                .append("<div class='legend'>").append(esc(lb)).append("</div>")
+                .append("<canvas class='chart' data-series='").append(esc(mm.get("b")))
+                .append("' data-label='").append(esc(lb))
+                .append("' data-ymin='").append(esc(ymin))
+                .append("' data-ymax='").append(esc(ymax)).append("'></canvas>")
+                .append("</div>");
+
+            sb.append("</div>");
             return sb;
         });
     }

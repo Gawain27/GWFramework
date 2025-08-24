@@ -1,11 +1,13 @@
 package com.gwngames.core.base;
 
 import com.gwngames.core.api.base.IBaseComp;
+import com.gwngames.core.api.base.monitor.IDashboardItem;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.api.build.PostInject;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
 import com.gwngames.core.base.log.FileLogger;
+import com.gwngames.core.base.log.LogBus;
 import com.gwngames.core.data.LogFiles;
 import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.util.ClassUtils;
@@ -38,11 +40,48 @@ import java.util.function.Supplier;
  *       so identical requests share the instance.</li>
  * </ul>
  */
-public abstract class BaseComponent implements IBaseComp {
+public abstract class BaseComponent implements IBaseComp, IDashboardItem {
 
     /** Identifier used reflectively (assigned once on construction). */
     private final int multId = ComponentUtils.assign(this);
 
+    public enum DashTable { COMPONENTS }
+    public enum DashCategory { ALL }
+    public enum DashICat { DEFAULT }
+
+    // --- IDashboardItem placement (defaults) ---
+    @Override public Enum<?> tableKey()        { return DashTable.COMPONENTS; }
+    @Override public Enum<?> categoryKey()     { return DashCategory.ALL; }
+    @Override public Enum<?> itemCategoryKey() { return DashICat.DEFAULT; }
+    // We render this item directly in CoreDashboard (no external content)
+    @Override public String templateId()       { return "component-item"; }
+    @Override public SubComponentNames contentSubComp() { return SubComponentNames.NONE; }
+
+    // --- OPTIONAL: convenient logging wrappers that also feed LogBus ---
+    protected void logInfo(String msg, Object... args) {
+        LOG.info(msg, args);
+        LogBus.record(dashboardKey(), LogBus.Level.INFO, String.format(msg, args), null);
+    }
+    protected void logDebug(String msg, Object... args) {
+        LOG.debug(msg, args);
+        LogBus.record(dashboardKey(), LogBus.Level.DEBUG, String.format(msg, args), null);
+    }
+    protected void logError(String msg, Object... args) {
+        LOG.error(msg, args);
+        LogBus.record(dashboardKey(), LogBus.Level.ERROR, String.format(msg, args), null);
+    }
+    protected void logError(String msg, Throwable ex, Object... args) {
+        LOG.error(msg, ex, args);
+        LogBus.record(dashboardKey(), LogBus.Level.ERROR, String.format(msg, args), ex);
+    }
+
+    // --- dashboard identity helpers ---
+    public final String dashboardKey() {
+        return getClass().getName() + "#" + multId;
+    }
+    public String dashboardTitle() {
+        return getClass().getSimpleName() + " #" + multId;
+    }
     @Override
     public void setMultId(int newId) { /* regular comps ignore external set */ }
 

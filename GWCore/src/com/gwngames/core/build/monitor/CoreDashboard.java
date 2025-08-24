@@ -9,6 +9,7 @@ import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.api.build.PostInject;
 import com.gwngames.core.base.BaseComponent;
+import com.gwngames.core.base.log.LogBus;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.data.cfg.BuildParameters;
@@ -198,11 +199,24 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
                     renderBlock(ic.stats, sb);
 
                     for (IDashboardItem it : ic.items()) {
-                        IDashboardContent content =
-                            BaseComponent.getInstance(IDashboardContent.class, it.contentSubComp());
-                        String tpl = (it.templateId() == null || it.templateId().isBlank())
-                            ? content.templateId() : it.templateId();
-                        DashboardTemplateRegistry.render(tpl, content.model(), sb);
+                        if (it instanceof BaseComponent bc) {
+                            String instKey = bc.dashboardKey();             // instance-level (wrappers)
+                            String clsKey  = bc.getClass().getName();       // class-level (FileLogger tap)
+                            int errors = LogBus.errorCount(instKey) + LogBus.errorCount(clsKey);
+
+                            Map<String,Object> model = Map.of(
+                                "title",  bc.dashboardTitle(),
+                                "key",    instKey + "," + clsKey,  // pass both
+                                "errors", errors
+                            );
+                            DashboardTemplateRegistry.render("component-item", model, sb);
+                        } else {
+                            IDashboardContent content =
+                                BaseComponent.getInstance(IDashboardContent.class, it.contentSubComp());
+                            String tpl = (it.templateId() == null || it.templateId().isBlank())
+                                ? content.templateId() : it.templateId();
+                            DashboardTemplateRegistry.render(tpl, content.model(), sb);
+                        }
                     }
                     sb.append("</div></details>");
                 }

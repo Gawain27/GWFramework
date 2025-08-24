@@ -146,6 +146,23 @@ public final class DashboardTemplateRegistry {
 
             sb.append("</div>");
         });
+
+        // In DashboardTemplateRegistry built-ins
+        register("component-item", Map.class, (m, sb) -> {
+            Object title = m.getOrDefault("title", "");
+            Object key   = m.getOrDefault("key", "");
+            Object errs  = m.getOrDefault("errors", 0);
+
+            sb.append("<div class='kv'>")
+                .append("<span class='k'>").append(esc(title)).append("</span>")
+                .append("<span class='v'>")
+                .append("<span class='badge badge-err'>").append(esc(errs)).append("</span>")
+                .append(" <button class='btn btn-logs' data-logkey='").append(esc(key))
+                .append("' data-title='").append(esc(title))
+                .append("'>View logs</button>")
+                .append("</span></div>");
+        });
+
     }
 
     private DashboardTemplateRegistry() {}

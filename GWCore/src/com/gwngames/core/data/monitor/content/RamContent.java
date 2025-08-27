@@ -63,6 +63,11 @@ public final class RamContent extends BaseComponent implements IDashboardContent
         }
     }
 
+    @Override
+    public void setComponent(BaseComponent component) {
+
+    }
+
     /* ── internals ─────────────────────────────────────────────── */
 
     private void sample() {

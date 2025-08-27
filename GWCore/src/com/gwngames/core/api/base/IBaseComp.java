@@ -69,4 +69,33 @@ public interface IBaseComp {
         }
         // Non-enums ignore: BaseComponent assigns at construction time.
     }
+
+    private void ensureEnum() {
+        if (!this.getClass().isEnum()) {
+            throw new UnsupportedOperationException(
+                "This method is only supported for enums: " + this.getClass().getName()
+            );
+        }
+    }
+
+    default String dashboardTitle() {
+        ensureEnum();
+        return this.toString();
+    }
+
+    default String safeId() {
+        ensureEnum();
+        return this.toString();
+    }
+
+    default int errorCount() {
+        ensureEnum();
+        return 0;
+    }
+
+    default String dashboardKey() {
+        ensureEnum();
+        return this.toString();
+    }
+
 }

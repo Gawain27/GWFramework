@@ -9,7 +9,9 @@ import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.api.build.PostInject;
 import com.gwngames.core.base.BaseComponent;
+import com.gwngames.core.base.cfg.ModuleClassLoader;
 import com.gwngames.core.base.log.LogBus;
+import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.data.cfg.BuildParameters;
@@ -32,7 +34,6 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
     @Inject private IConfig config;
     @Inject private IAssetManager assetManager;
     @Inject(loadAll = true) private List<IDashboardItem> injectedItems;
-    @Inject(loadAll = true) private List<IDashboardLayer> injectedLayers;
 
     private enum SysTable      { SYSTEM }
     private enum TelemetryCat  { CPU, RAM, IO }
@@ -46,11 +47,37 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
 
     @PostInject
     private void postInject() {
-        registerBuiltin(null, SubComponentNames.DASHBOARD_CPU_CONTENT, TelemetryCat.CPU);
-        registerBuiltin(null, SubComponentNames.DASHBOARD_IO_CONTENT,  TelemetryCat.IO);
-        registerBuiltin(null, SubComponentNames.DASHBOARD_RAM_CONTENT, TelemetryCat.RAM);
+        // Built-ins
+        registerBuiltin(SubComponentNames.DASHBOARD_CPU_CONTENT, TelemetryCat.CPU);
+        registerBuiltin(SubComponentNames.DASHBOARD_IO_CONTENT,  TelemetryCat.IO);
+        registerBuiltin(SubComponentNames.DASHBOARD_RAM_CONTENT, TelemetryCat.RAM);
+
+        // Items provided by DI
         if (injectedItems != null) for (IDashboardItem it : injectedItems) register(it);
+
+        // Ensure ALL components registered in the ModuleClassLoader are visible
+        try {
+            ModuleClassLoader loader = ModuleClassLoader.getInstance();
+            for (ComponentNames compName : ComponentNames.values()) {
+                for (Object o : loader.tryCreateAll(compName)) {
+                    if (o instanceof IDashboardItem it) register(it);
+                }
+            }
+        } catch (Throwable t) {
+            log.debug("ModuleClassLoader enumeration failed: {}", t.toString());
+        }
+
+        // Also register every already-instantiated (cached) component.
+        try {
+            for (var live : BaseComponent.allCachedInstances()) {
+                if (live instanceof IDashboardItem it) register(it);
+            }
+        } catch (Throwable t) {
+            log.debug("BaseComponent cache enumeration failed: {}", t.toString());
+        }
     }
+
+    /* ───────────────────── server control ───────────────────── */
 
     public void maybeStart() {
         Integer port = config.get(BuildParameters.DASHBOARD_PORT);
@@ -67,8 +94,6 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
     public synchronized void shutdown() { stopServer(); }
     @Override public void close() { shutdown(); }
 
-    /* ───────────────────────── internals ───────────────────────── */
-
     private void ensureServerOn(int port) {
         Javalin current = serverRef.get();
         if (current != null && Objects.equals(boundPort, port)) return;
@@ -81,6 +106,19 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
         Javalin s = Javalin.create(cfg -> cfg.http.defaultContentType = "text/html")
             .get("/dashboard", ctx -> ctx.result(render()))
             .get("/dashboard/fragment", ctx -> ctx.result(renderRootOnly()))
+            .get("/dashboard/logs", ctx -> {
+                final String keys = Objects.toString(ctx.queryParam("keys"), "");
+                StringBuilder out = new StringBuilder(4096);
+                if (!keys.isBlank()) {
+                    for (String k : keys.split(",")) {
+                        String key = k.trim();
+                        if (key.isEmpty()) continue;
+                        List<String> lines = LogBus.recent(key);
+                        if (!lines.isEmpty()) for (String line : lines) out.append(line).append('\n');
+                    }
+                }
+                ctx.contentType("text/plain; charset=utf-8").result(out.toString());
+            })
             .start(port);
 
         serverRef.set(s);
@@ -115,19 +153,31 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
         }
     }
 
-    /* ───────────────────── rendering & registry ───────────────────── */
+    /* ───────────────────── rendering ───────────────────── */
+
+    private static final String ESSENTIAL_CSS = """
+    /* Always include: modal + small UI helpers */
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;padding:4vh 6vw;z-index:9999}
+    .modal:target{display:block}
+    .modal-card{background:#101010;border-radius:.75rem;max-height:92vh;overflow:auto;padding:1rem}
+    .badge{padding:.08rem .45rem;border-radius:.66rem;background:#2a2a2a;color:#e7e7e7;font-weight:600}
+    .badge-err{padding:.08rem .45rem;border-radius:.66rem;background:#b00020;color:#fff;font-weight:600}
+    .btn{padding:.25rem .6rem;border:1px solid #2a2a2a;border-radius:.6rem;background:#161616;color:#e7e7e7;cursor:pointer}
+    .btn:hover{border-color:#00bcd4}
+    """;
+
 
     private String render() {
-        // CSS (fall back if asset missing)
-        String css = null;
+        // Theme CSS (asset or fallback)
+        String themeCss = null;
         try {
             FileHandle cssFile = assetManager.get(GwcoreCssAssets.DASHBOARD_DARK_CSS);
-            if (cssFile != null) css = cssFile.readString(StandardCharsets.UTF_8.name());
+            if (cssFile != null) themeCss = cssFile.readString(StandardCharsets.UTF_8.name());
         } catch (Throwable t) {
             log.debug("Dashboard CSS not available – using fallback: {}", t.toString());
         }
-        if (css == null) {
-            css = """
+        if (themeCss == null) {
+            themeCss = """
             body{background:#0b0d10;color:#e6eef8;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;}
             .page{max-width:1280px;margin:0 auto;padding:0 1.2rem}
             section.tbl{margin-top:2.4rem}
@@ -145,7 +195,10 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
 
         StringBuilder sb = new StringBuilder(16384)
             .append("<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>")
-            .append("<title>Dashboard</title><style>").append(css).append("</style></head><body>");
+            .append("<title>Dashboard</title><style>")
+            .append(themeCss)
+            .append(ESSENTIAL_CSS) // ← always append essential modal CSS
+            .append("</style></head><body>");
 
         sb.append(renderRoot());
         sb.append(SCRIPT_BLOCK);
@@ -154,7 +207,6 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
 
     private String renderRootOnly() { return renderRoot().toString(); }
 
-    /** Build body inside a stable wrapper and use <details> for collapsers. */
     private StringBuilder renderRoot() {
         StringBuilder sb = new StringBuilder(16384);
         sb.append("<div id='dash-root' class='page'>");
@@ -168,21 +220,7 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
         sb.append("</div></details>");
         sb.append("</section>");
 
-        // Free-floating layers (optional)
-        if (injectedLayers != null && !injectedLayers.isEmpty()) {
-            for (IDashboardLayer l : injectedLayers) {
-                sb.append("<section class='tbl'>");
-                sb.append("<details class='cat' open>");
-                DashboardTemplateRegistry.render("summary",
-                    Map.of("text", l.getName() == null ? "Layer" : l.getName()), sb);
-                sb.append("<div class='cat-body'>");
-                l.getContents().forEach(c -> renderBlock(c, sb));
-                sb.append("</div></details>");
-                sb.append("</section>");
-            }
-        }
-
-        // Tables (categories + item-categories)
+        // Tables
         for (DashboardTableTemplate<?, ?> t : tables.values()) {
             sb.append("<section class='tbl'>");
             int idx = 0;
@@ -198,26 +236,31 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
                     sb.append("<div class='icat-body'>");
                     renderBlock(ic.stats, sb);
 
-                    for (IDashboardItem it : ic.items()) {
-                        if (it instanceof BaseComponent bc) {
-                            String instKey = bc.dashboardKey();             // instance-level (wrappers)
-                            String clsKey  = bc.getClass().getName();       // class-level (FileLogger tap)
-                            int errors = LogBus.errorCount(instKey) + LogBus.errorCount(clsKey);
+                    // Sort by error count desc, then by title
+                    List<IDashboardItem> items = new ArrayList<>(ic.items());
+                    items.sort((a, b) -> {
+                        int ea = (a instanceof BaseComponent ba) ? ba.errorCount() : 0;
+                        int eb = (b instanceof BaseComponent bb) ? bb.errorCount() : 0;
+                        if (eb != ea) return Integer.compare(eb, ea);
+                        String na = (a instanceof BaseComponent ba) ? ba.dashboardTitle() : a.getClass().getSimpleName();
+                        String nb = (b instanceof BaseComponent bb) ? bb.dashboardTitle() : b.getClass().getSimpleName();
+                        return na.compareToIgnoreCase(nb);
+                    });
 
-                            Map<String,Object> model = Map.of(
-                                "title",  bc.dashboardTitle(),
-                                "key",    instKey + "," + clsKey,  // pass both
-                                "errors", errors
-                            );
-                            DashboardTemplateRegistry.render("component-item", model, sb);
-                        } else {
-                            IDashboardContent content =
-                                BaseComponent.getInstance(IDashboardContent.class, it.contentSubComp());
-                            String tpl = (it.templateId() == null || it.templateId().isBlank())
-                                ? content.templateId() : it.templateId();
-                            DashboardTemplateRegistry.render(tpl, content.model(), sb);
+                    for (IDashboardItem it : items) {
+                        IDashboardContent content = it.itemContent();
+                        if (content == null) continue;
+                        try {
+                            DashboardTemplateRegistry.render(content.templateId(), content.model(), sb);
+                        } catch (Throwable th) {
+                            String title = (it instanceof BaseComponent bc) ? bc.dashboardTitle() : it.getClass().getSimpleName();
+                            sb.append("<div class='kv'><span class='k'>⚠️ Failed to render: ")
+                                .append(DashboardTemplateRegistry.HeaderModel.class.getSimpleName()) // keep it escaped-ish
+                                .append("</span><span class='v'>").append(th.getClass().getSimpleName()).append("</span></div>");
+                            log.error("Dashboard render error in {}: {}", title, th.toString());
                         }
                     }
+
                     sb.append("</div></details>");
                 }
 
@@ -231,16 +274,16 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
 
     private Map<String, Object> systemOverview() {
         Runtime rt = Runtime.getRuntime();
-        int cores  = rt.availableProcessors();
+        int cores = rt.availableProcessors();
 
         RuntimeMXBean mx = ManagementFactory.getRuntimeMXBean();
-        long upMs   = mx.getUptime();
-        String up   = humanDuration(upMs);
+        long upMs = mx.getUptime();
+        String up = humanDuration(upMs);
 
-        String os   = System.getProperty("os.name") + " " + System.getProperty("os.version");
+        String os = System.getProperty("os.name") + " " + System.getProperty("os.version");
         String arch = System.getProperty("os.arch");
-        String jvm  = System.getProperty("java.runtime.name") + " " + System.getProperty("java.runtime.version");
-        long pid    = ProcessHandle.current().pid();
+        String jvm = System.getProperty("java.runtime.name") + " " + System.getProperty("java.runtime.version");
+        long pid = ProcessHandle.current().pid();
 
         return Map.of(
             "CPU cores", cores,
@@ -261,7 +304,7 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
 
     private void renderBlock(Object blk, StringBuilder sb) {
         if (blk instanceof IDashboardHeader h) {
-            DashboardTemplateRegistry.render("h3", h.model(), sb); // plain header when not in <details>
+            DashboardTemplateRegistry.render("h3", h.model(), sb);
         } else if (blk instanceof IDashboardContent c) {
             DashboardTemplateRegistry.render(c.templateId(), c.model(), sb);
         }
@@ -276,47 +319,40 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
         }
     }
 
-    private void registerBuiltin(String templateId,
-                                 SubComponentNames contentSubComp,
-                                 TelemetryCat catKey) {
+    private void registerBuiltin(SubComponentNames contentSubComp, TelemetryCat catKey) {
         register(new IDashboardItem() {
             @Override public Enum<?> tableKey()        { return SysTable.SYSTEM; }
             @Override public Enum<?> categoryKey()     { return catKey; }
             @Override public Enum<?> itemCategoryKey() { return TelemetryICat.DEFAULT; }
-            @Override public String templateId()       { return templateId; }
-            @Override public SubComponentNames contentSubComp() { return contentSubComp; }
+
+            @Override public IDashboardHeader categoryHeader()      { return DashboardDefaults.header(catKey.name()); }
+            @Override public IDashboardContent categoryStatistics() { return DashboardDefaults.none(); }
+            @Override public IDashboardHeader itemCategoryHeader()  { return DashboardDefaults.header(TelemetryICat.DEFAULT.name()); }
+            @Override public IDashboardContent itemCategoryStats()  { return DashboardDefaults.none(); }
+
+            @Override public IDashboardContent itemContent() {
+                // Render the telemetry block via sub-component
+                return BaseComponent.getInstance(IDashboardContent.class, contentSubComp);
+            }
         });
     }
 
-    @SuppressWarnings({ "rawtypes", "unchecked" })
+    @SuppressWarnings({"rawtypes","unchecked"})
     private void register(IDashboardItem it) {
         DashboardTableTemplate<?, ?> table =
             tables.computeIfAbsent(it.tableKey(), k -> new DashboardTableTemplate<>());
 
-        DashboardCategoryTemplate<?> cat = ((DashboardTableTemplate) table).category(
-            it.categoryKey(),
-            orDefault(it.categoryHeader(),     DashboardDefaults.header(it.categoryKey().name())),
-            orDefault(it.categoryStatistics(), DashboardDefaults.none()));
+        IDashboardHeader  catHdr   = Objects.requireNonNull(it.categoryHeader(),     "categoryHeader must not be null");
+        IDashboardContent catStats = Objects.requireNonNull(it.categoryStatistics(), "categoryStatistics must not be null");
+        IDashboardHeader  icHdr    = Objects.requireNonNull(it.itemCategoryHeader(), "itemCategoryHeader must not be null");
+        IDashboardContent icStats  = Objects.requireNonNull(it.itemCategoryStats(),  "itemCategoryStats must not be null");
 
-        DashboardItemCategoryTemplate ic = cat.itemCategory(
-            it.itemCategoryKey(),
-            orDefault(it.itemCategoryHeader(), DashboardDefaults.header(it.itemCategoryKey().name())),
-            orDefault(it.itemCategoryStats(),  DashboardDefaults.none()));
-
+        DashboardCategoryTemplate<?> cat = ((DashboardTableTemplate) table).category(it.categoryKey(), catHdr, catStats);
+        DashboardItemCategoryTemplate ic = cat.itemCategory(it.itemCategoryKey(), icHdr, icStats);
         ic.addItem(it);
     }
 
-    private static <T> T orDefault(T val, T fallback) { return val != null ? val : fallback; }
-
-    @Override public List<IDashboardLayer> layers() {
-        return injectedLayers == null ? List.of() : List.copyOf(injectedLayers);
-    }
-
-    /**
-     * Charts + live refresh. Percent axes auto-scale to 0..100 even if series are 0..1.
-     * Preserves open state for both category <details.cat> and item <details.icat>.
-     * Ignores empty/non-numeric data-ymin/ymax attributes.
-     */
+    /* ───────────────────── script ───────────────────── */
     private static final String SCRIPT_BLOCK = """
 <script>
 (() => {
@@ -324,8 +360,6 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
   const PX = v => Math.round(v);
 
   const parseSeries = (attr) => { try { return JSON.parse(attr); } catch { return []; } };
-
-  // Treat missing/empty/non-numeric attribute as null (so we can fall back)
   const numAttr = (el, name) => {
     const raw = el.getAttribute(name);
     if (raw == null) return null;
@@ -338,13 +372,10 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
   function drawChart(canvas) {
     const raw   = canvas.getAttribute('data-series') || '[]';
     const label = (canvas.getAttribute('data-label') || '').toLowerCase();
-
     const yMinAttr = numAttr(canvas, 'data-ymin');
     const yMaxAttr = numAttr(canvas, 'data-ymax');
-
     const seriesRaw = parseSeries(raw);
     const maxRaw = seriesRaw.reduce((m,v) => Math.max(m, +v || 0), -Infinity);
-
     const isPct = label.includes('%');
     const looksFractional = maxRaw <= 1.0000001;
     const values = (isPct && looksFractional)
@@ -364,7 +395,6 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
 
     const W=Wcss, H=Hcss, padL=36, padR=12, padT=18, padB=24;
 
-    // Bounds: prefer explicit, else 0..100 for %, else data-driven
     let lo = (yMinAttr != null) ? yMinAttr : (isPct ? 0   : Math.min(0, ...values));
     let hi = (yMaxAttr != null) ? yMaxAttr : (isPct ? 100 : Math.max(1, ...values));
     if (!Number.isFinite(lo)) lo = 0;
@@ -372,7 +402,6 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
 
     ctx.clearRect(0,0,W,H);
 
-    // grid + Y ticks
     ctx.strokeStyle = '#2a2a2a';
     ctx.lineWidth = 1;
     ctx.font = '11px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif';
@@ -385,17 +414,14 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
       ctx.fillText(v.toFixed(0), 4, y+4);
     }
 
-    // X ticks (seconds)
     ctx.textAlign = 'center';
     ctx.fillText('0s', padL, H-6);
     ctx.fillText((values.length/2|0)+'s', (padL+W-padR)/2, H-6);
     ctx.fillText(values.length+'s', W - padR, H-6);
     ctx.textAlign = 'left';
 
-    // Legend
     if (label) { ctx.fillStyle = '#e7e7e7'; ctx.fillText(label, padL, padT - 6); }
 
-    // Line
     if (values.length) {
       ctx.strokeStyle = '#00bcd4';
       ctx.lineWidth = 2;
@@ -423,42 +449,30 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
     });
   }
 
-  // Live updates; preserve <details> open state
-  async function refreshFragment() {
+  async function loadLogs(modalEl) {
+    if (!modalEl) return;
+    const keys = modalEl.getAttribute('data-keys');
+    const pre  = modalEl.querySelector('pre');
+    if (!keys || !pre) return;
     try {
-      const oldRoot = document.querySelector(ROOT);
-      if (!oldRoot) return;
-
-      const catOpen = Array.from(oldRoot.querySelectorAll('details.cat')).map(d => d.open);
-      const icatOpenByCat = Array.from(oldRoot.querySelectorAll('details.cat')).map(cat =>
-        Array.from(cat.querySelectorAll('details.icat')).map(d => d.open)
-      );
-
-      const res = await fetch('/dashboard/fragment', { cache:'no-store' });
-      if (!res.ok) return;
-      const html = await res.text();
-      const tmp = document.createElement('div');
-      tmp.innerHTML = html.trim();
-      const newRoot = tmp.querySelector(ROOT);
-      if (newRoot) {
-        const newCats = newRoot.querySelectorAll('details.cat');
-        catOpen.forEach((isOpen, i) => { if (newCats[i]) newCats[i].open = isOpen; });
-        newCats.forEach((cat, i) => {
-          const states = icatOpenByCat[i] || [];
-          const icats  = cat.querySelectorAll('details.icat');
-          states.forEach((isOpen, j) => { if (icats[j]) icats[j].open = isOpen; });
-        });
-
-        oldRoot.replaceWith(newRoot);
-        hydrateAll();
-      }
+      const res = await fetch('/dashboard/logs?keys=' + encodeURIComponent(keys), { cache:'no-store' });
+      if (res.ok) pre.textContent = await res.text();
     } catch {}
+  }
+
+  function showModalFromHash() {
+    if (!location.hash) return;
+    const root = document.querySelector(ROOT);
+    if (!root) return;
+    const modal = root.querySelector(location.hash);
+    if (modal && modal.classList.contains('modal')) loadLogs(modal);
   }
 
   window.addEventListener('DOMContentLoaded', () => {
     hydrateAll();
-    setInterval(refreshFragment, 2000);
+    showModalFromHash();
   });
+  window.addEventListener('hashchange', showModalFromHash);
 })();
 </script>
 """;

@@ -1,63 +1,120 @@
 package com.gwngames.core.base;
 
 import com.gwngames.core.api.base.IBaseComp;
+import com.gwngames.core.api.base.monitor.IDashboardContent;
+import com.gwngames.core.api.base.monitor.IDashboardHeader;
 import com.gwngames.core.api.base.monitor.IDashboardItem;
+import com.gwngames.core.api.base.monitor.view.IComponentLogView;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.api.build.PostInject;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.base.log.LogBus;
+import com.gwngames.core.build.monitor.DashboardDefaults;
 import com.gwngames.core.data.LogFiles;
 import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.util.ClassUtils;
 import com.gwngames.core.util.ComponentUtils;
 
 import java.lang.reflect.*;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 /**
- *
- * Root-class for every non-enum GW-Framework component.
- *
- * <p><b>What’s new</b></p>
- * <ul>
- *   <li>Each concrete instance receives a <strong>monotonically
- *       increasing integer</strong> (<code>multId</code>) at construction
- *       time.  This is completely independent of
- *       {@link SubComponentNames}.</li>
- *   <li>Enum components are not affected because an <code>enum</code>
- *       cannot extend a regular class anyway – they typically implement
- *       {@link IBaseComp} directly and may expose their own identifier
- *       (e.g.&nbsp;<code>ordinal()</code>).</li>
- *   <li>Thread-safe singleton cache (<em>per sub-component</em>).</li>
- *   <li>Fields annotated with {@link Inject} are populated lazily:
- *       the underlying object is materialised on first method call.</li>
- *   <li>{@link Inject#subComp()} lets you choose a concrete sub-component
- *       implementation; the same key is used for the singleton cache,
- *       so identical requests share the instance.</li>
- * </ul>
+ * Root-class for every non-enum GW component.
+ * Each concrete instance is also an IDashboardItem and renders:
+ *   - a tile (name + error count + “Logs” button)
+ *   - a hash-target popup with recent logs
+ * No dashboard layers required.
  */
 public abstract class BaseComponent implements IBaseComp, IDashboardItem {
 
-    /** Identifier used reflectively (assigned once on construction). */
+    /** Per-instance id (assigned once). */
     private final int multId = ComponentUtils.assign(this);
+
+    /** System logger (subclasses may also use their own FileLogger). */
+    private static final FileLogger LOG = FileLogger.get(LogFiles.SYSTEM);
+
+    /** One cached instance for each Component + SubComp pair. */
+    private static final Map<String, IBaseComp> INSTANCES = new ConcurrentHashMap<>();
+
+    /* ───────────────────── Dashboard placement ───────────────────── */
 
     public enum DashTable { COMPONENTS }
     public enum DashCategory { ALL }
     public enum DashICat { DEFAULT }
 
-    // --- IDashboardItem placement (defaults) ---
+    protected IDashboardContent dashboardContent;
+
     @Override public Enum<?> tableKey()        { return DashTable.COMPONENTS; }
     @Override public Enum<?> categoryKey()     { return DashCategory.ALL; }
     @Override public Enum<?> itemCategoryKey() { return DashICat.DEFAULT; }
-    // We render this item directly in CoreDashboard (no external content)
-    @Override public String templateId()       { return "component-item"; }
-    @Override public SubComponentNames contentSubComp() { return SubComponentNames.NONE; }
 
-    // --- OPTIONAL: convenient logging wrappers that also feed LogBus ---
+    @Override public IDashboardHeader categoryHeader()      { return DashboardDefaults.header("Components"); }
+    @Override public IDashboardContent categoryStatistics() { return DashboardDefaults.none(); }
+    @Override public IDashboardHeader itemCategoryHeader()  { return DashboardDefaults.header("All"); }
+    @Override public IDashboardContent itemCategoryStats()  { return DashboardDefaults.none(); }
+
+    /**
+     * Single content that renders the tile AND the popup (no layers needed).
+     */
+    @Override
+    public IDashboardContent itemContent() {
+        if (IDashboardContent.class.isAssignableFrom(this.getClass())) return null;
+        if (dashboardContent != null) return dashboardContent;
+
+        // Create a fresh logs content
+        IDashboardContent content = BaseComponent.getInstance(
+            IDashboardContent.class, SubComponentNames.DASHBOARD_LOGS_COMPONENT, true);
+
+        // Old path still works
+        content.setComponent(this);
+
+        // New, proxy-proof path: pass precomputed values if the content supports it
+        String instKey = dashboardKey();
+        String clsKey  = getClass().getName();
+        String keys    = instKey + "," + clsKey;
+
+        if (content instanceof IComponentLogView v) {
+            v.init(dashboardTitle(), safeId(), keys, errorCount());
+        }
+
+        dashboardContent = content;
+        return content;
+    }
+
+    /* ───────────────────── Dashboard identity & counters ───────────────────── */
+
+    public final String dashboardKey() { return getClass().getName() + "#" + multId; }
+
+    public String dashboardTitle() { return getClass().getSimpleName() + " #" + multId; }
+
+    /** Instance + class-level error counts combined. */
+    public int errorCount() {
+        final String instKey = dashboardKey();
+        final String clsKey  = getClass().getName();
+        return LogBus.errorCount(instKey) + LogBus.errorCount(clsKey);
+    }
+
+    /** Stable, DOM-safe id (used as hash target for the popup). */
+    public String safeId() { return "cmp-" + sha1Hex(dashboardKey()); }
+    private static String sha1Hex(String s) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-1");
+            byte[] dig = md.digest(s.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(dig.length * 2);
+            for (byte b : dig) sb.append(Character.forDigit((b >> 4) & 0xF, 16))
+                .append(Character.forDigit(b & 0xF, 16));
+            return sb.toString();
+        } catch (Exception e) { return Integer.toHexString(s.hashCode()); }
+    }
+
+    /* ───────────────────── Log helpers (also feed LogBus) ───────────────────── */
+
     protected void logInfo(String msg, Object... args) {
         LOG.info(msg, args);
         LogBus.record(dashboardKey(), LogBus.Level.INFO, String.format(msg, args), null);
@@ -75,49 +132,20 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem {
         LogBus.record(dashboardKey(), LogBus.Level.ERROR, String.format(msg, args), ex);
     }
 
-    // --- dashboard identity helpers ---
-    public final String dashboardKey() {
-        return getClass().getName() + "#" + multId;
-    }
-    public String dashboardTitle() {
-        return getClass().getSimpleName() + " #" + multId;
-    }
-    @Override
-    public void setMultId(int newId) { /* regular comps ignore external set */ }
-
-    private static final FileLogger LOG = FileLogger.get(LogFiles.SYSTEM);
-
-    /** One cached instance for each Component + SubComp pair. */
-    private static final Map<String, IBaseComp> INSTANCES = new ConcurrentHashMap<>();
+    @Override public void setMultId(int newId) { /* regular comps ignore external set */ }
 
     /* ===================== Public lookup helpers ===================== */
 
-    /** Default: cached singleton (SubComponentNames.NONE). */
     public static <T extends IBaseComp> T getInstance(Class<T> type) {
         return getInstance(type, SubComponentNames.NONE, false);
     }
-
-    /** Default: cached singleton for given sub-component. */
     public static <T extends IBaseComp> T getInstance(Class<T> type, SubComponentNames sub) {
         return getInstance(type, sub, false);
     }
-
-    /**
-     * Optionally get a fresh (non-cached) instance. Equivalent to
-     * {@code getInstance(type, SubComponentNames.NONE, fresh)}.
-     */
     public static <T extends IBaseComp> T getInstance(Class<T> type, boolean fresh) {
         return getInstance(type, SubComponentNames.NONE, fresh);
     }
 
-    /**
-     * Main entry: choose between cached singleton (fresh=false) or a brand-new
-     * instance (fresh=true). Fresh instances are NOT stored in the cache.
-     *
-     * @param type  interface annotated with @Init
-     * @param sub   sub-component (or NONE)
-     * @param fresh if true, always constructs a new instance and skips the cache
-     */
     @SuppressWarnings("unchecked")
     public static <T extends IBaseComp> T getInstance(Class<T> type,
                                                       SubComponentNames sub,
@@ -126,8 +154,7 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem {
             return (T) INSTANCES.computeIfAbsent(cacheKey(type, sub),
                 k -> createAndInject(type, sub));
         }
-        // fresh instance – do not cache
-        return createAndInject(type, sub);
+        return createAndInject(type, sub); // fresh, not cached
     }
 
     /* ================= instantiation & @Inject wiring ================= */
@@ -139,7 +166,6 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem {
         T obj = (sub == SubComponentNames.NONE)
             ? loader.tryCreate(meta.component())
             : loader.tryCreate(meta.component(), sub);
-
         if (obj == null)
             throw new IllegalStateException("Cannot instantiate " + iface.getSimpleName());
 
@@ -147,7 +173,6 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem {
         for (Field f : ClassUtils.getAnnotatedFields(obj.getClass(), Inject.class)) {
             f.setAccessible(true);
             Inject inj = f.getAnnotation(Inject.class);
-
             if (inj.loadAll()) {
                 injectAllImplementations(f, obj);
             } else {
@@ -189,8 +214,8 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem {
                     depType.getAnnotation(Init.class).component());
             }
             return sub == SubComponentNames.NONE
-                ? getInstance(depType)                      // cached
-                : getInstance(depType, sub);               // cached
+                ? getInstance(depType)
+                : getInstance(depType, sub);
         };
         Object proxy = LazyProxy.of(depType, create, inj.immortal());
         try { f.set(host, proxy); }
@@ -210,36 +235,32 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem {
         return t.getName() + '#' + sub.name();
     }
 
+    public static Collection<IBaseComp> allCachedInstances() {
+        return List.copyOf(INSTANCES.values());
+    }
+
     private static void runPostInject(Object host) {
-        // Collect methods in superclass -> subclass order
         Deque<Method> chain = new ArrayDeque<>();
         Class<?> c = host.getClass();
         while (c != null && c != Object.class) {
             for (Method m : c.getDeclaredMethods()) {
                 if (m.isAnnotationPresent(PostInject.class)) {
-                    // Validate signature: non-static, void, no params
                     if (Modifier.isStatic(m.getModifiers()))
-                        throw new IllegalStateException("@PostInject method must not be static: " + m);
+                        throw new IllegalStateException("@PostInject must not be static: " + m);
                     if (m.getParameterCount() != 0)
-                        throw new IllegalStateException("@PostInject method must have no parameters: " + m);
+                        throw new IllegalStateException("@PostInject must have no params: " + m);
                     if (m.getReturnType() != void.class)
-                        throw new IllegalStateException("@PostInject method must return void: " + m);
-                    chain.addFirst(m); // run superclass hooks first
+                        throw new IllegalStateException("@PostInject must return void: " + m);
+                    chain.addFirst(m);
                 }
             }
             c = c.getSuperclass();
         }
-
-        // Invoke in order
         for (Method m : chain) {
-            try {
-                m.setAccessible(true);
-                m.invoke(host);
-            } catch (ReflectiveOperationException e) {
+            try { m.setAccessible(true); m.invoke(host); }
+            catch (ReflectiveOperationException e) {
                 throw new IllegalStateException("Error invoking @PostInject: " + m, e);
             }
         }
     }
-
 }
-

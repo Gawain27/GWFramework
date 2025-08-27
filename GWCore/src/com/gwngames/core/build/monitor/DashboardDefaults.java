@@ -2,6 +2,7 @@ package com.gwngames.core.build.monitor;
 
 import com.gwngames.core.api.base.monitor.IDashboardContent;
 import com.gwngames.core.api.base.monitor.IDashboardHeader;
+import com.gwngames.core.base.BaseComponent;
 
 import java.util.Map;
 
@@ -21,6 +22,10 @@ public final class DashboardDefaults {
         return new IDashboardContent() {
             @Override public String templateId() { return "none"; }
             @Override public Object model()      { return null; }
+
+            @Override
+            public void setComponent(BaseComponent component) {
+            }
         };
     }
 
@@ -29,6 +34,10 @@ public final class DashboardDefaults {
         return new IDashboardContent() {
             @Override public String templateId() { return "count"; }
             @Override public Object model()      { return Map.of("value", n); }
+
+            @Override
+            public void setComponent(BaseComponent component) {
+            }
         };
     }
 
@@ -37,6 +46,10 @@ public final class DashboardDefaults {
         return new IDashboardContent() {
             @Override public String templateId() { return "kv"; }
             @Override public Object model()      { return pairs; }
+
+            @Override
+            public void setComponent(BaseComponent component) {
+            }
         };
     }
 

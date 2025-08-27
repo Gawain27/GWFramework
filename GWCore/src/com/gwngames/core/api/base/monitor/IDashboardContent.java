@@ -1,6 +1,7 @@
 package com.gwngames.core.api.base.monitor;
 
 import com.gwngames.core.api.build.Init;
+import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
 
@@ -11,7 +12,7 @@ import com.gwngames.core.data.ModuleNames;
  */
 @Init(module = ModuleNames.INTERFACE, component = ComponentNames.DASHBOARD_CONTENT, allowMultiple = true, forceDefinition = true)
 public non-sealed interface IDashboardContent extends IDashboardNode {
-// TODO: make template enums...
     String templateId();
     Object model();
+    void setComponent(BaseComponent component);
 }

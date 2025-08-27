@@ -5,25 +5,17 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 
 /**
- * DashboardTemplateRegistry v2 (fixed)
- *
- * - Typed models (records below) for each built-in template
- * - ID-based lookup still supported ("kv", "graph-line", "panel-kv-line", ...)
+ * DashboardTemplateRegistry v2
+ * - Typed models for each built-in template
  * - Gentle coercion from legacy Map/List payloads
- * - Escaping centralised
- * - Avoids getOrDefault(...) on wildcard maps (compile-safe)
+ * - Centralized escaping
  */
 public final class DashboardTemplateRegistry {
 
     /* ===================== typed models ===================== */
 
-    public record HeaderModel(String text) {
-        public HeaderModel { text = Objects.toString(text, ""); }
-    }
-
-    public record CountModel(Number value) {
-        public CountModel { value = (value == null) ? 0 : value; }
-    }
+    public record HeaderModel(String text) { public HeaderModel { text = Objects.toString(text, ""); } }
+    public record CountModel(Number value) { public CountModel { value = (value == null) ? 0 : value; } }
 
     /** Simple key/value list */
     public record KvModel(Map<String, Object> map) {
@@ -46,7 +38,6 @@ public final class DashboardTemplateRegistry {
 
     @FunctionalInterface
     public interface Renderer<T> extends BiConsumer<T, StringBuilder> {}
-
     private record Entry(Class<?> type, Renderer<?> renderer) {}
 
     private static final Map<String, Entry> REG = new ConcurrentHashMap<>();
@@ -77,7 +68,7 @@ public final class DashboardTemplateRegistry {
     /* ===================== built-ins ===================== */
 
     static {
-        // no-op
+        // no-op (accept null model)
         register("none", Object.class, (m, sb) -> {});
 
         // legacy alias: old "header" -> plain <h3>
@@ -147,22 +138,43 @@ public final class DashboardTemplateRegistry {
             sb.append("</div>");
         });
 
-        // In DashboardTemplateRegistry built-ins
+        // component-item  — row with error badge + Logs button
         register("component-item", Map.class, (m, sb) -> {
-            Object title = m.getOrDefault("title", "");
-            Object key   = m.getOrDefault("key", "");
-            Object errs  = m.getOrDefault("errors", 0);
+            String title  = Objects.toString(m.get("title"), "");
+            String safeId = Objects.toString(m.get("safeId"), "");
+            int errors    = Integer.parseInt(Objects.toString(m.get("errors"), "0"));
+            String badgeCls = errors > 0 ? "badge-err" : "badge";
 
-            sb.append("<div class='kv'>")
+            sb.append("<div class='kv' role='group' aria-label='component'>")
                 .append("<span class='k'>").append(esc(title)).append("</span>")
                 .append("<span class='v'>")
-                .append("<span class='badge badge-err'>").append(esc(errs)).append("</span>")
-                .append(" <button class='btn btn-logs' data-logkey='").append(esc(key))
-                .append("' data-title='").append(esc(title))
-                .append("'>View logs</button>")
+                .append("<span class='").append(badgeCls).append("' title='Errors'>").append(errors).append("</span>")
+                .append(" <a href='#").append(esc(safeId)).append("' class='btn'>Logs</a>")
                 .append("</span></div>");
         });
 
+        // log-popup  — hash-target overlay
+        register("log-popup", Map.class, (m, sb) -> {
+            String title  = Objects.toString(m.get("title"), "");
+            String safeId = Objects.toString(m.get("safeId"), "");
+            String keys   = Objects.toString(m.get("keys"), "");
+
+            sb.append("<div id='").append(esc(safeId)).append("' class='modal' data-keys='").append(esc(keys)).append("'>")
+                .append("<div class='modal-card'>")
+                .append("<div style='display:flex;justify-content:space-between;align-items:center;'>")
+                .append("<h3 style='margin:0;color:#00bcd4'>").append(esc(title)).append("</h3>")
+                .append("<a href='#' style='color:#e7e7e7'>✕</a></div>")
+                .append("<pre style='white-space:pre-wrap;font-family:ui-monospace,monospace;margin-top:.8rem;'></pre>")
+                .append("</div></div>");
+        });
+
+        // composite
+        register("component-with-logs", Map.class, (m, sb) -> {
+            Object tile  = m.get("tile");
+            Object popup = m.get("popup");
+            render("component-item", tile, sb);
+            render("log-popup", popup, sb);
+        });
     }
 
     private DashboardTemplateRegistry() {}
@@ -188,6 +200,9 @@ public final class DashboardTemplateRegistry {
     /** Best-effort coercion so legacy Map/List callers keep working. */
     @SuppressWarnings("unchecked")
     private static Object coerce(String id, Class<?> target, Object model) {
+        // Accept null for templates that don't care about a model (e.g., "none")
+        if (target == Object.class) return model;
+
         if (model == null) return null;
         if (target.isInstance(model)) return model;
 
@@ -222,34 +237,32 @@ public final class DashboardTemplateRegistry {
                 Double y1 = toD(m.get("ymax"));
                 return new GraphModel(series, label, y0, y1);
             }
-            if (model instanceof List<?> l) {
-                return GraphModel.of((List<Double>) l);
-            }
+            if (model instanceof List<?> l) return GraphModel.of((List<Double>) l);
         }
 
-        if (target == PanelKvLineModel.class && model instanceof Map<?,?> m) {
-            KvModel kv = (KvModel) coerce("kv", KvModel.class, m.get("kv"));
-            List<Double> series = toSeries(m.get("series"));
-            String label = Objects.toString(m.get("label"), "");
-            Double y0 = toD(m.get("ymin"));
-            Double y1 = toD(m.get("ymax"));
+        if (target == PanelKvLineModel.class && model instanceof Map<?,?> m1) {
+            KvModel kv = (KvModel) coerce("kv", KvModel.class, m1.get("kv"));
+            List<Double> series = toSeries(m1.get("series"));
+            String label = Objects.toString(m1.get("label"), "");
+            Double y0 = toD(m1.get("ymin"));
+            Double y1 = toD(m1.get("ymax"));
             GraphModel g = new GraphModel(series, label, y0, y1);
             return new PanelKvLineModel(kv, g);
         }
 
-        if (target == PanelKvDualLineModel.class && model instanceof Map<?,?> m) {
-            KvModel kv = (KvModel) coerce("kv", KvModel.class, m.get("kv"));
+        if (target == PanelKvDualLineModel.class && model instanceof Map<?,?> m2) {
+            KvModel kv = (KvModel) coerce("kv", KvModel.class, m2.get("kv"));
 
-            List<Double> aSeries = toSeries(m.get("a"));
-            String aLabel = Objects.toString(m.get("alabel"), "");
-            Double aY0 = toD(m.get("a_ymin"));
-            Double aY1 = toD(m.get("a_ymax"));
+            List<Double> aSeries = toSeries(m2.get("a"));
+            String aLabel = Objects.toString(m2.get("alabel"), "");
+            Double aY0 = toD(m2.get("a_ymin"));
+            Double aY1 = toD(m2.get("a_ymax"));
             GraphModel a = new GraphModel(aSeries, aLabel, aY0, aY1);
 
-            List<Double> bSeries = toSeries(m.get("b"));
-            String bLabel = Objects.toString(m.get("blabel"), "");
-            Double bY0 = toD(m.get("b_ymin"));
-            Double bY1 = toD(m.get("b_ymax"));
+            List<Double> bSeries = toSeries(m2.get("b"));
+            String bLabel = Objects.toString(m2.get("blabel"), "");
+            Double bY0 = toD(m2.get("b_ymin"));
+            Double bY1 = toD(m2.get("b_ymax"));
             GraphModel b = new GraphModel(bSeries, bLabel, bY0, bY1);
 
             return new PanelKvDualLineModel(kv, a, b);

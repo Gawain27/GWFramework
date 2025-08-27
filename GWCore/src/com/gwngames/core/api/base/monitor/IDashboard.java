@@ -14,11 +14,6 @@ import java.util.List;
 @Init(module = ModuleNames.INTERFACE, component = ComponentNames.DASHBOARD)
 public non-sealed interface IDashboard extends IDashboardNode {
 
-    /**
-     * @return read-only list of free-floating layers (may be empty).
-     */
-    List<IDashboardLayer> layers();
-
     void maybeStart();
 
     void maybeStart(int port);

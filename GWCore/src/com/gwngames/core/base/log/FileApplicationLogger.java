@@ -53,13 +53,19 @@ public class FileApplicationLogger implements ApplicationLogger {
                 System.out.println(logLine);
 
                 if (exception != null) {
-                    exception.printStackTrace(writer);
-                    exception.printStackTrace(System.out);
+                    write(exception, writer, level);
                 }
             }
         } catch (IOException ioe) {
             System.err.println("Failed to write log: " + ioe.getMessage());
         }
+    }
+
+    /** Helper to log exceptions only on error */
+    private void write(Throwable exception, PrintWriter writer, String level) {
+        if (exception == null) return;
+        // Only dump stacks for ERRORs (tweak if you also want WARN)
+        if ("ERROR".equals(level)) exception.printStackTrace(writer);
     }
 
     /** Resolve relative path, rotate if MAX_LINES reached, return *current* log file path. */

@@ -56,7 +56,7 @@ tasks.register('assembleChangelog') {
 
     fileTree('changelog/releases')
       .matching { include 'release*.html' }
-      .sort { a, b -> a.name <=> b.name }        // release0, release1, …
+      .sort { a, b -> b.name <=> a.name }        // release0, release1, …
       .each { File frag ->
         def txt = frag.text
 

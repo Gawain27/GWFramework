@@ -11,7 +11,15 @@
 
 <table>
     <tr><th style="width:110px">Version</th><th style="width:160px">Date</th><th>Highlights</th></tr>
-    <!-- ---------- 0.0.11J -------------------------------------------------- -->
+    <!-- ---------- 0.0.12K -------------------------------------------------- -->
+<tr>
+    <td>
+        <span class="tag" style="color:var(--v5)">0.0.12&nbsp;K</span>
+    </td> <td>27&nbsp;August&nbsp;2025</td>
+    <td> Dashboard&nbsp;v2: typed template registry, hash-target log popups, static render (no auto-refresh), late component sync &amp; de-dupe, quieter DEBUG logging, and Map.of NPE hardening.
+    </td>
+</tr>
+<!-- ---------- 0.0.11J -------------------------------------------------- -->
 <tr><td><span class="tag" style="color:var(--v4)">0.0.11&nbsp;J</span></td>
     <td>12&nbsp;July&nbsp;2025</td>
     <td>
@@ -85,6 +93,82 @@
     <td>24&nbsp;May&nbsp;2025</td>
     <td>First public “starter” release.</td></tr>      <!--  🡐 Gradle drops rows here -->
 </table>
+
+<!-- ---------- 0.0.12K -------------------------------------------------- -->
+<details>
+    <summary style="color:var(--v5)">
+        <span class="tag" style="color:var(--v5)">0.0.12 K</span>
+        <em style="flex:1">“Observability&nbsp;&amp;&nbsp;Dashboard&nbsp;V2” – released&nbsp;27&nbsp;August&nbsp;2025</em>
+    </summary>
+    <div class="entry-body"><h3>📊 Typed Template Registry &amp; Built-ins</h3>
+<ul>
+    <li><strong>DashboardTemplateRegistry</strong> reworked with typed models:
+        <code>HeaderModel</code>, <code>CountModel</code>, <code>KvModel</code>,
+        <code>GraphModel</code>, <code>PanelKvLineModel</code>, <code>PanelKvDualLineModel</code>.</li>
+    <li>Centralised <code>esc()</code> and <code>attr()</code>; gentle coercion from legacy
+        <code>Map</code>/<code>List</code> payloads keeps old callers working.</li>
+    <li>New built-in templates:
+        <code>"none"</code>, <code>"summary"</code>, <code>"h3"</code>, <code>"count"</code>,
+        <code>"kv"</code>, <code>"graph-line"</code>, <code>"panel-kv-line"</code>,
+        <code>"panel-kv-dualline"</code>, <code>"component-item"</code>,
+        <code>"log-popup"</code>, <code>"component-with-logs"</code>.</li>
+    <li>Canvas sparkline renderer with % auto-scaling and optional <code>ymin/ymax</code>.</li>
+</ul>
+
+<h3>🖥️ CoreDashboard: Static Page, Hash-Target Modals</h3>
+<ul>
+    <li>Server endpoints: <code>/dashboard</code> (full HTML) and <code>/dashboard/logs?keys=…</code> (plain text).
+        Auto-refresh removed; the page is static by design (manual reload when needed).</li>
+    <li>Log popups are pure-CSS <code>:target</code> overlays (work without JS). A “Logs” link anchors to
+        the component’s stable <code>safeId</code>; JS only fetches the text once the modal is targeted.</li>
+    <li>Essential modal/UI CSS is always injected even if a theme CSS asset is missing.</li>
+    <li>Components sorted by <em>descending</em> error count, then title, inside each item-category.</li>
+</ul>
+
+<h3>🧩 Component Discovery, De-dupe &amp; Late Sync</h3>
+<ul>
+    <li>All <code>IDashboardItem</code>s are registered from:
+        DI-injected items, <code>ModuleClassLoader.tryCreateAll()</code>, and
+        the live cache <code>BaseComponent.allCachedInstances()</code>.</li>
+    <li>Registration de-duplicates by stable component key; repeated discoveries are ignored.</li>
+    <li>Static rendering path re-scans the live cache just before HTML generation so a simple browser
+        reload picks up components created after boot.</li>
+</ul>
+
+<h3>📝 FileApplicationLogger Noise Reduction</h3>
+<ul>
+    <li>DEBUG/INFO no longer dump exception stacks (Jetty’s harmless <code>ClosedChannelException</code>).
+        Full stacktraces are kept for <strong>ERROR</strong> only.</li>
+    <li>Removed duplicate <code>System.out</code> stack printing; rotation &amp; path handling unchanged.</li>
+</ul>
+
+<h3>🐛 Hardening &amp; Fixes</h3>
+<ul>
+    <li>Fixed <code>Map.of(...)</code> NPE in <code>ComponentWithLogsContent.model()</code> by ensuring all
+        values are non-null (empty lists/strings where appropriate).</li>
+    <li>Logs button reliability: modal <code>id</code> strictly matches the anchor; <code>data-keys</code>
+        carries both the instance key and the class key for aggregated logs.</li>
+    <li>Dashboard gracefully handles missing theme CSS via a built-in dark fallback.</li>
+</ul>
+
+<h3>🔌 APIs &amp; Notes</h3>
+<ul>
+    <li><code>BaseComponent</code> exposes <code>dashboardKey()</code>, <code>safeId()</code>,
+        <code>errorCount()</code>, and lightweight log helpers that also feed <code>LogBus</code>.</li>
+    <li><code>itemContent()</code> is provided by a shared <code>component-with-logs</code> content block.
+        Classes implementing <code>IDashboardContent</code> continue to supply their own content (and are skipped by the default).</li>
+    <li><code>LogBus</code> keeps a ring buffer per component and exposes
+        <code>recent(key)</code> and <code>errorCount(key)</code> for the dashboard.</li>
+</ul>
+
+<h3>✅ Outcome</h3>
+<ul>
+    <li>Working “Logs” popups without JS dependencies; fewer log files full of benign Jetty stacks;
+        all relevant components appear after a simple page reload; strong forward-compatibility for legacy dashboard callers.</li>
+</ul>
+
+</div>
+</details>
 
 <!-- ---------- 0.0.11J -------------------------------------------------- -->
 <details>

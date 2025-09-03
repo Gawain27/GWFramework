@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.google.gson.stream.JsonReader;
 import com.gwngames.core.api.base.IBaseComp;
+import com.gwngames.core.api.base.cfg.IClassLoader;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.ex.ErrorPopupException;
 import com.gwngames.core.base.cfg.i18n.CoreTranslation;
@@ -14,11 +15,9 @@ import com.gwngames.core.util.ComponentUtils;
 import java.io.*;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Proxy;
 import java.net.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.jar.JarFile;
 
 /**
@@ -32,7 +31,8 @@ import java.util.jar.JarFile;
  * changes are made.
  * </p>
  */
-public final class ModuleClassLoader extends ClassLoader {
+@Init(module = ModuleNames.CORE)
+public final class ModuleClassLoader extends ClassLoader implements IClassLoader {
 
     /* ───────────────────────── static members ───────────────────────── */
     private static final FileLogger log = FileLogger.get(LogFiles.SYSTEM);
@@ -44,8 +44,6 @@ public final class ModuleClassLoader extends ClassLoader {
 
     private final Map<Class<?>, Object> singletons = new ConcurrentHashMap<>();
 
-    /** For enum-multId offset */
-    private final Map<Class<?>, Integer> enumBase = new ConcurrentHashMap<>();
     private static ModuleClassLoader INSTANCE;
 
     /* positive / negative lookup caches */
@@ -56,7 +54,7 @@ public final class ModuleClassLoader extends ClassLoader {
     private final List<URLClassLoader> loaders      = new ArrayList<>();
     private final Map<URLClassLoader, JarFile> jars = new LinkedHashMap<>();
     private final List<ProjectLoader> classLoaders = new ArrayList<>();
-    private final AtomicInteger enumSeq = new AtomicInteger();
+
     /* ==================================================================== */
     /*  Singleton                                                           */
     /* ==================================================================== */
@@ -215,101 +213,6 @@ public final class ModuleClassLoader extends ClassLoader {
     }
 
     /* ==================================================================== */
-    /*  Init-annotation inheritance helper                                  */
-    /* ==================================================================== */
-
-    /**
-     * Produces a merged {@link Init} where missing {@code component()} or
-     * {@code module()} values (sentinel {@link ComponentNames#NONE} /
-     * {@link ModuleNames#UNIMPLEMENTED}) are inherited from the nearest superclass
-     * or interface that declares them.
-     * <p>
-     * <strong>Note:</strong> The method now fails fast—if {@code clazz} lacks an
-     * {@code @Init} annotation an {@link IllegalStateException} is thrown instead
-     * of returning {@code null}.
-     * </p>
-     */
-    public static Init resolvedInit(Class<?> clazz) {
-        Init base = clazz.getAnnotation(Init.class);
-        if (base == null) {
-            throw new IllegalStateException(
-                "Class " + clazz.getName() + " is missing required @Init annotation");
-        }
-
-        boolean isEnum       = clazz.isEnum() || base.isEnum();
-        boolean hasSubComp   = base.subComp() != SubComponentNames.NONE;
-
-        ComponentNames comp  = base.component();
-        ModuleNames    module= base.module();
-
-        // Policy: sub-component or enum implies allowMultiple = true
-        boolean allowMult    = base.allowMultiple() || isEnum || hasSubComp;
-
-        // IMPORTANT: external is evaluated **only on the concrete class**.
-        final boolean externalFlag = base.external();
-
-        /* inherit only component/module (and enum “influence”) */
-        Class<?> sup = clazz.getSuperclass();
-        while (sup != null && sup != Object.class &&
-            (comp == ComponentNames.NONE || module == ModuleNames.UNIMPLEMENTED)) {
-
-            Init ann = sup.getAnnotation(Init.class);
-            if (ann != null) {
-                if (comp   == ComponentNames.NONE)       comp   = ann.component();
-                if (module == ModuleNames.UNIMPLEMENTED) module = ann.module();
-                if (!isEnum) isEnum = ann.isEnum();
-            }
-            sup = sup.getSuperclass();
-        }
-
-        if (comp == ComponentNames.NONE || module == ModuleNames.UNIMPLEMENTED) {
-            Class<?> cur = clazz;
-            while (cur != null && cur != Object.class &&
-                (comp == ComponentNames.NONE || module == ModuleNames.UNIMPLEMENTED)) {
-
-                for (Class<?> ifc : cur.getInterfaces()) {
-                    Init ann = ifc.getAnnotation(Init.class);
-                    if (ann == null) continue;
-
-                    if (comp   == ComponentNames.NONE)       comp   = ann.component();
-                    if (module == ModuleNames.UNIMPLEMENTED) module = ann.module();
-
-                    if (comp != ComponentNames.NONE && module != ModuleNames.UNIMPLEMENTED)
-                        break;
-
-                    if (ann.isEnum()) {
-                        allowMult = true;
-                        isEnum    = true;
-                    }
-                }
-                cur = cur.getSuperclass();
-            }
-        }
-
-        ComponentNames finalComp      = comp;
-        ModuleNames    finalModule    = module;
-        boolean        finalAllowMult = allowMult;
-        boolean        finalIsEnum    = isEnum;
-
-        return (Init) Proxy.newProxyInstance(
-            Init.class.getClassLoader(),
-            new Class<?>[]{Init.class},
-            (proxy, method, args) -> switch (method.getName()) {
-                case "annotationType" -> Init.class;
-                case "component"      -> finalComp;
-                case "module"         -> finalModule;
-                case "subComp"        -> base.subComp();
-                case "platform"       -> base.platform();
-                case "allowMultiple"  -> finalAllowMult;
-                case "isEnum"         -> finalIsEnum;
-                case "isPlatformDependent" -> base.isPlatformDependent();
-                case "forceDefinition"     -> base.forceDefinition();
-                case "external"       -> base.external();   // ← from concrete only (no inheritance)
-                default               -> method.invoke(base, args);
-            });
-    }
-
-    /* ==================================================================== */
     /*  Annotation scanning & de-duplication                                */
     /* ==================================================================== */
     private synchronized void ensureTypesLoaded() {
@@ -322,7 +225,7 @@ public final class ModuleClassLoader extends ClassLoader {
         Map<String, Class<?>> bestMulti = new HashMap<>();
 
         for (Class<?> c : found) {
-            Init an = resolvedInit(c);
+            Init an = IClassLoader.resolvedInit(c);
 
             /* ---------- interface branch ----------------------------------- */
             if (c.isInterface()) {
@@ -345,7 +248,7 @@ public final class ModuleClassLoader extends ClassLoader {
             Class<?> incumbent = bestMulti.get(key);
             if (incumbent == null ||
                 an.module().modulePriority >
-                    resolvedInit(incumbent).module().modulePriority) {
+                    IClassLoader.resolvedInit(incumbent).module().modulePriority) {
                 bestMulti.put(key, c);
             }
         }
@@ -366,7 +269,7 @@ public final class ModuleClassLoader extends ClassLoader {
         }
     }
 
-
+    @Override
     public List<Class<?>> scanForAnnotated(Class<? extends Annotation> ann) {
         List<Class<?>> out = new ArrayList<>();
         jars.forEach((loader, jar) ->
@@ -395,12 +298,13 @@ public final class ModuleClassLoader extends ClassLoader {
     }
 
     /* single-component (allowMultiple = false) --------------------------- */
-    private Class<?> findClass(ComponentNames comp) throws ClassNotFoundException {
+    @Override
+    public Class<?> findClass(ComponentNames comp) throws ClassNotFoundException {
         Class<?> iface = interfaceOf(comp);
         Class<?> best  = null; int prio = Integer.MIN_VALUE;
         for (Class<?> c : concreteTypes) {
             if (!iface.isAssignableFrom(c)) continue;
-            Init an = resolvedInit(c);
+            Init an = IClassLoader.resolvedInit(c);
             if (an.subComp() != SubComponentNames.NONE) continue;
             if (an.module().modulePriority > prio) { best = c; prio = an.module().modulePriority; }
         }
@@ -408,23 +312,25 @@ public final class ModuleClassLoader extends ClassLoader {
         return best;
     }
 
-    private List<Class<?>> findClasses(ComponentNames comp) throws ClassNotFoundException {
+    @Override
+    public List<Class<?>> findClasses(ComponentNames comp) throws ClassNotFoundException {
         Class<?> iface = interfaceOf(comp);
         List<Class<?>> out = new ArrayList<>();
         for (Class<?> c : concreteTypes) {
             if (!iface.isAssignableFrom(c)) continue;
-            Init an = resolvedInit(c);
+            Init an = IClassLoader.resolvedInit(c);
             if (an.subComp() != SubComponentNames.NONE) continue;
             out.add(c);
         }
         if (out.isEmpty()) throw new ClassNotFoundException("No impl of " + comp);
         out.sort(Comparator.comparingInt(
-            (Class<?> cl) -> Objects.requireNonNull(resolvedInit(cl)).module().modulePriority).reversed());
+            (Class<?> cl) -> Objects.requireNonNull(IClassLoader.resolvedInit(cl)).module().modulePriority).reversed());
         return out;
     }
 
     /* multi sub-components (allowMultiple = true) ------------------------ */
-    private Class<?> findSubComponent(ComponentNames comp, SubComponentNames sub)
+    @Override
+    public Class<?> findSubComponent(ComponentNames comp, SubComponentNames sub)
         throws ClassNotFoundException {
 
         if (sub == SubComponentNames.NONE) throw new IllegalArgumentException("subComp NONE");
@@ -435,7 +341,7 @@ public final class ModuleClassLoader extends ClassLoader {
 
         Class<?> best = null; int prio = Integer.MIN_VALUE;
         for (Class<?> c : concreteTypes) {
-            Init an = resolvedInit(c);
+            Init an = IClassLoader.resolvedInit(c);
             if (an.subComp()!=sub) continue;
             if (!iface.isAssignableFrom(c)) continue;
             if (an.module().modulePriority > prio) { best = c; prio = an.module().modulePriority; }
@@ -451,20 +357,21 @@ public final class ModuleClassLoader extends ClassLoader {
 
         List<Class<?>> out = new ArrayList<>();
         for (Class<?> c : concreteTypes) {
-            Init an = resolvedInit(c);
+            Init an = IClassLoader.resolvedInit(c);
             if (iface.isAssignableFrom(c)) {
                 if (an.subComp()!=SubComponentNames.NONE) out.add(c);
             }
         }
         if (out.isEmpty()) throw new ClassNotFoundException("No sub-components for "+comp);
         out.sort(Comparator.comparingInt(
-            (Class<?> cl) -> Objects.requireNonNull(resolvedInit(cl)).module().modulePriority).reversed());
+            (Class<?> cl) -> Objects.requireNonNull(IClassLoader.resolvedInit(cl)).module().modulePriority).reversed());
         return out;
     }
 
     /* -------------------------------------------------------------------- */
     /*  SIMPLE COMPONENT (one impl only)                                    */
     /* -------------------------------------------------------------------- */
+    @Override
     public <T> T tryCreate(ComponentNames comp, Object... args) {
         try { return firstInstanceOf(findClass(comp), args); }
         catch (ClassNotFoundException e) {
@@ -476,6 +383,7 @@ public final class ModuleClassLoader extends ClassLoader {
     /* -------------------------------------------------------------------- */
     /*  SIMPLE COMPONENT + SUBCOMPONENT                                     */
     /* -------------------------------------------------------------------- */
+    @Override
     public <T> T tryCreate(ComponentNames comp, SubComponentNames sub, Object... args) {
         try {
             T obj = firstInstanceOf(findSubComponent(comp, sub), args);
@@ -488,6 +396,7 @@ public final class ModuleClassLoader extends ClassLoader {
     /* -------------------------------------------------------------------- */
     /*  ALL SUBCOMPONENTS (allowMultiple = true)                            */
     /* -------------------------------------------------------------------- */
+    @Override
     public <T> List<T> tryCreateAll(ComponentNames comp, Object... args) {
         try {
             List<Class<?>> clz = findSubComponents(comp);
@@ -500,10 +409,11 @@ public final class ModuleClassLoader extends ClassLoader {
     /* -------------------------------------------------------------------- */
     /*  PLATFORM-SPECIFIC LOOK-UP                                           */
     /* -------------------------------------------------------------------- */
+    @Override
     public <T> T tryCreate(ComponentNames comp, PlatformNames platform, Object... args) {
         try {
             for (Class<?> c : findClasses(comp)) {
-                if (Objects.requireNonNull(resolvedInit(c)).platform() == platform)
+                if (Objects.requireNonNull(IClassLoader.resolvedInit(c)).platform() == platform)
                     return firstInstanceOf(c, args);
             }
         } catch (ClassNotFoundException ignored) { }
@@ -514,6 +424,7 @@ public final class ModuleClassLoader extends ClassLoader {
     /* ==================================================================== */
     /*  Reflection convenience                                              */
     /* ==================================================================== */
+    @Override
     public Object createInstance(Class<?> clazz, Object... params) {
         // If the concrete class says “external”, always use its own factory.
         if (clazz.getAnnotation(Init.class).external()) {
@@ -523,7 +434,7 @@ public final class ModuleClassLoader extends ClassLoader {
         // Cache a single instance per class if NONE of the implemented IBaseComp interfaces allow multiple.
         boolean noneAllowMultiple = Arrays.stream(clazz.getInterfaces())
             .filter(IBaseComp.class::isAssignableFrom)
-            .map(ModuleClassLoader::resolvedInit)
+            .map(IClassLoader::resolvedInit)
             .noneMatch(Init::allowMultiple);
 
         if (noneAllowMultiple) {
@@ -597,6 +508,7 @@ public final class ModuleClassLoader extends ClassLoader {
     }
 
     /** Convenience method */
+    @Override
     public <T extends IBaseComp> Optional<T> lookup(int id, Class<T> type) {
         return ComponentUtils.lookup(id).map(type::cast);
     }

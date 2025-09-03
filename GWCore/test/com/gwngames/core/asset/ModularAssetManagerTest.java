@@ -8,6 +8,8 @@ import org.junit.jupiter.api.*;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -33,27 +35,22 @@ public final class ModularAssetManagerTest extends BaseTest {
 
     @BeforeEach
     void snapshotLoaders() throws IllegalAccessException {
-        // get the singleton instance *first* …
+        // 1) get the singleton instance
         ModuleClassLoader mcl = ModuleClassLoader.getInstance();
-
-        // … then read the field value from that instance
+        // 2) read the field value from that instance
         @SuppressWarnings("unchecked")
         List<Object> list = (List<Object>) loadersField.get(mcl);
-
-        // deep copy so we can restore it later
+        // 3) deep copy so we can restore it later
         originalLoaders = new ArrayList<>(list);
-
-        // finally, clear the real list so no assets.txt files are scanned
+        // 4) clear the real list so no assets.txt files are scanned
         list.clear();
     }
 
     @AfterEach
     void restoreLoaders() throws IllegalAccessException {
         ModuleClassLoader mcl = ModuleClassLoader.getInstance();
-
         @SuppressWarnings("unchecked")
         List<Object> target = (List<Object>) loadersField.get(mcl);
-
         target.clear();
         target.addAll(originalLoaders);   // compiler-safe: both are List<Object>
     }
@@ -84,19 +81,34 @@ public final class ModularAssetManagerTest extends BaseTest {
         toAbs.setAccessible(true);
         final String ABS = (String) toAbs.invoke(mgr, REL);
 
-        /* ── lazy-load → keep → evict sequence ─────────────────────── */
+        // 🔧 Ensure the file physically exists so the manager’s existence check passes
+        Path absPath = Path.of(ABS);
+        Files.createDirectories(absPath.getParent());
+        boolean createdHere = false;
+        if (Files.notExists(absPath)) {
+            Files.write(absPath, new byte[0]); // tiny placeholder
+            createdHere = true;
+        }
 
-        Assertions.assertFalse(stub.isLoaded(ABS));
+        try {
+            /* ── lazy-load → keep → evict sequence ─────────────────────── */
+            Assertions.assertFalse(stub.isLoaded(ABS));
 
-        mgr.get(REL, Object.class);              // schedules & loads lazily (records ABS)
-        Assertions.assertTrue(stub.isLoaded(ABS));
+            mgr.get(REL, Object.class);          // schedules & loads lazily (records ABS)
+            Assertions.assertTrue(stub.isLoaded(ABS));
 
-        mgr.update(0.05f);                       // 50 ms  (< TTL) – still loaded
-        Assertions.assertTrue(stub.isLoaded(ABS));
+            mgr.update(0.05f);                   // 50 ms  (< TTL) – still loaded
+            Assertions.assertTrue(stub.isLoaded(ABS));
 
-        Thread.sleep(200);                       // > TTL
-        mgr.update(0.1f);                        // eviction pass
-        Assertions.assertFalse(stub.isLoaded(ABS),
-            "asset was not evicted after TTL elapsed and single ref-count");
+            Thread.sleep(200);                   // > TTL
+            mgr.update(0.1f);                    // eviction pass
+            Assertions.assertFalse(stub.isLoaded(ABS),
+                "asset was not evicted after TTL elapsed and single ref-count");
+        } finally {
+            // Cleanup the placeholder we created
+            if (createdHere) {
+                try { Files.deleteIfExists(absPath); } catch (Exception ignored) {}
+            }
+        }
     }
 }

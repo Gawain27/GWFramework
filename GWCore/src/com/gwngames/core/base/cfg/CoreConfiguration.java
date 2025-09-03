@@ -5,6 +5,7 @@ import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.cfg.BuildParameters;
+import com.gwngames.core.data.input.InputParameters;
 
 @Init(module = ModuleNames.CORE)
 public class CoreConfiguration extends BaseComponent implements IConfig {
@@ -15,5 +16,7 @@ public class CoreConfiguration extends BaseComponent implements IConfig {
         // TODO save and load param values, so set defaults will do nothing
         setDefault(BuildParameters.PROD_ENV, Boolean.FALSE); // TODO: set true
         setDefault(BuildParameters.DASHBOARD_PORT, 10_707);
+
+        setDefault(InputParameters.COMBO_DEFAULT_TTL_FRAMES, 8);
     }
 }

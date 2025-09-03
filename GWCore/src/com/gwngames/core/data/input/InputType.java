@@ -1,4 +1,4 @@
-package com.gwngames.core.api.input;
+package com.gwngames.core.data.input;
 
 public enum InputType {
     BUTTON_DOWN,

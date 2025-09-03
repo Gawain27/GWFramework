@@ -1,5 +1,6 @@
 package com.gwngames.core.base.init;
 
+import com.gwngames.core.api.base.cfg.IClassLoader;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseTest;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
@@ -33,7 +34,7 @@ public final class InitInheritanceComplianceTest extends BaseTest {
         /*  For each one, obtain the *MERGED* annotation via the loader */
         for (Class<?> type : annotated) {
 
-            Init merged = ModuleClassLoader.resolvedInit(type);
+            Init merged = IClassLoader.resolvedInit(type);
             Assertions.assertNotNull(merged,
                 () -> err("resolvedInit returned null", type));
 

@@ -2,10 +2,9 @@ package com.gwngames.core.event.input;
 
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.event.input.IButtonEvent;
-import com.gwngames.core.api.input.InputType;
+import com.gwngames.core.data.input.InputType;
 import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.SubComponentNames;
 
 /**
  * Fired when a digital or analog button / trigger changes state.

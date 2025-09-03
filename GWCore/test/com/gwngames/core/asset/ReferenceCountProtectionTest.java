@@ -1,12 +1,14 @@
 package com.gwngames.core.asset;
 
-import com.gwngames.core.api.asset.IAssetManager;
-import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.BaseTest;
+import com.gwngames.core.util.Cdi;
 import org.junit.jupiter.api.Assertions;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Map;
 
 /**
  * • Step-1  : load dummy asset  → ref-count == 2  → NOT evicted
@@ -22,11 +24,8 @@ public class ReferenceCountProtectionTest extends BaseTest {
     public static final class RefCountingStub extends StubAssetManager {
         private final String watchAbs;
         private volatile int forced = 2;              // start with 2 refs
-
         RefCountingStub(String watchAbs){ this.watchAbs = watchAbs; }
-
         void setRefCount(int v){ this.forced = v; }
-
         @Override public int getReferenceCount(String n){
             return watchAbs.equals(n) ? forced : super.getReferenceCount(n);
         }
@@ -38,44 +37,80 @@ public class ReferenceCountProtectionTest extends BaseTest {
 
         final String REL = "foo/bar.dummy";
 
-        // Use the real manager via DI and reflect its absolute-path resolver
-        IAssetManager api = BaseComponent.getInstance(IAssetManager.class);
-        ModularAssetManager mgr = (ModularAssetManager) api;
+        // Fresh manager (no globals), wire dependencies
+        ModularAssetManager mgr = new ModularAssetManager();
+        Cdi.inject(mgr);
 
+        // Resolve the absolute path the manager will use internally
         Method toAbs = ModularAssetManager.class.getDeclaredMethod("toAbsolute", String.class);
         toAbs.setAccessible(true);
         final String ABS = (String) toAbs.invoke(mgr, REL);
 
-        // Swap internal AssetManager for our ref-counting stub (watching ABS)
-        Field gdxF = ModularAssetManager.class.getDeclaredField("gdx");
-        gdxF.setAccessible(true);
-        RefCountingStub stub = new RefCountingStub(ABS);
-        gdxF.set(mgr, stub);
+        // Ensure a physical file exists at ABS so get() passes the existence check
+        Path absPath = Path.of(ABS);
+        Files.createDirectories(absPath.getParent());
+        boolean createdHere = false;
+        if (Files.notExists(absPath)) {
+            Files.write(absPath, new byte[0]); // tiny placeholder
+            createdHere = true;
+        }
 
-        // Start with 0 until load finishes, then bump to 2 to protect from eviction
-        stub.setRefCount(0);
+        try {
+            // Swap the internal AssetManager for our ref-counting stub (watching ABS)
+            Field gdxF = ModularAssetManager.class.getDeclaredField("gdx");
+            gdxF.setAccessible(true);
+            RefCountingStub stub = new RefCountingStub(ABS);
+            gdxF.set(mgr, stub);
+            gdxF.setAccessible(false);
 
-        // Load once (manager will call load/get using ABS under the hood)
-        mgr.get(REL, DummyAsset.class);
-        stub.setRefCount(2);
+            // Register discovery so ensureScheduled() accepts the path
+            Field discF = ModularAssetManager.class.getDeclaredField("discovered");
+            discF.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> discovered = (Map<String, Object>) discF.get(mgr);
+            discovered.put(ABS, new Object());
 
-        // Backdate last-used so it’s TTL-expired
-        Field lastF = ModularAssetManager.class.getDeclaredField("lastUsed");
-        lastF.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        var last = (java.util.Map<String,Long>) lastF.get(mgr);
-        long expired = System.currentTimeMillis() - (5 * 60_000 + 1); // default TTL + ε
-        last.put(ABS, expired);
+            // Start with 0 until load finishes, then bump to 2 to protect from eviction
+            stub.setRefCount(0);
 
-        // First update: ref-count forced to 2 → must NOT evict
-        mgr.update(0);
-        Assertions.assertTrue(stub.isLoaded(ABS),
-            "asset must survive while reference-count > 1");
+            // Load once (manager will call through stub; key is ABS)
+            mgr.get(REL, DummyAsset.class);
+            stub.setRefCount(2);
 
-        // Drop extra reference and update again → should evict
-        stub.setRefCount(1);
-        mgr.update(0);
-        Assertions.assertFalse(stub.isLoaded(ABS),
-            "asset must be evicted once ref-count returns to 1");
+            // Sanity: it should be marked loaded under ABS
+            Assertions.assertTrue(stub.isLoaded(ABS), "sanity: asset was not loaded via stub");
+
+            // Backdate last-used so it’s TTL-expired
+            long defaultTtlMs;
+            try {
+                Field ttlF = ModularAssetManager.class.getDeclaredField("DEFAULT_TTL_MS");
+                ttlF.setAccessible(true);
+                defaultTtlMs = ttlF.getLong(null);
+            } catch (NoSuchFieldException nsfe) {
+                defaultTtlMs = 5 * 60_000L; // fallback if field renamed
+            }
+
+            Field lastF = ModularAssetManager.class.getDeclaredField("lastUsed");
+            lastF.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            Map<String, Long> last = (Map<String, Long>) lastF.get(mgr);
+            long expired = System.currentTimeMillis() - (defaultTtlMs + 1);
+            last.put(ABS, expired);
+
+            // First update: ref-count forced to 2 → must NOT evict
+            mgr.update(0f);
+            Assertions.assertTrue(stub.isLoaded(ABS),
+                "asset must survive while reference-count > 1");
+
+            // Drop extra reference and update again → should evict
+            stub.setRefCount(1);
+            mgr.update(0f);
+            Assertions.assertFalse(stub.isLoaded(ABS),
+                "asset must be evicted once ref-count returns to 1");
+        } finally {
+            if (createdHere) {
+                try { Files.deleteIfExists(absPath); } catch (Exception ignored) {}
+            }
+        }
     }
 }

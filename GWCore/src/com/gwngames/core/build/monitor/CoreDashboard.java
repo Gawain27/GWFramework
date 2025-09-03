@@ -3,6 +3,7 @@ package com.gwngames.core.build.monitor;
 import com.badlogic.gdx.files.FileHandle;
 import com.gwngames.assets.css.GwcoreCssAssets;
 import com.gwngames.core.api.asset.IAssetManager;
+import com.gwngames.core.api.base.cfg.IClassLoader;
 import com.gwngames.core.api.base.cfg.IConfig;
 import com.gwngames.core.api.base.monitor.*;
 import com.gwngames.core.api.build.Init;
@@ -31,9 +32,14 @@ import java.util.concurrent.atomic.AtomicReference;
 @Init(module = ModuleNames.CORE)
 public final class CoreDashboard extends BaseComponent implements IDashboard, AutoCloseable {
 
-    @Inject private IConfig config;
-    @Inject private IAssetManager assetManager;
-    @Inject(loadAll = true) private List<IDashboardItem> injectedItems;
+    @Inject
+    private IConfig config;
+    @Inject
+    private IAssetManager assetManager;
+    @Inject
+    private IClassLoader loader;
+    @Inject(loadAll = true)
+    private List<IDashboardItem> injectedItems;
 
     private enum SysTable      { SYSTEM }
     private enum TelemetryCat  { CPU, RAM, IO }
@@ -55,16 +61,15 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
         // Items provided by DI
         if (injectedItems != null) for (IDashboardItem it : injectedItems) register(it);
 
-        // Ensure ALL components registered in the ModuleClassLoader are visible
+        // Ensure ALL components registered in the ClassLoader are visible
         try {
-            ModuleClassLoader loader = ModuleClassLoader.getInstance();
             for (ComponentNames compName : ComponentNames.values()) {
                 for (Object o : loader.tryCreateAll(compName)) {
                     if (o instanceof IDashboardItem it) register(it);
                 }
             }
         } catch (Throwable t) {
-            log.debug("ModuleClassLoader enumeration failed: {}", t.toString());
+            log.debug("ClassLoader enumeration failed: {}", t.toString());
         }
 
         // Also register every already-instantiated (cached) component.

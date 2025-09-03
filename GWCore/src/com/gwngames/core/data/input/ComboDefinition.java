@@ -13,12 +13,8 @@ import java.util.stream.Collectors;
 
 /**
  * Catalogue of simultaneous-press combos.
- * <p>
- * ▸ Change {@link #DEFAULT_TTL} once – every 2-arg constructor inherits it.<br>
- * ▸ Two constructors:<br>
- * &nbsp;&nbsp;• <code>(ids, prio)</code> → uses {@link #DEFAULT_TTL}.<br>
- * &nbsp;&nbsp;• <code>(ids, ttl, prio)</code> → per-combo lifetime.
- * </p>
+ * - If constructed with (ids, prio) → uses a dynamic default TTL loaded from config.
+ * - If constructed with (ids, ttl, prio) → uses that explicit ttl and ignores the default.
  */
 @Init(module = ModuleNames.CORE)
 public enum ComboDefinition implements IInputCombo {
@@ -37,22 +33,27 @@ public enum ComboDefinition implements IInputCombo {
     AB     (ids("A", "B"),  ComboPriority.NORMAL);
 
     /* ------------------------------------------------------------------ */
-    public  static final int DEFAULT_TTL = 8;          // frames
+     private static volatile int DEFAULT_TTL_DYNAMIC = 8;
     /* ------------------------------------------------------------------ */
 
     private final Set<IInputIdentifier> ids;
-    private final int           ttl;
+    private final int           ttl;            // meaningful only if explicitTtl==true
     private final ComboPriority prio;
+    private final boolean       explicitTtl;
 
-    /* uses DEFAULT_TTL */
+    /* uses dynamic default TTL */
     ComboDefinition(Set<IInputIdentifier> ids, ComboPriority prio) {
-        this(ids, DEFAULT_TTL, prio);
+        this.ids  = ids;
+        this.ttl  = 0;                // ignored
+        this.prio = prio;
+        this.explicitTtl = false;
     }
     /* explicit ttl */
     ComboDefinition(Set<IInputIdentifier> ids, int ttl, ComboPriority prio) {
         this.ids  = ids;
         this.ttl  = ttl;
         this.prio = prio;
+        this.explicitTtl = true;
     }
 
     /* ===== helper to shorten enum lines ===== */
@@ -64,7 +65,7 @@ public enum ComboDefinition implements IInputCombo {
 
     /* ===== IInputCombo implementation ===== */
     @Override public Set<IInputIdentifier> identifiers() { return ids; }
-    @Override public int  activeFrames()                  { return ttl; }
+    @Override public int  activeFrames()                  { return explicitTtl ? ttl : DEFAULT_TTL_DYNAMIC; }
     @Override public ComboPriority priority()             { return prio; }
 
     /* bulk-registration helper */
@@ -72,4 +73,9 @@ public enum ComboDefinition implements IInputCombo {
         for (ComboDefinition c : values()) mgr.register(c);
     }
 
+    /** Called at boot by config loader to set global default TTL. */
+    public static void setDefaultTtlFrames(int frames) {
+        if (frames <= 0) throw new IllegalArgumentException("default TTL must be > 0");
+        DEFAULT_TTL_DYNAMIC = frames;
+    }
 }

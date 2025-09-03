@@ -22,13 +22,17 @@ public abstract class BaseInputMapper extends BaseComponent
     implements IInputMapper, IInputListener {
 
     /* ── collaborators supplied by sub-class ───────────────────────── */
-    @Inject protected IInputComboManager comboMgr;
-    @Inject protected IInputChainManager chainMgr;
-    @Inject protected IInputBuffer       buffer;
+    @Inject
+    protected IInputComboManager comboMgr;
+    @Inject
+    protected IInputChainManager chainMgr;
+    @Inject
+    protected IInputBuffer       buffer;
 
     /* ── logging & statistics ──────────────────────────────────────── */
     protected static final FileLogger log = FileLogger.get(LogFiles.INPUT);
-    @Inject protected IInputHistory   history;
+    @Inject
+    protected IInputHistory   history;
     public IInputHistory history(){ return history; }
 
     /* ── adapter binding ───────────────────────────────────────────── */
@@ -44,8 +48,12 @@ public abstract class BaseInputMapper extends BaseComponent
 
     /* ── context / visibility ──────────────────────────────────────── */
     private volatile InputContext context = InputContext.GAMEPLAY;
-    @Override public InputContext getContext()                { return context; }
-    @Override public void switchContext(InputContext ctx){
+
+    @Override
+    public InputContext getContext()
+    { return context; }
+    @Override
+    public void switchContext(InputContext ctx){
         context = Objects.requireNonNull(ctx);
         log.debug("[mapper] context → {}", ctx);
     }

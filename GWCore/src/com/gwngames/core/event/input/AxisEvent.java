@@ -2,10 +2,9 @@ package com.gwngames.core.event.input;
 
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.event.input.IAxisEvent;
-import com.gwngames.core.api.input.InputType;
+import com.gwngames.core.data.input.InputType;
 import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.SubComponentNames;
 
 /**
  * Represents motion on an analog axis (stick X/Y, trigger, wheel, etc.).

@@ -1,7 +1,7 @@
 package com.gwngames.core.event.input;
 
 import com.gwngames.core.api.event.input.IInputEvent;
-import com.gwngames.core.api.input.InputType;
+import com.gwngames.core.data.input.InputType;
 import com.gwngames.core.api.input.action.IInputAction;
 import com.gwngames.core.event.base.AbstractEvent;
 

@@ -1,6 +1,7 @@
 package com.gwngames.core.base.init;
 
 import com.gwngames.core.api.base.IBaseComp;
+import com.gwngames.core.api.base.cfg.IClassLoader;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseTest;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
@@ -39,8 +40,7 @@ public class SubComponentForceDefinitionTest extends BaseTest {
 
         /* ---------------- Rule #1 : interface ⇄ annotation consistency --- */
         for (Class<?> iface : interfaces) {
-            Init an = ModuleClassLoader.resolvedInit(iface);
-            assert an != null;
+            Init an = IClassLoader.resolvedInit(iface);
 
             boolean extendsBase = IBaseComp.class.isAssignableFrom(iface);
 
@@ -59,8 +59,7 @@ public class SubComponentForceDefinitionTest extends BaseTest {
 
         /* ---------------- Rule #2 : allowMultiple+forceDefinition --------- */
         for (Class<?> iface : interfaces) {
-            Init an = ModuleClassLoader.resolvedInit(iface);
-            assert an != null;
+            Init an = IClassLoader.resolvedInit(iface);
             if (!an.allowMultiple() || !an.forceDefinition()) continue;
 
             /* gather concrete, non-abstract impls of this interface */
@@ -71,7 +70,7 @@ public class SubComponentForceDefinitionTest extends BaseTest {
                 .toList();
 
             for (Class<?> impl : impls) {
-                Init implAnn = ModuleClassLoader.resolvedInit(impl);
+                Init implAnn = IClassLoader.resolvedInit(impl);
                 Assertions.assertNotNull(implAnn,
                     "Concrete "+impl.getSimpleName()+" missing @Init");
 

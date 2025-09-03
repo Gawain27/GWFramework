@@ -6,13 +6,13 @@ import com.gwngames.core.api.input.buffer.IInputChain;
 import com.gwngames.core.api.input.buffer.IInputCombo;
 import com.gwngames.core.data.input.InputContext;
 import com.gwngames.core.base.BaseTest;
-import com.gwngames.core.input.buffer.CoreInputChainManager;
+import com.gwngames.core.input.buffer.FastInputChainManager;
 import org.junit.jupiter.api.Assertions;
 
 import java.util.*;
 
 /**
- * Verifies that {@link CoreInputChainManager}:
+ * Verifies that {@link FastInputChainManager}:
  * <ul>
  *   <li>picks the first enabled chain whose combo-sequence matches the buffer</li>
  *   <li>respects visibility rules</li>
@@ -43,7 +43,7 @@ public final class InputChainManagerTest extends BaseTest {
     /* ───── test implementation ────────────────────────────────────── */
     @Override protected void runTest() {
 
-        CoreInputChainManager mgr = new CoreInputChainManager();
+        FastInputChainManager mgr = new FastInputChainManager();
 
         /* register both chains, both enabled */
         mgr.register(CHAIN_LONG , true);

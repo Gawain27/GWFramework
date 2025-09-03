@@ -1,10 +1,11 @@
 package com.gwngames.core.input.mapper;
 
 import com.gwngames.core.api.input.IInputIdentifier;
+import com.gwngames.core.api.input.buffer.IInputComboManager;
 import com.gwngames.core.data.input.ComboPriority;
 import com.gwngames.core.api.input.buffer.IInputCombo;
 import com.gwngames.core.base.BaseTest;
-import com.gwngames.core.input.buffer.SmartComboManager;
+import com.gwngames.core.input.buffer.FastComboManager;
 import org.junit.jupiter.api.Assertions;
 
 import java.util.*;
@@ -27,7 +28,7 @@ public final class InputComboManagerTest extends BaseTest {
     @Override protected void runTest() {
 
         /*  build manager + combos */
-        SmartComboManager mgr = new SmartComboManager();
+        IInputComboManager mgr = new FastComboManager();
 
         IInputCombo downLeft = combo("DOWN_LEFT", 6, ComboPriority.HIGH , DOWN, LEFT);
         IInputCombo down     = combo("DOWN"     , 6, ComboPriority.NORMAL, DOWN);

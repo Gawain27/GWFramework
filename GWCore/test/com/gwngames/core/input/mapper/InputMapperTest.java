@@ -13,8 +13,8 @@ import com.gwngames.core.data.input.InputContext;
 import com.gwngames.core.event.input.ButtonEvent;
 import com.gwngames.core.input.action.BaseInputMapper;
 import com.gwngames.core.input.action.InputHistory;
-import com.gwngames.core.input.buffer.CoreInputChainManager;
-import com.gwngames.core.input.buffer.SmartComboManager;
+import com.gwngames.core.input.buffer.FastComboManager;
+import com.gwngames.core.input.buffer.FastInputChainManager;
 import com.gwngames.core.input.buffer.SmartInputBuffer;
 import org.junit.jupiter.api.Assertions;
 
@@ -50,9 +50,9 @@ public final class InputMapperTest extends BaseTest {
         setupApplication();   // LibGDX head-less scaffolding
 
         /* run-time dictionaries (no static singletons) */
-        SmartComboManager      comboMgr  = new SmartComboManager();
-        CoreInputChainManager  chainMgr  = new CoreInputChainManager();
-        SmartInputBuffer       buffer    = new SmartInputBuffer(8);
+        IInputComboManager comboMgr  = new FastComboManager();
+        IInputChainManager chainMgr  = new FastInputChainManager();
+        IInputBuffer       buffer    = new SmartInputBuffer(8);
 
         IInputCombo downLeft = combo("DOWN_LEFT", DOWN, LEFT);
         IInputCombo ab       = combo("AB",        A,    B);

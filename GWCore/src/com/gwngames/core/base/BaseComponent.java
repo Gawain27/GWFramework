@@ -1,6 +1,7 @@
 package com.gwngames.core.base;
 
 import com.gwngames.core.api.base.IBaseComp;
+import com.gwngames.core.api.base.cfg.IClassLoader;
 import com.gwngames.core.api.base.monitor.IDashboardContent;
 import com.gwngames.core.api.base.monitor.IDashboardHeader;
 import com.gwngames.core.api.base.monitor.IDashboardItem;
@@ -160,7 +161,7 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem {
     /* ================= instantiation & @Inject wiring ================= */
 
     private static <T extends IBaseComp> T createAndInject(Class<T> iface, SubComponentNames sub) {
-        Init meta = ModuleClassLoader.resolvedInit(iface);
+        Init meta = IClassLoader.resolvedInit(iface);
 
         ModuleClassLoader loader = ModuleClassLoader.getInstance();
         T obj = (sub == SubComponentNames.NONE)

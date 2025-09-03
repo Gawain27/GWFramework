@@ -1,6 +1,7 @@
 package com.gwngames.core.base.init;
 
 import com.gwngames.core.api.base.IBaseComp;
+import com.gwngames.core.api.base.cfg.IClassLoader;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseTest;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
@@ -28,7 +29,7 @@ public class InterfaceInitAnnotationComplianceTest extends BaseTest {
             if (!IBaseComp.class.isAssignableFrom(c)) continue;
 
             // Use the merged/inherited view of @Init
-            Init init = ModuleClassLoader.resolvedInit(c);
+            Init init = IClassLoader.resolvedInit(c);
 
             Assertions.assertEquals(
                 ModuleNames.INTERFACE, init.module(),

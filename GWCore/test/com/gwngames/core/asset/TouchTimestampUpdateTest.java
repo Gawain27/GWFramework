@@ -9,6 +9,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.Map;
 
 /**
@@ -62,27 +63,60 @@ public class TouchTimestampUpdateTest extends BaseTest {
         toAbs.setAccessible(true);
         final String ABS = (String) toAbs.invoke(mam, REL);
 
-        /* ---------- 1st get() creates + touches asset ---------------- */
-        mam.get(REL, Object.class);
+        // Ensure the physical file exists at ABS so get()'s existence check passes
+        Path absPath = Path.of(ABS);
+        Files.createDirectories(absPath.getParent());
+        boolean createdHere = false;
+        if (Files.notExists(absPath)) {
+            Files.write(absPath, new byte[0]); // zero-byte placeholder
+            createdHere = true;
+        }
 
-        Field lastF = ModularAssetManager.class.getDeclaredField("lastUsed");
-        lastF.setAccessible(true);
-        Map<String,Long> last = (Map<String, Long>) lastF.get(mam);
-        Long t1 = last.get(ABS);
-        Assertions.assertNotNull(t1, "first get() must record a lastUsed entry");
+        // Register discovery so ensureScheduled() accepts the path
+        Field discF = ModularAssetManager.class.getDeclaredField("discovered");
+        discF.setAccessible(true);
+        Map<String, Object> discovered = (Map<String, Object>) discF.get(mam);
+        discovered.put(ABS, new Object());
 
-        /* little pause, then fetch again ------------------------------ */
-        Thread.sleep(60);
-        mam.get(REL, Object.class);
+        try {
+            /* ---------- 1st get() creates + touches asset ---------------- */
+            mam.get(REL, Object.class);
 
-        Long t2 = last.get(ABS);
-        Assertions.assertNotNull(t2, "second get() must record a lastUsed entry");
-        Assertions.assertTrue(t2 > t1, "second get() must refresh the lastUsed timestamp");
+            Field lastF = ModularAssetManager.class.getDeclaredField("lastUsed");
+            lastF.setAccessible(true);
+            Map<String,Long> last = (Map<String, Long>) lastF.get(mam);
+            Long t1 = last.get(ABS);
+            Assertions.assertNotNull(t1, "first get() must record a lastUsed entry");
 
-        /* sanity: asset still loaded ---------------------------------- */
-        Field gdxF = ModularAssetManager.class.getDeclaredField("gdx");
-        gdxF.setAccessible(true);
-        StubAssetManager stub = (StubAssetManager) gdxF.get(mam);
-        Assertions.assertTrue(stub.isLoaded(ABS), "Asset should still be loaded");
+            /* little pause, then fetch again ------------------------------ */
+            Thread.sleep(60);
+            mam.get(REL, Object.class);
+
+            Long t2 = last.get(ABS);
+            Assertions.assertNotNull(t2, "second get() must record a lastUsed entry");
+            Assertions.assertTrue(t2 > t1, "second get() must refresh the lastUsed timestamp");
+
+            /* sanity: asset still loaded ---------------------------------- */
+            Field gdxF = ModularAssetManager.class.getDeclaredField("gdx");
+            gdxF.setAccessible(true);
+            StubAssetManager stub = (StubAssetManager) gdxF.get(mam);
+            Assertions.assertTrue(stub.isLoaded(ABS), "Asset should still be loaded");
+        } finally {
+            // clean up placeholder file
+            if (createdHere) try { Files.deleteIfExists(absPath); } catch (Exception ignored) {}
+
+            // clean up the temporary assets root directory
+            try {
+                Field rootF = ModularAssetManager.class.getDeclaredField("assetsRoot");
+                rootF.setAccessible(true);
+                Path root = (Path) rootF.get(mam);
+                if (root != null && Files.exists(root)) {
+                    try (var walk = Files.walk(root)) {
+                        walk.sorted(Comparator.reverseOrder())
+                            .forEach(p -> { try { Files.deleteIfExists(p); } catch (Exception ignored) {} });
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
     }
 }

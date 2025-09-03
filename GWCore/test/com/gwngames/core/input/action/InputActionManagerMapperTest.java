@@ -8,8 +8,8 @@ import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.BaseTest;
 import com.gwngames.core.event.input.ButtonEvent;
 import com.gwngames.core.input.BaseInputAdapter;
-import com.gwngames.core.input.buffer.CoreInputChainManager;
-import com.gwngames.core.input.buffer.SmartComboManager;
+import com.gwngames.core.input.buffer.FastComboManager;
+import com.gwngames.core.input.buffer.FastInputChainManager;
 import com.gwngames.core.input.buffer.SmartInputBuffer;
 import com.gwngames.core.input.controls.KeyInputIdentifier;
 import org.junit.jupiter.api.Assertions;
@@ -46,8 +46,8 @@ public class InputActionManagerMapperTest extends BaseTest {
 
             /* supply mandatory collaborators expected by BaseInputMapper */
             /* dummy managers (combos/chains not used in this test) */
-            this.comboMgr = new SmartComboManager();
-            this.chainMgr = new CoreInputChainManager();
+            this.comboMgr = new FastComboManager();
+            this.chainMgr = new FastInputChainManager();
             this.buffer   = new SmartInputBuffer(4);
 
             /* install a history instance to avoid NPE in super.onInput() */

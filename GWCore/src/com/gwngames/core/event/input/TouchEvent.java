@@ -3,7 +3,7 @@ package com.gwngames.core.event.input;
 import com.badlogic.gdx.math.Vector2;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.event.input.ITouchEvent;
-import com.gwngames.core.api.input.InputType;
+import com.gwngames.core.data.input.InputType;
 import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.data.ModuleNames;
 

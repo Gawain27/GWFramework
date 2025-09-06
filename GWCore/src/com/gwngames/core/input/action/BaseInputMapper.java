@@ -105,40 +105,52 @@ public abstract class BaseInputMapper extends BaseComponent
     /* ═════════════════════════════════ endFrame() ═══════════════════ */
     public void endFrame(){
 
-        /* resolve combos pressed *this* frame ----------------------- */
         if (!pressedThisFrame.isEmpty()){
+            log.debug("[f{}] pressedThisFrame={}", frame, pressedThisFrame);
             List<IInputCombo> combos = comboMgr.resolve(Set.copyOf(pressedThisFrame));
             if (!combos.isEmpty()){
                 combos.forEach(history::record);
                 buffer.nextFrame(frame, combos);
-                log.debug("[f{}] +combos {}  buf={}", frame, combos, buffer);
+                log.debug("[f{}] resolved combos={}  ⇒ buffer={}", frame, combos.stream().map(IInputCombo::name).toList(), buffer);
+            } else {
+                log.debug("[f{}] no combos resolved", frame);
             }
             pressedThisFrame.clear();
+        } else {
+            log.debug("[f{}] idle frame  ⇒ buffer={}", frame, buffer);
         }
 
-        /* if oldest combo’s TTL expired → try chain match ---------- */
-        buffer.peekOldest().ifPresent(old -> {
-            if (frame - old.frame() < old.combo().activeFrames()) return;
+        buffer.peekOldest().ifPresentOrElse(old -> {
+            int ttl = old.combo().activeFrames();
+            long age = frame - old.frame();
+            log.debug("[f{}] oldest='{}' bornAt={} ttl={} age={}",
+                frame, old.combo().name(), old.frame(), ttl, age);
 
-            log.debug("[f{}] oldest '{}' expired → evaluate chains", frame, old.combo().name());
+            if (age < ttl) {
+                log.debug("[f{}] TTL not reached → skip evaluation", frame);
+                return; // lambda return
+            }
 
-            chainMgr.match(buffer.combos(), context).ifPresent(chain -> {
+            log.debug("[f{}] TTL reached → evaluating chains (ctx={})", frame, context);
+            chainMgr.match(buffer.combos(), context).ifPresentOrElse(chain -> {
                 IInputAction act = Optional.ofNullable(chainMap.get(chain))
                     .map(m -> m.get(context))
                     .orElse(null);
 
+                log.debug("[f{}] MATCH: {}  action={}", frame, chain.name(),
+                    act == null ? "<none>" : act.getClass().getSimpleName());
+
                 if (act != null){
-                    act.execute(null);                          // TODO: queue instead of direct call
-                    log.debug("[f{}] chain {} ⇒ {}", frame, chain.name(), act.getClass().getSimpleName());
-                }else{
-                    log.debug("[f{}] chain {} matched but no action for {}", frame, chain.name(), context);
+                    act.execute(null);
                 }
                 history.record(chain);
                 buffer.discard(chain.combos().size());
-            });
-        });
+                log.debug("[f{}] after-discard buffer={}", frame, buffer);
 
-        /* every-frame recording for “continuous” identifiers ------- */
+            }, () -> log.debug("[f{}] no chain matched", frame));
+
+        }, () -> log.debug("[f{}] buffer empty → nothing to evaluate", frame));
+
         for (IInputIdentifier id : held){
             if (id.isRecordWhilePressed()){
                 history.record(id);
@@ -147,4 +159,5 @@ public abstract class BaseInputMapper extends BaseComponent
 
         frame++;
     }
+
 }

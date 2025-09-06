@@ -22,13 +22,12 @@ public final class CpuContent extends BaseComponent implements IDashboardContent
     private final Deque<Double> processSeries = new ArrayDeque<>(WINDOW);
     private final Deque<Double> systemSeries  = new ArrayDeque<>(WINDOW);
 
-    private final ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor(r -> {
-        Thread t = new Thread(r, "Dash-CPU");
-        t.setDaemon(true);
-        return t;
-    });
-
     public CpuContent() {
+        ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "Dash-CPU");
+            t.setDaemon(true);
+            return t;
+        });
         exec.scheduleAtFixedRate(() -> {
             try { sample(); } catch (Throwable ignored) { /* keep sampling */ }
         }, 0, 1, TimeUnit.SECONDS);
@@ -40,9 +39,9 @@ public final class CpuContent extends BaseComponent implements IDashboardContent
     public Object model() {
         Map<String, Object> kv = new LinkedHashMap<>();
         double proc = clampPct(OS.getProcessCpuLoad() * 100.0);
-        double sys  = clampPct(OS.getSystemCpuLoad()   * 100.0);
+        double sys  = clampPct(OS.getCpuLoad() * 100.0);
         int cores   = Runtime.getRuntime().availableProcessors();
-        double load = Optional.ofNullable(ManagementFactory.getOperatingSystemMXBean().getSystemLoadAverage())
+        double load = Optional.of(ManagementFactory.getOperatingSystemMXBean().getSystemLoadAverage())
             .orElse(-1.0);
 
         kv.put("Process CPU", fmtPct(proc));
@@ -69,7 +68,7 @@ public final class CpuContent extends BaseComponent implements IDashboardContent
 
     private void sample() {
         double proc = clampPct(OS.getProcessCpuLoad() * 100.0);
-        double sys  = clampPct(OS.getSystemCpuLoad()   * 100.0);
+        double sys  = clampPct(OS.getCpuLoad() * 100.0);
         synchronized (this) {
             push(processSeries, proc);
             push(systemSeries,  sys);

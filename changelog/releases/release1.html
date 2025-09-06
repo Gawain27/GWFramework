@@ -1,4 +1,12 @@
 <!--#SUMMARY-->
+<!-- ---------- 0.0.13L -------------------------------------------------- -->
+<tr>
+    <td>
+        <span class="tag" style="color:var(--v6)">0.0.13&nbsp;L</span>
+    </td> <td>6&nbsp;September&nbsp;2025</td>
+    <td> Input&nbsp;Mapper fixes, combo resolution overhaul, Gradle run-task isolation, and Translation&nbsp;Editor improvements (popup editing, CSV stability).
+    </td>
+</tr>
 <!-- ---------- 0.0.12K -------------------------------------------------- -->
 <tr>
     <td>
@@ -8,6 +16,56 @@
     </td>
 </tr>
 <!--#DETAILS-->
+<!-- ---------- 0.0.13L -------------------------------------------------- -->
+<details>
+    <summary style="color:var(--v6)">
+        <span class="tag" style="color:var(--v6)">0.0.13 L</span>
+        <em style="flex:1">“Combos, Chains &amp; Clean Run” – released&nbsp;6&nbsp;September&nbsp;2025</em>
+    </summary>
+    <div class="entry-body"><h3>🎮 Input System: Combo &amp; Chain Reliability</h3>
+        <ul>
+            <li><strong>FastComboManager</strong> now resolves multiple non-overlapping combos per frame:
+                higher <code>priority()</code> wins, then larger combos, with overlaps strictly prevented.</li>
+            <li><strong>InputMapperTest</strong> hardened: only uses keyboard identifiers to avoid null LibGDX controller stubs;
+                deterministic chain firing verified (<code>DOWN+LEFT</code> → <code>AB</code> → chain action).</li>
+            <li><strong>InputComboManagerTest</strong> clarified expectations and confirmed correct ordering
+                (down-left beats singles; AB beats A/B alone).</li>
+            <li>TTL expiry behavior clarified in buffer tests: combos only fire chains once their lifetime is satisfied.</li>
+        </ul>
+
+        <h3>🛠️ Gradle &amp; Run Task</h3>
+        <ul>
+            <li>Custom root <code>run</code> task reimplemented as <code>Exec</code>:
+                launches generated <code>run.sh</code>/<code>run.bat</code> directly from <code>/bin</code> with correct working dir.</li>
+            <li>Ensures the game process blocks Gradle until exit; exit code is treated as normal shutdown.</li>
+            <li>Disabled unintended cross-project <code>run</code> task execution (Translation Editor no longer autostarts when running the game).</li>
+            <li>Optionally exposed as <code>runGame</code> for disambiguation.</li>
+        </ul>
+
+        <h3>📝 Translation Editor Quality of Life</h3>
+        <ul>
+            <li>CSV generator fixed: consistent column count and alignment (no trailing commas or broken rows).</li>
+            <li>Editing UX improved: clicking a cell now opens a popup dialog with a large textarea, OK/Cancel buttons,
+                and outside-click dismissal — avoids cramped inline editing.</li>
+        </ul>
+
+        <h3>🐛 Misc Fixes</h3>
+        <ul>
+            <li>Resolved <code>NoClassDefFoundError</code> on <code>IBaseComp</code> by adjusting Gradle
+                run scripts to use generated classpath jars.</li>
+            <li>Prevented <code>NullPointerException</code> in identifier selection by filtering for keyboard-only ids.</li>
+        </ul>
+
+        <h3>✅ Outcome</h3>
+        <ul>
+            <li>Combos and chains behave deterministically across frames.</li>
+            <li>Game can be run standalone from Gradle without dragging in tooling tasks.</li>
+            <li>Translation Editor provides a stable CSV and a much more ergonomic editing experience.</li>
+        </ul>
+
+    </div>
+</details>
+
 <!-- ---------- 0.0.12K -------------------------------------------------- -->
 <details>
     <summary style="color:var(--v5)">

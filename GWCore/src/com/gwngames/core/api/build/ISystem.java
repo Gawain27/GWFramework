@@ -8,7 +8,6 @@ import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.LogFiles;
 import com.gwngames.core.data.ModuleNames;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -29,13 +28,19 @@ public interface ISystem extends IBaseComp {
         return checks;
     }
 
+    void adaptSystem();
 
     void performChecks();
 
     void loadContext();
 
     default void setup(){
+        log.info("Loading main context...");
         loadContext();
+        log.info("Performing startup checks...");
         performChecks();
+
+        log.info("Adapting System...");
+        adaptSystem();
     }
 }

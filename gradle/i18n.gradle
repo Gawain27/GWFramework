@@ -26,7 +26,6 @@ allprojects {
  * I18N  – scan enums annotated with @Translations and maintain CSV
  * ========================================================================= */
 
-
 import jdk.internal.org.objectweb.asm.AnnotationVisitor
 import jdk.internal.org.objectweb.asm.ClassReader
 import jdk.internal.org.objectweb.asm.ClassVisitor
@@ -111,6 +110,15 @@ void ensureAlphabeticOrder(Class<?> enumCls, Project prj) {
 subprojects { Project subproj ->
   if (!includedProjectNames.contains(subproj.name)) return
 
+  // Helper: normalize supportedLocales (can be String "en_US,de_DE" or a Collection)
+  def normalizeLocales = { obj ->
+    if (obj instanceof Collection) {
+      return obj.collect { it.toString().trim() }.findAll { it }
+    }
+    def s = obj == null ? '' : obj.toString().trim()
+    return s ? s.split(/\s*,\s*/).collect { it.trim() } : []
+  }
+
   tasks.register('updateTranslationsCsv') {
     group       = 'i18n'
     description = 'Scan enums annotated with @Translations and update messages.csv'
@@ -118,6 +126,11 @@ subprojects { Project subproj ->
     mustRunAfter subproj.tasks.named('compileJava')
 
     doLast {
+      // Always use a normalized List<String> for supported locales
+      List<String> SUP = normalizeLocales(rootProject.hasProperty('supportedLocales')
+        ? rootProject.property('supportedLocales')
+        : supportedLocales)
+
       println "🔍  ${subproj.path}: scanning for @Translations…"
 
       // (1) Collect all enum‐class files annotated with @Translations
@@ -152,12 +165,12 @@ subprojects { Project subproj ->
 
         // Gather key/defaultCaption from each enum constant
         cls.enumConstants.each { Object constant ->
-          Method getKeyMeth        = constant.class.getMethod('getKey')
-          Method getDefaultMeth    = constant.class.getMethod('getDefaultCaption')
-          String key           = getKeyMeth.invoke(constant) as String
-          String defaultCap    = getDefaultMeth.invoke(constant) as String
-          String where         = "${subproj.path}:${cls.simpleName}"
-          String prev          = rootProject.translationKeysGlobal.putIfAbsent(key, where)
+          Method getKeyMeth     = constant.class.getMethod('getKey')
+          Method getDefaultMeth = constant.class.getMethod('getDefaultCaption')
+          String key        = getKeyMeth.invoke(constant) as String
+          String defaultCap = getDefaultMeth.invoke(constant) as String
+          String where      = "${subproj.path}:${cls.simpleName}"
+          String prev       = rootProject.translationKeysGlobal.putIfAbsent(key, where)
           if (prev != null) {
             throw new GradleException(
               "Duplicate translation key '$key': declared in $where, already in $prev"
@@ -172,43 +185,47 @@ subprojects { Project subproj ->
       csvFile.parentFile.mkdirs()
 
       // Read or initialize the header + existing rows
-      List<String> header = ['key'] + supportedLocales
+      List<String> header = ['key'] + SUP
       Map<String, List<String>> rows = [:]
 
       if (csvFile.exists()) {
         csvFile.readLines('UTF-8').withIndex().each { String line, int idx ->
-          List<String> cols = line.split(',', -1) as List<String>
+          // split preserving empty columns, then normalize
+          List<String> cols = (line.split(',', -1) as List<String>).collect { it.trim() }
           if (idx == 0) {
-            // ───────────────────────────────────────────────────────────
-            // NEW: only keep “key” plus any pre‐existing columns that are in supportedLocales
-            List<String> existingLocales = (cols - 'key')
-              .findAll { supportedLocales.contains(it) }
-            header = ['key'] + (existingLocales + supportedLocales).unique()
-            // ───────────────────────────────────────────────────────────
+            // strip BOM on first column just in case
+            if (!cols.isEmpty()) cols[0] = cols[0].replace('\uFEFF', '').trim()
+
+            // keep only supported locales already present in header
+            List<String> existingLocales = (cols - 'key').findAll { SUP.contains(it) }
+
+            // merge with SUP, FLATTEN, TRIM, UNIQUE — prevents duplication & char-splitting
+            List<String> merged = (existingLocales + SUP)
+              .flatten()
+              .collect { it.trim() }
+              .unique()
+
+            header = ['key'] + merged
           } else {
+            // pad/truncate to current header length
             List<String> padded = (cols + [''] * header.size()).take(header.size())
             rows[cols[0]] = padded
           }
         }
       }
 
-      // Figure out which column index corresponds to “en_US” (the first supported locale)
-      int defaultCol = header.indexOf(supportedLocales[0])
-      if (defaultCol < 0) {
-        // In case “en_US” isn’t literally in the header, fall back to column 1
-        defaultCol = 1
-      }
+      // Column for default locale (first supported)
+      int defaultCol = header.indexOf(SUP ? SUP[0] : 'en_US')
+      if (defaultCol < 0) defaultCol = 1  // fallback if header lacked it
 
-      // (4) Populate or create rows; fill in “en_US” if blank
+      // (4) Populate or create rows; fill default locale if blank
       moduleKeys.each { String key, String defaultCap ->
         if (rows.containsKey(key)) {
-          // If an “en_US” cell is empty, fill it
           List<String> existingRow = rows[key]
-          if (existingRow[defaultCol]?.trim() == '') {
+          if ((existingRow[defaultCol] ?: '').trim() == '') {
             existingRow[defaultCol] = defaultCap
           }
         } else {
-          // Brand‐new key: create a blank row, put key + defaultCap into “en_US”
           List<String> newRow = [''] * header.size()
           newRow[0] = key
           newRow[defaultCol] = defaultCap
@@ -220,10 +237,14 @@ subprojects { Project subproj ->
       csvFile.withWriter('UTF-8') { writer ->
         writer.println header.join(',')
         rows.keySet().sort().each { String k ->
-          writer.println rows[k].join(',')
+          List<String> row = rows[k]
+          if (row.size() != header.size()) {
+            row = (row + [''] * header.size()).take(header.size())
+          }
+          writer.println row.join(',')
         }
       }
-      println "✅  ${csvFile} updated → ${moduleKeys.size()} keys scanned; ‘en_US’ cells populated."
+      println "✅  ${csvFile} updated → ${moduleKeys.size()} keys scanned; default-locale cells populated."
     }
   }
 

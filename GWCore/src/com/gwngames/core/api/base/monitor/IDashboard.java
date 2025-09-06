@@ -17,4 +17,6 @@ public non-sealed interface IDashboard extends IDashboardNode {
     void maybeStart();
 
     void maybeStart(int port);
+
+    void shutdown();
 }

@@ -14,61 +14,68 @@ import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.LogFiles;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.PlatformNames;
-import com.gwngames.core.data.cfg.BuildParameters;
 import com.gwngames.starter.StartupHelper;
 import com.gwngames.starter.build.ILauncher;
 import com.gwngames.starter.build.ILauncherMaster;
 
 @Init(module = ModuleNames.STARTER)
 public class LauncherMaster extends BaseComponent implements ILauncherMaster {
+
     private static final Application.ApplicationType platformDetected = ILauncherMaster.detectPlatform();
+
     @Inject
-    IContext context;
+    private IContext context;
     @Inject
-    IConfig config;
+    private IConfig config;
     @Inject
-    ISystem system;
+    private ISystem system;
     @Inject
-    IDashboard dashboard;
+    private IDashboard dashboard;
 
     private static final FileLogger log = FileLogger.get(LogFiles.SYSTEM);
     private static final ModuleClassLoader loader = ModuleClassLoader.getInstance();
 
     public void start(String[] args) {
         log.info("Starting up GWFrameWork");
-        if (StartupHelper.startNewJvmIfRequired()) return; // This handles macOS support and helps on Windows.
+        if (StartupHelper.startNewJvmIfRequired()) return; // macOS/Windows helper
 
-        log.debug("Loading main context...");
-        system.loadContext();
-        log.info("Performing startup checks...");
-        system.performChecks();
+        try {
+            system.setup();
 
-        log.info("Resolving new launcher...");
-        ILauncher launcher = getNewLauncher();
-        if (launcher == null)
-            throw new IllegalStateException("Null launcher configured");
-        context.put(IContext._LAUNCHER, launcher);
+            log.info("Resolving new launcher...");
+            ILauncher launcher = getNewLauncher();
+            if (launcher == null) throw new IllegalStateException("Null launcher configured");
 
-        dashboard.maybeStart();
+            // Make director visible to everyone *before* launch (the launch call blocks)
+            context.put(IContext._DIRECTOR, this);
+            context.put(IContext._LAUNCHER, launcher);
 
-        log.info("Preparing launcher: {}", launcher.getVersion());
-        context.put(IContext._DIRECTOR, this);
+            // Start dashboard (disabled automatically in PROD)
+            dashboard.maybeStart();
 
-        //FIXME this actually freezes until application dies, do async
-        Application game = launcher.createApplication();
-        context.put(IContext.APPLICATION, game);
-        log.info("Created application: {}", game.getVersion());
+            log.info("Launching application…");
+            // NOTE: On desktop this call blocks until the app exits.
+            launcher.createApplication();
 
-        // todo logic for queue, listeners, udp etc.
+            // When we get here, the app has terminated → stop the dashboard.
+            log.info("Application exited; shutting down dashboard…");
+            dashboard.shutdown();
+
+        } catch (Throwable t) {
+            // Ensure we don’t leak the dashboard if the launch fails.
+            try { dashboard.shutdown(); } catch (Throwable ignored) {}
+            throw t instanceof RuntimeException re ? re : new RuntimeException(t);
+        }
     }
 
-    public static ILauncher getNewLauncher(){
+    public static ILauncher getNewLauncher() {
         return switch (platformDetected) {
             case Android -> loader.tryCreate(ComponentNames.LAUNCHER, PlatformNames.ANDROID);
-            case iOS -> loader.tryCreate(ComponentNames.LAUNCHER, PlatformNames.IOS);
+            case iOS     -> loader.tryCreate(ComponentNames.LAUNCHER, PlatformNames.IOS);
             case Desktop -> loader.tryCreate(ComponentNames.LAUNCHER, PlatformNames.DESKTOP);
-            case WebGL -> loader.tryCreate(ComponentNames.LAUNCHER, PlatformNames.WEB);
-            default -> throw new IllegalStateException("Unknown platform detected");
+            case WebGL   -> loader.tryCreate(ComponentNames.LAUNCHER, PlatformNames.WEB);
+            default      -> throw new IllegalStateException("Unknown platform detected");
         };
     }
 }
+

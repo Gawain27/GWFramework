@@ -30,8 +30,10 @@ public class ControllerButtonInputIdentifier extends BaseInputIdentifier impleme
 
     @Override
     public String getDeviceType() {
-        return controller.getName();
+        // fall back gracefully when controller is not wired yet
+        return "controller" + (controller != null ? ":" + controller.getName() : "");
     }
+
 
     @Override
     public String getComponentType() {

@@ -11,6 +11,20 @@ apply from: "$rootDir/gradle/dependency-graph.gradle"
 apply from: "$rootDir/gradle/distribution.gradle"
 apply from: "$rootDir/gradle/misc.gradle"
 
+// If someone runs `gradlew run` at the root, only execute the root :run task.
+// Prevents :tools:translation-editor:run (and any other :run) from also firing.
+gradle.taskGraph.whenReady {
+  // Was a "run" selector used from the root?
+  if (gradle.startParameter.taskNames.any { it == 'run' || it.endsWith(':run') }) {
+    // Disable every run task except the root one
+    allprojects {
+      tasks.matching { it.name == 'run' && it.path != ':run' }.configureEach {
+        enabled = false
+      }
+    }
+  }
+}
+
 // ------------------------------------------------------------------
 //  guarantee `includedProjects` exists
 // ------------------------------------------------------------------
@@ -35,20 +49,45 @@ tasks.register('build') {
   dependsOn 'generateRunScripts', 'zipDistribution', 'tarDistribution'
 }
 
-tasks.register('run') {
+tasks.register('run', Exec) {
   dependsOn classTasks, 'generateRunScripts'
   mustRunAfter 'zipDistribution', 'tarDistribution'
-  doLast {
+
+  doFirst {
     File binDir   = file("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin")
     File launcher = org.gradle.internal.os.OperatingSystem.current().isWindows()
       ? new File(binDir, 'run.bat')
       : new File(binDir, 'run.sh')
 
-    println "▶️  Launching via $launcher"
-    exec {
-      commandLine ((launcher.name.endsWith('.bat')
-        ? ['cmd', '/c', launcher]
-        : ['bash', launcher]) as List<String>)
+    if (!launcher.exists()) {
+      throw new GradleException("Launcher script not found: $launcher")
+    }
+
+    // IMPORTANT: run from the bin directory so relative classpath in the script works
+    workingDir binDir
+
+    // On *nix make sure it’s executable
+    if (!org.gradle.internal.os.OperatingSystem.current().isWindows()) {
+      launcher.setExecutable(true)
+    }
+
+    // Build the command
+    commandLine launcher.name.endsWith('.bat')
+      ? ['cmd', '/c', launcher.absolutePath]
+      : ['bash', launcher.absolutePath]
+  }
+
+  // Don’t fail the task if the game exits with non-zero (window closed, etc.)
+  ignoreExitValue = true
+
+  // (Optional) stream child output into Gradle’s console
+  standardOutput = System.out
+  errorOutput    = System.err
+
+  doLast {
+    def code = executionResult.get().exitValue
+    if (code != 0) {
+      logger.lifecycle("ℹ️  Game process exited with code ${code}; treating as normal shutdown.")
     }
   }
 }

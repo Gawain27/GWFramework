@@ -13,7 +13,8 @@ public final class AfterEventCondition extends StrictCondition {
     private final IEvent prerequisite;
     public AfterEventCondition(IEvent prerequisite) { this.prerequisite = prerequisite; }
 
-    @Override public ConditionResult evaluate(IEvent e, MasterEventQueue q) {
+    @Override
+    public ConditionResult evaluate(IEvent e, MasterEventQueue q) {
         return q.hasExecuted(prerequisite) ? TRUE : WAIT;
     }
 }

@@ -6,7 +6,7 @@ import com.gwngames.starter.launcher.LauncherMaster;
 public class Starter {
     public static void main(String[] args) {
         ILauncherMaster master = LauncherMaster.getInstance(ILauncherMaster.class);
-        //TODO: parameterize before passing to the launcher master (custom handler)
+        //TODO: parameterize args before passing to the launcher master (custom handler)
         master.start(args);
     }
 }

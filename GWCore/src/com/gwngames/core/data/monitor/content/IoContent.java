@@ -31,13 +31,12 @@ public final class IoContent extends BaseComponent implements IDashboardContent 
     private volatile long lastWrite = 0;
     private volatile long lastNanos = System.nanoTime();
 
-    private final ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor(r -> {
-        Thread t = new Thread(r, "Dash-IO");
-        t.setDaemon(true);
-        return t;
-    });
-
     public IoContent() {
+        ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "Dash-IO");
+            t.setDaemon(true);
+            return t;
+        });
         exec.scheduleAtFixedRate(() -> {
             try { sample(); } catch (Throwable ignored) { }
         }, 0, 1, TimeUnit.SECONDS);
@@ -112,8 +111,6 @@ public final class IoContent extends BaseComponent implements IDashboardContent 
         try {
             Object v = fs.getAttribute(name);
             return (v instanceof Long) ? (Long) v : 0L;
-        } catch (UnsupportedOperationException ignored) {
-            return 0L;
         } catch (Exception ignored) {
             return 0L;
         }

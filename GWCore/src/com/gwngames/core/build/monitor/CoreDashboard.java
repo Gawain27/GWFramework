@@ -96,8 +96,13 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
         ensureServerOn(port);
     }
 
-    public synchronized void shutdown() { stopServer(); }
-    @Override public void close() { shutdown(); }
+    @Override
+    public synchronized void shutdown()
+    { stopServer(); }
+
+    @Override
+    public void close()
+    { shutdown(); }
 
     private void ensureServerOn(int port) {
         Javalin current = serverRef.get();

@@ -7,11 +7,11 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class FileLogger {
     private final FileApplicationLogger logger = new FileApplicationLogger();
-    private static final int ERROR_LEVEL = 0;
-    private static final int INFO_LEVEL  = 1;
-    private static final int DEBUG_LEVEL = 2;
+    public static final int ERROR_LEVEL = 0;
+    public static final int INFO_LEVEL  = 1;
+    public static final int DEBUG_LEVEL = 2;
 
-    private static int enabled_level = DEBUG_LEVEL;
+    public static int enabled_level = DEBUG_LEVEL;
 
     /** Toggle in case you ever want to disable dashboard tapping at runtime. */
     private static volatile boolean tapDashboard = true;

@@ -11,4 +11,6 @@ public final class BuildParameters {
         ParamKey.of("prod.env", Boolean.class);
     public static final IParam<Integer> DASHBOARD_PORT =
         ParamKey.of("dashboard.port", Integer.class);
+    public static final IParam<Integer> LOG_LEVEL =
+        ParamKey.of("log.level", Integer.class);
 }

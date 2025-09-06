@@ -59,33 +59,13 @@ public final class InputComboManagerTest extends BaseTest {
 
     /** Lightweight identifier just for this test */
     private record DummyId(String name) implements IInputIdentifier {
+        @Override public String getDeviceType()    { return "keyboard"; }
+        @Override public String getComponentType() { return "key"; }
+        @Override public String getDisplayName()   { return name; }
+        @Override public boolean isRecordWhilePressed() { return true; }
+        @Override public int getMultId() { return 0; }
         @Override public String toString() { return name; }
-        @Override public int hashCode()    { return name.hashCode(); }
-
-        @Override
-        public String getDeviceType() {
-            return "";
-        }
-
-        @Override
-        public String getComponentType() {
-            return "";
-        }
-
-        @Override
-        public String getDisplayName() {
-            return "";
-        }
-
-        @Override
-        public boolean isRecordWhilePressed() {
-            return true;
-        }
-
-        @Override
-        public int getMultId() {
-            return 0;
-        }
+        @Override public int hashCode() { return name.hashCode(); }
     }
 
     /** Factory for simple immutable combos used in the test */

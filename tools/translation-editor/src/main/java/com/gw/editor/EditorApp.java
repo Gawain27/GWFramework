@@ -6,7 +6,6 @@ import javafx.collections.*;
 import javafx.collections.transformation.FilteredList;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.BorderPane;
 import javafx.stage.Stage;
 
@@ -18,7 +17,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.time.LocalTime;
 import java.util.*;
-import java.util.Base64;
 import java.util.stream.*;
 
 public class EditorApp extends Application {
@@ -51,10 +49,10 @@ public class EditorApp extends Application {
 
     /* ───── UI state ───── */
     private final TextField        filterField  = new TextField();
-    private final ComboBox<String> moduleBox   = new ComboBox<>();
-    private final ComboBox<String> localeBox   = new ComboBox<>();
-    private final Button            translateBtn = new Button("🌍 Translate");
-    private final Button            saveBtn      = new Button("💾 Save");
+    private final ComboBox<String> moduleBox    = new ComboBox<>();
+    private final ComboBox<String> localeBox    = new ComboBox<>();
+    private final Button           translateBtn = new Button("🌍 Translate");
+    private final Button           saveBtn      = new Button("💾 Save");
     private final TableView<ObservableList<String>> table = new TableView<>();
 
     private List<String> header = List.of();
@@ -65,7 +63,10 @@ public class EditorApp extends Application {
     private final ObservableList<ObservableList<String>> rowsRaw =
         FXCollections.observableArrayList();
     private final FilteredList<ObservableList<String>> rowsView =
-        new FilteredList<>(rowsRaw, r -> true);
+        new FilteredList<>(rowsRaw, _ -> true);
+
+    // primary stage (for centering/owning popups)
+    private Stage primaryStage;
 
     /* ───── start ───── */
     @Override public void start(Stage st){
@@ -73,7 +74,7 @@ public class EditorApp extends Application {
 
         moduleBox.setPromptText("Module");
         moduleBox.getItems().setAll(moduleCsv.keySet());
-        moduleBox.valueProperty().addListener((o,ov,nv)->{
+        moduleBox.valueProperty().addListener((_, _, nv)->{
             log(Lv.INFO,"Module changed → "+nv);
             loadCsv(nv);
         });
@@ -82,15 +83,15 @@ public class EditorApp extends Application {
         filterField.setPrefWidth(180);
 
         localeBox.setPromptText("Locale");
-        localeBox.valueProperty().addListener((o,ov,nv)->{
+        localeBox.valueProperty().addListener((_, _, nv)->{
             log(Lv.INFO,"Locale changed → "+nv);
             translateBtn.setDisable(nv==null);
         });
         translateBtn.setDisable(true);
-        translateBtn.setOnAction(e -> autoTranslate());
+        translateBtn.setOnAction(_ -> autoTranslate());
 
         saveBtn.setDisable(true);
-        saveBtn.setOnAction(e -> saveCsv());
+        saveBtn.setOnAction(_ -> saveCsv());
 
         var bar = new ToolBar(
             moduleBox, localeBox, translateBtn,
@@ -98,7 +99,7 @@ public class EditorApp extends Application {
             new Separator(), filterField
         );
 
-        filterField.textProperty().addListener((obs, oldText, newText) -> {
+        filterField.textProperty().addListener((_, _, newText) -> {
             String needle = newText.toLowerCase().trim();
             rowsView.setPredicate(row -> needle.isEmpty() ||
                 row.stream().anyMatch(cell -> cell.toLowerCase().contains(needle)));
@@ -112,78 +113,94 @@ public class EditorApp extends Application {
         st.setScene(scene);
         st.setTitle("GWFramework Translation Editor");
         st.show();
+        this.primaryStage = st;            // ← store owner for popups
         log(Lv.INFO,"Editor ready");
     }
 
     /* ───── CSS ───── */
     private static String darculaCss(){
         String css = """
-            .root{
-              -fx-font-family:"Segoe UI","Helvetica Neue",sans-serif;
-              -fx-font-size:13;
-              -fx-background-color:#2b2b2b;
-            }
-            /* toolbar */
-            .tool-bar{
-              -fx-background-color:linear-gradient(#3d3f43 0%,#323438 100%);
-              -fx-background-insets:0; -fx-padding:6;
-            }
-            .tool-bar .combo-box, .tool-bar .button{
-              -fx-background-color:#4b4d51;
-              -fx-text-fill:white; -fx-background-radius:18;
-              -fx-cursor:hand; -fx-padding:4 14 4 14;
-            }
-            .tool-bar .combo-box:hover, .tool-bar .button:hover{
-              -fx-background-color:#58606a;
-            }
-            /* make the popup list cells white text too */
-            .combo-box .list-cell { -fx-text-fill:white; }
-            /* combo-box popup palette */
-            .combo-box-popup .list-view{
-              -fx-background-color:#000000;
-            }
-            .combo-box-popup .list-cell{
-              -fx-background-color:#000000;
-              -fx-text-fill:white;
-            }
-            .combo-box-popup .list-cell:hover{
-              -fx-background-color:#3d3f43;
-            }
+        .root{
+          -fx-font-family:"Segoe UI","Helvetica Neue",sans-serif;
+          -fx-font-size:13;
+          -fx-background-color:#2b2b2b;
+        }
+        /* toolbar */
+        .tool-bar{
+          -fx-background-color:linear-gradient(#3d3f43 0%,#323438 100%);
+          -fx-background-insets:0; -fx-padding:6;
+        }
+        .tool-bar .combo-box, .tool-bar .button{
+          -fx-background-color:#4b4d51;
+          -fx-text-fill:white; -fx-background-radius:18;
+          -fx-cursor:hand; -fx-padding:4 14 4 14;
+        }
+        .tool-bar .combo-box:hover, .tool-bar .button:hover{
+          -fx-background-color:#58606a;
+        }
+        .combo-box .list-cell { -fx-text-fill:white; }
+        .combo-box-popup .list-view{ -fx-background-color:#000000; }
+        .combo-box-popup .list-cell{ -fx-background-color:#000000; -fx-text-fill:white; }
+        .combo-box-popup .list-cell:hover{ -fx-background-color:#3d3f43; }
 
-            /* table */
-            .table-view{
-              -fx-background-color:#3c3f41;
-              -fx-background-radius:8; -fx-padding:10;
-              -fx-table-cell-border-color:transparent;
-            }
-            .table-view .column-header-background{
-              -fx-background-color:linear-gradient(#4e5054 0%,#43464a 100%);
-            }
-            .table-view .column-header .label{
-              -fx-text-fill:white; -fx-font-weight:bold;
-            }
-            .table-view .column-header, .table-view .filler{ -fx-size:28; }
-            .table-row-cell:odd   { -fx-background-color:#323437; }
-            .table-row-cell:even  { -fx-background-color:#2b2b2b; }
-            .table-row-cell:hover { -fx-background-color:#45494c; }
-            .table-row-cell:selected{ -fx-background-color:#537bd7; }
-            .table-view .cell{ -fx-text-fill:white; -fx-padding:5 9 5 9; }
-            /* inline editor */
-            .text-field{
-              -fx-background-color:transparent; -fx-border-color:transparent;
-              -fx-text-fill:white;
-            }
-            .text-field:focused{
-              -fx-background-color:transparent;
-              -fx-border-color:#ff9e44; -fx-border-width:0 0 2 0;
-            }
-            /* scroll */
-            .scroll-bar:vertical .thumb, .scroll-bar:horizontal .thumb{
-              -fx-background-color:#62676f; -fx-background-radius:4;
-            }
-            """;
+        /* table */
+        .table-view{
+          -fx-background-color:#3c3f41;
+          -fx-background-radius:8; -fx-padding:10;
+          -fx-table-cell-border-color:transparent;
+        }
+        .table-view .column-header-background{
+          -fx-background-color:linear-gradient(#4e5054 0%,#43464a 100%);
+        }
+        .table-view .column-header .label{ -fx-text-fill:white; -fx-font-weight:bold; }
+        .table-view .column-header, .table-view .filler{ -fx-size:28; }
+        .table-row-cell:odd   { -fx-background-color:#323437; }
+        .table-row-cell:even  { -fx-background-color:#2b2b2b; }
+        .table-row-cell:hover { -fx-background-color:#45494c; }
+        .table-row-cell:selected{ -fx-background-color:#537bd7; }
+        .table-view .cell{ -fx-text-fill:white; -fx-padding:5 9 5 9; }
+
+        /* inline editor */
+        .text-field{
+          -fx-background-color:transparent; -fx-border-color:transparent;
+          -fx-text-fill:white;
+        }
+        .text-field:focused{
+          -fx-background-color:transparent;
+          -fx-border-color:#ff9e44; -fx-border-width:0 0 2 0;
+        }
+
+        /* ==== scrollbars (TableView uses VirtualFlow) ===================== */
+        .table-view .virtual-flow .scroll-bar:vertical,
+        .table-view .virtual-flow .scroll-bar:horizontal{
+          -fx-opacity: 1.0;
+          -fx-background-color: #2b2b2b;
+        }
+        .table-view .virtual-flow .scroll-bar:vertical { -fx-pref-width: 14; }
+        .table-view .virtual-flow .scroll-bar:horizontal { -fx-pref-height: 14; }
+
+        .table-view .virtual-flow .scroll-bar .track{
+          -fx-background-color: #2f3235;
+          -fx-background-radius: 4;
+        }
+        .table-view .virtual-flow .scroll-bar .thumb{
+          -fx-background-color:#62676f;
+          -fx-background-insets: 0;
+          -fx-background-radius:4;
+        }
+        .table-view .virtual-flow .scroll-bar .thumb:hover{
+          -fx-background-color:#77808a;
+        }
+
+        .table-view .virtual-flow .scroll-bar .increment-button,
+        .table-view .virtual-flow .scroll-bar .decrement-button{
+          -fx-padding: 0;
+          -fx-opacity: 0;
+          -fx-shape: "";
+        }
+        """;
         return "data:text/css;base64,"+
-            Base64.getEncoder().encodeToString(css.getBytes(StandardCharsets.UTF_8));
+            java.util.Base64.getEncoder().encodeToString(css.getBytes(StandardCharsets.UTF_8));
     }
 
     /* ───── scan modules & locales ───── */
@@ -224,6 +241,7 @@ public class EditorApp extends Application {
         } else buildColumns(header);
 
         table.setItems(rowsView);            // <— bind FilteredList
+        table.requestFocus();
 
         saveBtn.setDisable(false);
         snapshot = rowsRaw.stream().map(ArrayList::new).collect(Collectors.toList());
@@ -240,6 +258,7 @@ public class EditorApp extends Application {
         header.forEach(h->{if(!m.contains(h))m.add(h);});
         header=m; return m;
     }
+
     private void buildColumns(List<String> hdr){
         table.getColumns().clear(); header=hdr;
         for(int c=0;c<header.size();c++){
@@ -248,18 +267,82 @@ public class EditorApp extends Application {
             col.setPrefWidth(C().COL_W);
             col.setCellValueFactory(d->new SimpleStringProperty(d.getValue().get(idx)));
             col.setStyle("-fx-alignment:CENTER-LEFT;");
+
             if(c>0){
-                col.setCellFactory(TextFieldTableCell.forTableColumn());
-                col.setOnEditCommit(ev-> ev.getRowValue().set(idx,ev.getNewValue()));
+                // Popup editor cell — double-click to edit
+                col.setCellFactory(_ -> new TableCell<>() {
+                    {
+                        setOnMouseClicked(ev -> {
+                            if (ev.getClickCount() == 2 && !isEmpty()) {
+                                int rowIndex = getIndex();
+                                ObservableList<String> row = getTableView().getItems().get(rowIndex);
+                                String current = row.get(idx);
+                                showCellEditor("Edit " + header.get(idx), current, newText -> {
+                                    row.set(idx, newText);
+                                    getTableView().refresh();
+                                });
+                            }
+                        });
+                    }
+                    @Override protected void updateItem(String item, boolean empty) {
+                        super.updateItem(item, empty);
+                        setText(empty ? null : item);
+                        setGraphic(null);
+                    }
+                });
             }
+
             table.getColumns().add(col);
         }
-        table.setEditable(true);
+        table.setEditable(false); // we use popup editor instead of inline editing
     }
+
     private ObservableList<String> pad(List<String> cols){
         int miss=header.size()-cols.size();
         return FXCollections.observableArrayList(
             Stream.concat(cols.stream(), Stream.generate(()->"").limit(miss)).toList());
+    }
+
+    /* ───── popup editor ───── */
+    private void showCellEditor(String title, String initialText, java.util.function.Consumer<String> onOk){
+        Stage dlg = new Stage();
+        dlg.setTitle(title);
+        if (primaryStage != null) dlg.initOwner(primaryStage);
+        dlg.setResizable(true);
+
+        TextArea area = new TextArea(initialText == null ? "" : initialText);
+        area.setWrapText(true);
+        area.setPrefColumnCount(60);
+        area.setPrefRowCount(12);
+
+        Button okBtn = new Button("OK");
+        Button cancelBtn = new Button("Cancel");
+        okBtn.setDefaultButton(true);
+        cancelBtn.setCancelButton(true);
+
+        okBtn.setOnAction(_ -> { onOk.accept(area.getText()); dlg.close(); });
+        cancelBtn.setOnAction(_ -> dlg.close());
+
+        // Close without changes on focus loss (click outside)
+        dlg.focusedProperty().addListener((_, _, isNow) -> {
+            if (!isNow) dlg.close();
+        });
+
+        var buttons = new ToolBar(okBtn, cancelBtn);
+        var root = new BorderPane(area, null, null, buttons, null);
+        Scene sc = new Scene(root, 700, 380);
+        sc.getStylesheets().add(darculaCss());
+        dlg.setScene(sc);
+
+        // Center over main window
+        if (primaryStage != null) {
+            dlg.setX(primaryStage.getX() + (primaryStage.getWidth() - 700) / 2);
+            dlg.setY(primaryStage.getY() + (primaryStage.getHeight() - 380) / 2);
+        }
+
+        dlg.show();
+        area.requestFocus();
+        area.positionCaret(area.getText().length());
     }
 
     /* ───── translation via DeepL ───── */
@@ -299,9 +382,9 @@ public class EditorApp extends Application {
     /* -------- callDeepL (replace the old method completely) ------------ */
     private String callDeepL(String key, String text, String tgt){
         try{
-            String payload = "auth_key="+URLEncoder.encode(key,"UTF-8")+
-                "&text="+URLEncoder.encode(text,"UTF-8")+
-                "&target_lang="+URLEncoder.encode(tgt.replace('_','-'),"UTF-8");
+            String payload = "auth_key="+URLEncoder.encode(key, StandardCharsets.UTF_8)+
+                "&text="+URLEncoder.encode(text, StandardCharsets.UTF_8)+
+                "&target_lang="+URLEncoder.encode(tgt.replace('_','-'), StandardCharsets.UTF_8);
             log(Lv.DEBUG,"DeepL payload → "+payload.substring(0,Math.min(120,payload.length())));
             var url = URI.create("https://api-free.deepl.com/v2/translate").toURL();
             HttpURLConnection con = (HttpURLConnection) url.openConnection();

@@ -16,6 +16,8 @@ buildscript {
 plugins {
   id 'application'
 }
+// If you keep the application plugin for dist tasks, just disable its run
+tasks.named('run').configure { enabled = false }
 
 // Apply Construo if you want to bundle JRE for native apps
 apply plugin: 'io.github.fourlastor.construo'

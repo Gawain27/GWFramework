@@ -23,13 +23,12 @@ public final class RamContent extends BaseComponent implements IDashboardContent
     /** JVM heap used as percent of max (0–100) over time. */
     private final Deque<Double> jvmPctSeries = new ArrayDeque<>(WINDOW);
 
-    private final ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor(r -> {
-        Thread t = new Thread(r, "Dash-RAM");
-        t.setDaemon(true);
-        return t;
-    });
-
     public RamContent() {
+        ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "Dash-RAM");
+            t.setDaemon(true);
+            return t;
+        });
         exec.scheduleAtFixedRate(() -> {
             try { sample(); } catch (Throwable ignored) { }
         }, 0, 1, TimeUnit.SECONDS);

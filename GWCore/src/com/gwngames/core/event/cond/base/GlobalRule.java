@@ -5,9 +5,9 @@ import com.gwngames.core.api.event.IExecutionCondition;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class GlobalRule {
-    final String               id;
+    final String id;
     final IExecutionCondition condition;
-    volatile boolean           enabled;
+    volatile boolean enabled;
     final AtomicInteger vetoCount = new AtomicInteger();
 
     public GlobalRule(String id, IExecutionCondition c, boolean enabled) {

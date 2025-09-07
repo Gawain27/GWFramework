@@ -22,7 +22,7 @@ public class TimeTriggerTest extends BaseTest {
         MasterEventQueue master = new MasterEventQueue();
         CountDownLatch   done   = new CountDownLatch(1);
 
-        ConcurrentSubQueue<SimpleEvent> subQ = new ConcurrentSubQueue<>(1, master) {
+        ConcurrentSubQueue<SimpleEvent> subQ = new ConcurrentSubQueue<>(1) {
             @Override protected void processEvent(SimpleEvent e) throws EventException {
                 done.countDown();
             }
@@ -31,11 +31,9 @@ public class TimeTriggerTest extends BaseTest {
 
         /* ---- trigger: fire immediately, one-shot ---------------------- */
         TimeTrigger trigger = new TimeTrigger(
-            "instant-time-trigger",
             0L,                      // delay 0 ms
             new SimpleEvent(),       // single-event payload
-            false,                    // one-shot
-            master
+            false                   // one-shot
         );
         master.registerTrigger(trigger);
 

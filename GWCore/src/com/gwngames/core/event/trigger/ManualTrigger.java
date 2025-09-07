@@ -1,18 +1,22 @@
 package com.gwngames.core.event.trigger;
 
+import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.event.IEvent;
+import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.event.base.AbstractEventTrigger;
 import com.gwngames.core.event.base.MacroEvent;
-import com.gwngames.core.event.queue.MasterEventQueue;
 
 /** Fires only when {@link #fire()} is called. */
+@Init(module = ModuleNames.CORE)
 public class ManualTrigger extends AbstractEventTrigger {
 
     private MacroEvent macroPayload;
     private IEvent     singlePayload;
     private volatile boolean pending = false;
 
-    public ManualTrigger(String id, MasterEventQueue master) { super(id, master); }
+    public ManualTrigger() {
+        super();
+    }
 
     /* setters so external code can change the payload */
     public void setMacroPayload (MacroEvent m) { this.macroPayload  = m; }

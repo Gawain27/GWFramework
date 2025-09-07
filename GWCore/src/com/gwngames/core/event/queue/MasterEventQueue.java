@@ -1,12 +1,13 @@
 package com.gwngames.core.event.queue;
 
-import com.gwngames.core.api.event.IEvent;
-import com.gwngames.core.api.event.IEventTrigger;
-import com.gwngames.core.api.event.IExecutionCondition;
+import com.gwngames.core.api.build.Init;
+import com.gwngames.core.api.event.*;
 import com.gwngames.core.api.ex.EventException;
+import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.LogFiles;
 import com.badlogic.gdx.utils.*;
+import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.event.base.AbstractEvent;
 import com.gwngames.core.event.base.MacroEvent;
 import com.gwngames.core.event.cond.base.ConditionPolicy;
@@ -19,33 +20,36 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 
-//TODO: make component for MasterEventQueue
-public class MasterEventQueue {
-    private final Queue<MacroEvent> macroQueue = new Queue<>();
+@Init(module = ModuleNames.CORE)
+public class MasterEventQueue extends BaseComponent implements IMasterEventQueue {
+    private final Queue<IMacroEvent> macroQueue = new Queue<>();
     private final ObjectSet<IEvent> executedEvents = new ObjectSet<>();
-    private final ObjectSet<MacroEvent> completedMacros = new ObjectSet<>();
-    private final ObjectMap<Class<? extends IEvent>, ConcurrentSubQueue<? extends AbstractEvent>> subQueues = new ObjectMap<>();
+    private final ObjectSet<IMacroEvent> completedMacros = new ObjectSet<>();
+    private final ObjectMap<Class<? extends IEvent>, ConcurrentSubQueue<? extends IEvent>> subQueues = new ObjectMap<>();
     private final Map<String, GlobalRule> globalRules = new ConcurrentHashMap<>();
     private final FileLogger logger = FileLogger.get(LogFiles.EVENT);
     private BiConsumer<IEvent, EventException> postExceptionAction;
     private final Map<String, IEventTrigger> triggers = new ConcurrentHashMap<>();
 
-    public synchronized void registerSubQueue(Class<? extends IEvent> cls, ConcurrentSubQueue<? extends AbstractEvent> queue) {
+    public synchronized void registerSubQueue(Class<? extends IEvent> cls, ConcurrentSubQueue<? extends IEvent> queue) {
         subQueues.put(cls, queue);
     }
 
-    public synchronized void enqueueMacroEvent(MacroEvent macroEvent) {
+    @Override
+    public synchronized void enqueueMacroEvent(IMacroEvent macroEvent) {
         macroQueue.addLast(macroEvent);
     }
 
     /* ───────────── helper: enqueue *single* event ───────────── */
+    @Override
     public synchronized void enqueueEvent(IEvent ev) {
         /* wrap into a synthetic macro so the usual flow works */
-        MacroEvent wrap = new MacroEvent("single-" + UUID.randomUUID());
+        MacroEvent wrap = new MacroEvent("single-" + ev.getClass().getSimpleName()+ "-" + UUID.randomUUID());
         wrap.addEvent(ev);
         enqueueMacroEvent(wrap);
     }
 
+    @Override
     public boolean canExecute(IEvent ev) {
 
         /* 1 – global guard rails */
@@ -68,31 +72,35 @@ public class MasterEventQueue {
 
     private boolean fails(IExecutionCondition c, IEvent ev) {
         //TODO: encapsulate this logic somewhere
-        ConditionResult r = c.evaluate(ev, this);
+        IConditionResult r = c.evaluate(ev, this);
         return (c.policy() == ConditionPolicy.WAIT_UNTIL_TRUE    && r != ConditionResult.TRUE)
             || (c.policy() == ConditionPolicy.EXECUTE_UNLESS_FALSE && r == ConditionResult.FALSE);
     }
 
+    @Override
     public synchronized void markExecuted(IEvent event) {
         executedEvents.add(event);
         checkMacroCompletion(event.getMacroEvent());
     }
 
-    private void checkMacroCompletion(MacroEvent macroEvent) {
+    private void checkMacroCompletion(IMacroEvent macroEvent) {
         for (IEvent event : macroEvent.getEvents())
             if (!executedEvents.contains(event)) return;
         completedMacros.add(macroEvent);
     }
 
+    @Override
     public boolean hasExecuted(IEvent event) {
         return executedEvents.contains(event);
     }
 
-    public boolean isMacroEventCompleted(MacroEvent macroEvent) {
+    @Override
+    public boolean isMacroEventCompleted(IMacroEvent macroEvent) {
         return completedMacros.contains(macroEvent);
     }
 
-    public Array<MacroEvent> getMacroEvents() {
+    @Override
+    public Array<IMacroEvent> getMacroEvents() {
         return CollectionUtils.queueToArray(macroQueue);
     }
 
@@ -103,9 +111,9 @@ public class MasterEventQueue {
 
         /*  move macro-events’ inner events to their sub-queues */
         synchronized (this) {
-            for (MacroEvent macro : macroQueue)
+            for (IMacroEvent macro : macroQueue)
                 for (IEvent e : macro.getEvents())
-                    subQueues.get(e.getClass()).enqueue((AbstractEvent) e); // pass master
+                    subQueues.get(e.getClass()).enqueue(e); // pass master
             macroQueue.clear();
         }
 
@@ -113,10 +121,12 @@ public class MasterEventQueue {
         subQueues.values().forEach(ConcurrentSubQueue::processAllEligible);
     }
 
+    @Override
     public FileLogger getLogger() {
         return logger;
     }
 
+    @Override
     public void handleEventException(IEvent event, EventException ex) {
         logger.error("EventException in event [%s] from MacroEvent [%s]: %s",
             event.getClass().getSimpleName(),

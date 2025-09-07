@@ -1,12 +1,9 @@
 package com.gwngames.core.event.queue;
 
-import com.gwngames.core.api.build.Init;
-import com.gwngames.core.api.event.EventStatus;
+import com.gwngames.core.data.event.EventStatus;
 import com.gwngames.core.api.ex.EventException;
 import com.gwngames.core.api.build.ITranslatable;
 import com.gwngames.core.base.BaseTest;
-import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.event.DummyEventException;
 import com.gwngames.core.event.base.AbstractEvent;
 import com.gwngames.core.event.base.MacroEvent;

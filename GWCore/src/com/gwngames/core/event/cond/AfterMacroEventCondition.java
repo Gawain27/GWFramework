@@ -1,11 +1,8 @@
 package com.gwngames.core.event.cond;
 
-import com.gwngames.core.api.event.IEvent;
-import com.gwngames.core.api.event.IExecutionCondition;
-import com.gwngames.core.event.base.MacroEvent;
+import com.gwngames.core.api.event.*;
 import com.gwngames.core.event.cond.base.ConditionPolicy;
 import com.gwngames.core.event.cond.base.ConditionResult;
-import com.gwngames.core.event.queue.MasterEventQueue;
 
 /**
  * Blocks the candidate event until the referenced macro-event has
@@ -14,21 +11,21 @@ import com.gwngames.core.event.queue.MasterEventQueue;
  */
 public final class AfterMacroEventCondition implements IExecutionCondition {
 
-    private final MacroEvent macroEvent;
+    private final IMacroEvent macroEvent;
 
-    public AfterMacroEventCondition(MacroEvent macroEvent) {
+    public AfterMacroEventCondition(IMacroEvent macroEvent) {
         this.macroEvent = macroEvent;
     }
 
     @Override
-    public ConditionResult evaluate(IEvent event, MasterEventQueue master) {
+    public IConditionResult evaluate(IEvent event, IMasterEventQueue master) {
         return master.isMacroEventCompleted(macroEvent)
             ? ConditionResult.TRUE   // ready – let the queue run the event
             : ConditionResult.WAIT;  // stay queued and re-check next tick
     }
 
     @Override
-    public ConditionPolicy policy() {
+    public IConditionPolicy policy() {
         return ConditionPolicy.WAIT_UNTIL_TRUE;
     }
 }

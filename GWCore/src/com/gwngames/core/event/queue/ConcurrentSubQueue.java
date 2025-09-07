@@ -1,26 +1,31 @@
 package com.gwngames.core.event.queue;
 
-import com.gwngames.core.api.event.EventStatus;
+import com.gwngames.core.api.build.Inject;
+import com.gwngames.core.api.event.IEventQueue;
+import com.gwngames.core.api.event.IMasterEventQueue;
+import com.gwngames.core.base.BaseComponent;
+import com.gwngames.core.data.event.EventStatus;
+import com.gwngames.core.api.event.IEvent;
 import com.gwngames.core.api.ex.EventException;
-import com.gwngames.core.event.base.AbstractEvent;
 
 import java.util.Deque;
 import java.util.concurrent.*;
 
-public abstract class ConcurrentSubQueue<T extends AbstractEvent> {
-
+public abstract class ConcurrentSubQueue<T extends IEvent>
+    extends BaseComponent implements IEventQueue {
     private final ExecutorService executor;
     private final Deque<T>        eventQueue = new ConcurrentLinkedDeque<>();
-    private final MasterEventQueue master;
 
-    public ConcurrentSubQueue(int maxParallel, MasterEventQueue master) {
+    @Inject
+    protected IMasterEventQueue master;
+
+    public ConcurrentSubQueue(int maxParallel) {
         this.executor = Executors.newFixedThreadPool(maxParallel);
-        this.master = master;
     }
 
     /* ─────────────────── smart enqueue (front vs back) ────────────────── */
     @SuppressWarnings("unchecked")
-    public void enqueue(AbstractEvent ev) {
+    public void enqueue(IEvent ev) {
         if (master.canExecute(ev))
             eventQueue.offerFirst((T) ev);   // ready → front
         else

@@ -1,7 +1,12 @@
 package com.gwngames.core.event.cond.base;
 
+import com.gwngames.core.api.build.Init;
+import com.gwngames.core.api.event.IConditionResult;
+import com.gwngames.core.data.ModuleNames;
+
 /** Return value of an {@code IExecutionCondition}. */
-public enum ConditionResult {
+@Init(module = ModuleNames.CORE)
+public enum ConditionResult implements IConditionResult {
     /** Condition is satisfied – the event may proceed.            */
     TRUE,
 

@@ -1,26 +1,30 @@
 package com.gwngames.core.event.base;
 
 import com.badlogic.gdx.utils.Array;
-import com.gwngames.core.api.event.EventStatus;
+import com.gwngames.core.api.event.IEventStatus;
+import com.gwngames.core.api.event.IMacroEvent;
+import com.gwngames.core.data.event.EventStatus;
 import com.gwngames.core.api.event.IEvent;
 import com.gwngames.core.api.event.IExecutionCondition;
 import com.gwngames.core.base.BaseComponent;
 
 public abstract class AbstractEvent extends BaseComponent implements IEvent {
-    private MacroEvent macroEvent;
-    private EventStatus status = EventStatus.WAITING;
+    private IMacroEvent macroEvent;
+    private IEventStatus status = EventStatus.WAITING;
     private long executionStartTime;
     private long executionDuration;
     private final Array<IExecutionCondition> conditions = new Array<>();
 
     @Override
-    public MacroEvent getMacroEvent() { return macroEvent; }
+    public IMacroEvent getMacroEvent() { return macroEvent; }
     @Override
-    public void setMacroEvent(MacroEvent macroEvent) { this.macroEvent = macroEvent; }
+    public void setMacroEvent(IMacroEvent macroEvent) { this.macroEvent = macroEvent; }
 
-    public EventStatus getStatus() { return status; }
+    @Override
+    public IEventStatus getStatus() { return status; }
 
-    public void setStatus(EventStatus status) {
+    @Override
+    public void setStatus(IEventStatus status) {
         this.status = status;
         if (status == EventStatus.EXECUTING) executionStartTime = System.currentTimeMillis();
         else if (status == EventStatus.COMPLETED) executionDuration = System.currentTimeMillis() - executionStartTime;

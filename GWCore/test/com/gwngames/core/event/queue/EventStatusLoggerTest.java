@@ -44,7 +44,7 @@ public final class EventStatusLoggerTest extends BaseTest {
         master.enqueueMacroEvent(macro);
 
         EventStatusLogger statusLogger =
-            new EventStatusLogger(master, 1f, logFile.toString()); // interval irrelevant
+            new EventStatusLogger( 1f, logFile.toString()); // interval irrelevant
         log.debug("EventStatusLogger instantiated");
 
         /* 3) invoke private log() directly */

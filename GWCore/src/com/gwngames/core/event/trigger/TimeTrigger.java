@@ -1,26 +1,28 @@
 package com.gwngames.core.event.trigger;
 
 import com.badlogic.gdx.utils.TimeUtils;
+import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.event.IEvent;
+import com.gwngames.core.api.event.IMacroEvent;
+import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.event.base.AbstractEventTrigger;
-import com.gwngames.core.event.base.MacroEvent;
-import com.gwngames.core.event.queue.MasterEventQueue;
 
 /**
  * Fires at fixed time intervals (in milliseconds).
  * If {@code repeat} is {@code false} it behaves like a one-shot timer.
  */
+@Init(module = ModuleNames.CORE)
 public class TimeTrigger extends AbstractEventTrigger {
 
     private final long intervalMs;
     private final boolean repeat;
-    private final MacroEvent macroPayload;   // alternative to single event
+    private final IMacroEvent macroPayload;   // alternative to single event
     private final IEvent     singlePayload;  // alternative to macro
     private long nextFireAt;
 
-    /* ► one-shot macro constructor */
-    public TimeTrigger(String id, long delayMs, MacroEvent macro, MasterEventQueue master) {
-        super(id, master);
+    /* one-shot macro constructor */
+    public TimeTrigger(long delayMs, IMacroEvent macro) {
+        super();
         this.intervalMs   = delayMs;
         this.repeat       = false;
         this.macroPayload = macro;
@@ -28,9 +30,9 @@ public class TimeTrigger extends AbstractEventTrigger {
         this.nextFireAt   = TimeUtils.millis() + delayMs;
     }
 
-    /* ► repeated single-event constructor */
-    public TimeTrigger(String id, long everyMs, IEvent event, boolean repeat, MasterEventQueue master) {
-        super(id, master);
+    /* repeated single-event constructor */
+    public TimeTrigger(long everyMs, IEvent event, boolean repeat) {
+        super();
         this.intervalMs   = everyMs;
         this.repeat       = repeat;
         this.singlePayload = event;

@@ -1,15 +1,22 @@
 package com.gwngames.core.event.queue;
 
 import com.badlogic.gdx.utils.Timer;
+import com.gwngames.core.api.build.Init;
+import com.gwngames.core.api.build.Inject;
+import com.gwngames.core.api.event.IEventLogger;
+import com.gwngames.core.api.event.IMasterEventQueue;
+import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.log.FileLogger;
+import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.event.base.AbstractEvent;
 
-public class EventStatusLogger {
-    private final MasterEventQueue masterQueue;
+@Init(module = ModuleNames.CORE)
+public class EventStatusLogger extends BaseComponent implements IEventLogger {
+    @Inject
+    private IMasterEventQueue masterQueue;
     private final FileLogger logger;
 
-    public EventStatusLogger(MasterEventQueue masterQueue, float intervalSec, String logFilePath) {
-        this.masterQueue = masterQueue;
+    public EventStatusLogger(float intervalSec, String logFilePath) {
         this.logger = FileLogger.get(logFilePath);
         Timer.schedule(new Timer.Task() {
             public void run() { log(); }

@@ -1,12 +1,17 @@
 package com.gwngames.core.api.event;
 
+import com.gwngames.core.api.base.IBaseComp;
+import com.gwngames.core.api.build.Init;
+import com.gwngames.core.data.ComponentNames;
+import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.event.queue.MasterEventQueue;
 
 /**
  * A hook that decides – each frame/tick – whether it should
  * inject one or more events/macro-events into the queue.
  */
-public interface IEventTrigger {
+@Init(module = ModuleNames.INTERFACE, component = ComponentNames.EVENT_TRIGGER, allowMultiple = true)
+public interface IEventTrigger extends IBaseComp {
 
     /** Unique identifier (used for enable/disable at runtime). */
     String getId();

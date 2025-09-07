@@ -23,7 +23,7 @@ public class ManualTriggerTest extends BaseTest {
         CountDownLatch   done   = new CountDownLatch(1);
 
         /* lightweight sub-queue that just counts down the latch */
-        ConcurrentSubQueue<SimpleEvent> subQ = new ConcurrentSubQueue<>(1, master) {
+        ConcurrentSubQueue<SimpleEvent> subQ = new ConcurrentSubQueue<>(1) {
             @Override protected void processEvent(SimpleEvent e) throws EventException {
                 done.countDown();
             }
@@ -31,7 +31,7 @@ public class ManualTriggerTest extends BaseTest {
         master.registerSubQueue(SimpleEvent.class, subQ);
 
         /* ---- trigger + payload ---------------------------------------- */
-        ManualTrigger trigger = new ManualTrigger("manual-test", master);
+        ManualTrigger trigger = new ManualTrigger();
         trigger.setSinglePayload(new SimpleEvent());
         master.registerTrigger(trigger);
 

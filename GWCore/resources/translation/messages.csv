@@ -10,4 +10,5 @@ INCONSISTENT.ERROR,System was found in an inconsistent state: $1,Das System wurd
 JAR.NOT.FOUND,Bad JAR-URL: $1,Schlechte JAR-URL: $1,Mauvais JAR-URL : $1,JAR-URL incorrecto: $1
 PROJECTS.NOT.FOUND,No projects defined in config.json,Keine Projekte in config.json definiert,Aucun projet défini dans config.json,No hay proyectos definidos en config.json
 STARTUP.ERROR,A system check has failed: $1,Eine Systemprüfung ist fehlgeschlagen: $1,Une vérification du système a échoué : $1,Ha fallado una comprobación del sistema: $1
+UNKNOWN.EVENT.ERROR,Unknown event: $1,,,
 WARNING,Warning,Warnung,Avertissement,Advertencia

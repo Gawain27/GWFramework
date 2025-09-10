@@ -2,6 +2,7 @@ package com.gwngames.core.input.detector;
 
 import com.badlogic.gdx.controllers.*;
 import com.gwngames.core.api.build.Init;
+import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.api.input.*;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.data.ModuleNames;
@@ -15,6 +16,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 @Init(module = ModuleNames.CORE, subComp = SubComponentNames.CONTROLLER_DETECTOR)
 public class ControllerDeviceDetector extends BaseComponent implements IDeviceDetector, ControllerListener {
+    @Inject
+    private IInputAdapterFactory factory;
 
     private final Map<Controller, IInputAdapter> map = new ConcurrentHashMap<>();
     private final List<IInputDeviceListener> listeners = new CopyOnWriteArrayList<>();
@@ -29,10 +32,11 @@ public class ControllerDeviceDetector extends BaseComponent implements IDeviceDe
     @Override public void removeDeviceListener(IInputDeviceListener l){listeners.remove(l);}
 
     /* ─── ControllerListener ───────────────────────── */
-
+    // FIXME these should use interfaces
     @Override
     public void connected(Controller c) {
-        IInputAdapter adapter = new ControllerInputAdapter(c);
+        IControllerAdapter adapter = factory.createController(c);
+        adapter.setController(c);
         map.put(c, adapter);
         listeners.forEach(l -> l.onAdapterConnected(adapter));
     }

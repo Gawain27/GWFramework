@@ -30,7 +30,6 @@ public final class ConcurrentSubQueueTest extends BaseTest {
         private final AtomicInteger  peakRunning = new AtomicInteger(0);
 
         CountingSubQueue(int maxParallel, CountDownLatch doneLatch, MasterEventQueue master) {
-            super(maxParallel, master);
             this.doneLatch = doneLatch;
         }
         @Override protected void processEvent(SimpleEvent evt) {
@@ -40,14 +39,24 @@ public final class ConcurrentSubQueueTest extends BaseTest {
             running.decrementAndGet();
             doneLatch.countDown();
         }
+
+        @Override
+        public Class<SimpleEvent> getType() {
+            return SimpleEvent.class;
+        }
+
         int peak() { return peakRunning.get(); }
     }
 
     /** Sub-queue that always throws an {@link EventException}. */
     private static final class FailingSubQueue extends ConcurrentSubQueue<SimpleEvent> {
-        FailingSubQueue(MasterEventQueue master) { super(1, master); }
         @Override protected void processEvent(SimpleEvent evt) throws EventException {
             throw new DummyEventException(DUMMY);
+        }
+
+        @Override
+        public Class<SimpleEvent> getType() {
+            return SimpleEvent.class;
         }
     }
 
@@ -81,9 +90,9 @@ public final class ConcurrentSubQueueTest extends BaseTest {
 
         CountingSubQueue subQueue = new CountingSubQueue(MAX_PARALLEL, done, master);
 
-        master.registerSubQueue(SimpleEvent.class, subQueue);
 
-        MacroEvent macro = new MacroEvent("macro-ok");
+        MacroEvent macro = new MacroEvent();
+        macro.setId("macro-ok");
         for (int i = 0; i < TOTAL_EVENTS; i++) macro.addEvent(new SimpleEvent());
         master.enqueueMacroEvent(macro);
 
@@ -108,9 +117,9 @@ public final class ConcurrentSubQueueTest extends BaseTest {
         CountDownLatch caught = new CountDownLatch(1);
 
         CapturingMaster master = new CapturingMaster(caught);
-        master.registerSubQueue(SimpleEvent.class, new FailingSubQueue(master));
 
-        MacroEvent macro = new MacroEvent("macro-fail");
+        MacroEvent macro = new MacroEvent();
+        macro.setId("macro-fail");
         macro.addEvent(new SimpleEvent());
         master.enqueueMacroEvent(macro);
 

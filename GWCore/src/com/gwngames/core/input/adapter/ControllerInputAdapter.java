@@ -2,17 +2,14 @@ package com.gwngames.core.input.adapter;
 
 import com.badlogic.gdx.controllers.*;
 import com.gwngames.core.api.build.Init;
+import com.gwngames.core.api.input.IAxisIdentifier;
+import com.gwngames.core.api.input.IButtonIdentifier;
 import com.gwngames.core.api.input.IControllerAdapter;
-import com.gwngames.core.api.input.IInputAdapter;
 import com.gwngames.core.api.input.IInputIdentifier;
+import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.input.IdentifierDefinition;
 import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.SubComponentNames;
-import com.gwngames.core.event.input.AxisEvent;
-import com.gwngames.core.event.input.ButtonEvent;
 import com.gwngames.core.input.BaseInputAdapter;
-import com.gwngames.core.input.controls.ControllerAxisInputIdentifier;
-import com.gwngames.core.input.controls.ControllerButtonInputIdentifier;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -28,46 +25,40 @@ import java.util.Map;
  * </ul>
  */
 @Init(module = ModuleNames.CORE)
-public final class ControllerInputAdapter
-    extends BaseInputAdapter
-    implements IControllerAdapter, ControllerListener {
+public final class ControllerInputAdapter extends BaseInputAdapter implements IControllerAdapter, ControllerListener {
 
     private static final float DEAD_ZONE = 0.10f;
 
-    private final Controller controller;
+    private Controller controller;
 
     /* one identifier instance per (button / axis) ---------------------- */
-    private final Map<Integer, ControllerButtonInputIdentifier> btnId = new HashMap<>();
-    private final Map<Integer, ControllerAxisInputIdentifier>   axisId = new HashMap<>();
+    private final Map<Integer, IButtonIdentifier> btnId = new HashMap<>();
+    private final Map<Integer, IAxisIdentifier> axisId = new HashMap<>();
 
-    /* ─────────────────────────── ctor & life-cycle ──────────────────── */
-    public ControllerInputAdapter(Controller controller) {
-        super("Controller:" + controller.getName());
-        this.controller = controller;
-
+    public ControllerInputAdapter() {
         /* ── build the lookup caches once ─────────────────────────── */
         for (IdentifierDefinition def : IdentifierDefinition.values()) {
             for (IInputIdentifier raw : def.ids()) {
 
                 /* buttons */
-                if (raw instanceof ControllerButtonInputIdentifier tmpl
-                    && tmpl.getButtonCode() >= 0) {
-                    btnId.putIfAbsent(
-                        tmpl.getButtonCode(),
-                        new ControllerButtonInputIdentifier(
-                            controller, tmpl.getButtonCode(), tmpl.isRecordWhilePressed()));
+                if (raw instanceof IButtonIdentifier tmpl && tmpl.getButtonCode() >= 0) {
+                    IButtonIdentifier id = loader.tryCreate(ComponentNames.CONTROLLER_BUTTON_INPUT);
+                    id.setRecordWhilePressed(tmpl.isRecordWhilePressed());
+                    id.setButtonCode(tmpl.getButtonCode());
+                    btnId.putIfAbsent(tmpl.getButtonCode(), id);
                 }
 
                 /* axes */
-                if (raw instanceof ControllerAxisInputIdentifier tmpl) {
-                    axisId.putIfAbsent(
-                        tmpl.getAxisCode(),
-                        new ControllerAxisInputIdentifier(
-                            controller, tmpl.getAxisCode(), tmpl.isRecordWhilePressed()));
+                if (raw instanceof IAxisIdentifier tmpl) {
+                    IAxisIdentifier id = loader.tryCreate(ComponentNames.CONTROLLER_AXIS_INPUT);
+                    id.setAxisCode(tmpl.getAxisCode());
+                    id.setRecordWhilePressed(tmpl.isRecordWhilePressed());
+                    axisId.putIfAbsent(tmpl.getAxisCode(), id);
                 }
             }
         }
     }
+    /* ─────────────────────────── ctor & life-cycle ──────────────────── */
 
     @Override
     public Controller getController() { return controller; }
@@ -75,36 +66,53 @@ public final class ControllerInputAdapter
     @Override public void start() { Controllers.addListener(this); }
     @Override public void stop()  { Controllers.removeListener(this); }
 
+    @Override
+    public String getAdapterName() {
+        if (getController() != null) {
+            return getController().getName();
+        }
+        return "Unknown";
+    }
+
     /* ───────────────────── ControllerListener callbacks ────────────── */
     @Override
     public boolean buttonDown(Controller c, int buttonCode) {
         if (c != controller) return false;
-        ControllerButtonInputIdentifier id = btnId.get(buttonCode);
+        IButtonIdentifier id = btnId.get(buttonCode);
         if (id == null) return false;               // unmapped button
-        dispatch(new ButtonEvent(getSlot(), id, true, 1f));
+        inputManager.emitButtonDown(this, id, 1f);
         return false;
     }
 
     @Override
     public boolean buttonUp(Controller c, int buttonCode) {
         if (c != controller) return false;
-        ControllerButtonInputIdentifier id = btnId.get(buttonCode);
+        IButtonIdentifier id = btnId.get(buttonCode);
         if (id == null) return false;
-        dispatch(new ButtonEvent(getSlot(), id, false, 0f));
+        inputManager.emitButtonUp(this, id, 0f);
         return false;
     }
 
     @Override
     public boolean axisMoved(Controller c, int axisCode, float value) {
         if (c != controller) return false;
-        ControllerAxisInputIdentifier id = axisId.get(axisCode);
+        IAxisIdentifier id = axisId.get(axisCode);
         if (id == null) return false;               // unmapped axis
         float norm = Math.abs(value) < DEAD_ZONE ? 0f : value;
-        dispatch(new AxisEvent(getSlot(), id, value, norm));
+        inputManager.emitAxis(this, id, value, norm);
         return false;
     }
 
     /* ignore other callbacks – device plug/unplug handled elsewhere */
     @Override public void connected   (Controller c) {}
     @Override public void disconnected(Controller c) {}
+
+    @Override
+    public void setController(Controller controller) {
+        this.controller = controller;
+
+        if (controller == null) return;
+        axisId.values().forEach(e -> e.setController(controller));
+        btnId.values().forEach(e -> e.setController(controller));
+    }
 }

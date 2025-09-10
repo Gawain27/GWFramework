@@ -6,4 +6,6 @@ import com.gwngames.core.data.ComponentNames;
 @Init(component = ComponentNames.TOUCH_INPUT)
 public interface ITouchIdentifier extends IInputIdentifier{
     int getPointer();
+
+    void setPointer(int pointer);
 }

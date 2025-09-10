@@ -4,13 +4,12 @@ import com.badlogic.gdx.controllers.Controller;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.input.IButtonIdentifier;
 import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.util.ControllerMappingUtil;
 
 @Init(module = ModuleNames.CORE)
 public class ControllerButtonInputIdentifier extends BaseInputIdentifier implements IButtonIdentifier {
-    private final Controller controller;
-    private final int        buttonCode;
+    private Controller controller;
+    private int buttonCode;
 
     public ControllerButtonInputIdentifier(Controller controller, int buttonCode, boolean recordWhilePressed) {
         super(recordWhilePressed);
@@ -24,8 +23,18 @@ public class ControllerButtonInputIdentifier extends BaseInputIdentifier impleme
     }
 
     @Override
+    public void setController(Controller controller) {
+        this.controller = controller;
+    }
+
+    @Override
     public int getButtonCode() {
         return buttonCode;
+    }
+
+    @Override
+    public void setButtonCode(int buttonCode) {
+        this.buttonCode = buttonCode;
     }
 
     @Override

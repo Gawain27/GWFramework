@@ -11,45 +11,40 @@ import com.gwngames.core.data.ModuleNames;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Thread-safe counters for every identifier / combo / chain that passes
- * through a mapper.  No timing data – just totals.
- */
 @Init(module = ModuleNames.CORE)
 public class InputHistory extends BaseComponent implements IInputHistory {
 
-    private final Map<IInputIdentifier, Long> idHits    = new ConcurrentHashMap<>();
-    private final Map<IInputCombo, Long> comboHits = new ConcurrentHashMap<>();
-    private final Map<IInputChain, Long> chainHits = new ConcurrentHashMap<>();
+    private final Map<IInputIdentifier, Long> idHits     = new ConcurrentHashMap<>();
+    private final Map<IInputIdentifier, Long> idReleases = new ConcurrentHashMap<>();
+    private final Map<IInputCombo, Long>      comboHits  = new ConcurrentHashMap<>();
+    private final Map<IInputChain, Long>      chainHits  = new ConcurrentHashMap<>();
 
-    /* ───────── increment helpers ───────── */
-    @Override
-    public void record(IInputIdentifier id){
-        idHits.merge(id, 1L, Long::sum);
-    }
-    @Override
-    public void record(IInputCombo combo){
-        comboHits.merge(combo, 1L, Long::sum);
-    }
-    @Override
-    public void record(IInputChain chain){
-        chainHits.merge(chain, 1L, Long::sum);
-    }
+    // Optional: lightweight axis/touch counters
+    private final Map<IInputIdentifier, Long> axisSamples = new ConcurrentHashMap<>();
+    private final Map<IInputIdentifier, Long> touchDowns  = new ConcurrentHashMap<>();
+    private final Map<IInputIdentifier, Long> touchDrags  = new ConcurrentHashMap<>();
+    private final Map<IInputIdentifier, Long> touchUps    = new ConcurrentHashMap<>();
 
-    /* ───────── read-only views ─────────── */
-    @Override
-    public Map<IInputIdentifier,Long> identifiers()
-    { return Map.copyOf(idHits); }
-    @Override
-    public Map<IInputCombo,Long> combos()
-    { return Map.copyOf(comboHits); }
-    @Override
-    public Map<IInputChain,Long> chains()
-    { return Map.copyOf(chainHits); }
+    @Override public void record (IInputIdentifier id){ idHits.merge(id, 1L, Long::sum); }
+    @Override public void release(IInputIdentifier id){ idReleases.merge(id, 1L, Long::sum); }
+    @Override public void record (IInputCombo combo){ comboHits.merge(combo, 1L, Long::sum); }
+    @Override public void record (IInputChain chain){ chainHits.merge(chain, 1L, Long::sum); }
 
-    /** Reset all counters (useful for tests or level restarts). */
-    @Override
-    public void clear(){
-        idHits.clear(); comboHits.clear(); chainHits.clear();
+    @Override public Map<IInputIdentifier,Long> identifiers(){ return Map.copyOf(idHits); }
+    @Override public Map<IInputIdentifier,Long> releases()   { return Map.copyOf(idReleases); }
+    @Override public Map<IInputCombo,Long>      combos()     { return Map.copyOf(comboHits); }
+    @Override public Map<IInputChain,Long>      chains()     { return Map.copyOf(chainHits); }
+
+    /* NEW: simple counters; expand to store last (x,y,pressure) if needed */
+    @Override public void axis     (IInputIdentifier id, float raw, float normalized){ axisSamples.merge(id, 1L, Long::sum); }
+    @Override public void touchDown(IInputIdentifier id, float x, float y, float p) { touchDowns.merge(id, 1L, Long::sum); }
+    @Override public void touchDrag(IInputIdentifier id, float x, float y, float p) { touchDrags.merge(id, 1L, Long::sum); }
+    @Override public void touchUp  (IInputIdentifier id, float x, float y, float p) { touchUps.merge(id, 1L, Long::sum); }
+
+    @Override public void clear(){
+        idHits.clear(); idReleases.clear();
+        comboHits.clear(); chainHits.clear();
+        axisSamples.clear(); touchDowns.clear(); touchDrags.clear(); touchUps.clear();
     }
 }
+

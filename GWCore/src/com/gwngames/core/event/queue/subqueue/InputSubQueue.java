@@ -1,19 +1,62 @@
 package com.gwngames.core.event.queue.subqueue;
 
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.api.event.input.IInputEvent;
+import com.gwngames.core.api.build.PostInject;
+import com.gwngames.core.api.event.input.*;
 import com.gwngames.core.api.ex.EventException;
+import com.gwngames.core.api.ex.UnknownEventException;
+import com.gwngames.core.api.input.IInputListener;
+import com.gwngames.core.base.log.FileLogger;
+import com.gwngames.core.data.LogFiles;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.SubComponentNames;
+import com.gwngames.core.data.event.EventParameters;
 import com.gwngames.core.event.queue.ConcurrentSubQueue;
 
 @Init(module = ModuleNames.CORE, subComp = SubComponentNames.INPUT_QUEUE)
 public class InputSubQueue extends ConcurrentSubQueue<IInputEvent> {
-    public InputSubQueue(int maxParallel) {
-        super(maxParallel);
+    FileLogger log = FileLogger.get(LogFiles.INPUT);
+
+    @PostInject
+    @Override
+    protected void init(){
+        this.maxParallel = config.get(EventParameters.INPUT_EVENT_MAX_THREAD);
+        super.init();
     }
     @Override
     protected void processEvent(IInputEvent ev) throws EventException {
-        // TODO
+        if (ev == null){
+            log.error("null input event registered");
+            return;
+        }
+
+        switch (ev) {
+            case IAxisEvent iAxisEvent -> listenOn(iAxisEvent);
+            case IButtonEvent iButtonEvent -> listenOn(iButtonEvent);
+            case ITouchEvent iTouchEvent -> listenOn(iTouchEvent);
+            case IInputActionEvent iInputActionEvent -> {
+                if (ev.getAssignedAction() != null) {
+                    log.debug("Executing action: {}", ev.getClass().getSimpleName());
+                    ev.getAssignedAction().execute(ev);
+                }
+            }
+            default -> throw new UnknownEventException(ev);
+        }
+    }
+
+    private void listenOn(IInputEvent event){
+        for (IInputListener listener : event.getAdapter().getListeners()){
+
+            log.debug("\nSending input: {}\nfrom: {}\nto: {}\n",
+                event,
+                event.getAdapter(),
+                listener.identity());
+            listener.onInput(event);
+        }
+    }
+
+    @Override
+    public Class<IInputEvent> getType() {
+        return IInputEvent.class;
     }
 }

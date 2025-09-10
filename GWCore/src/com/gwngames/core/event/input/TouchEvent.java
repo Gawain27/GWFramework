@@ -3,7 +3,6 @@ package com.gwngames.core.event.input;
 import com.badlogic.gdx.math.Vector2;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.event.input.ITouchEvent;
-import com.gwngames.core.data.input.InputType;
 import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.data.ModuleNames;
 
@@ -16,24 +15,14 @@ import com.gwngames.core.data.ModuleNames;
 public final class TouchEvent extends InputEvent implements ITouchEvent {
 
     /** Which logical pointer (0‥N) this event came from. */
-    private final IInputIdentifier control;
+    private IInputIdentifier control;
 
     /** Screen position when the event fired (pixel coords). */
-    private final Vector2 position;
+    private Vector2 position;
 
     /** Pressure if available (1 = full press). */
-    private final float pressure;
+    private float pressure;
 
-    public TouchEvent(InputType type,
-                      int slot,
-                      IInputIdentifier control,
-                      Vector2 position,
-                      float pressure) {
-        super(type, slot, System.nanoTime());
-        this.control  = control;
-        this.position = position;
-        this.pressure = pressure;
-    }
 
     /* ---------------- getters ---------------- */
 
@@ -43,6 +32,21 @@ public final class TouchEvent extends InputEvent implements ITouchEvent {
     public Vector2          getPosition() { return position; }
     @Override
     public float            getPressure() { return pressure; }
+
+    @Override
+    public void setControl(IInputIdentifier control) {
+        this.control = control;
+    }
+
+    @Override
+    public void setPosition(Vector2 position) {
+        this.position = position;
+    }
+
+    @Override
+    public void setPressure(float pressure) {
+        this.pressure = pressure;
+    }
 
     /* ---------------- convenience ---------------- */
 

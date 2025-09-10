@@ -7,7 +7,6 @@ import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.api.input.IKeyboardAdapter;
 import com.gwngames.core.data.input.IdentifierDefinition;
 import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.event.input.ButtonEvent;
 import com.gwngames.core.input.BaseInputAdapter;
 import com.gwngames.core.input.controls.KeyInputIdentifier;
 
@@ -18,14 +17,11 @@ import java.util.Map;
  * Keyboard → GW events adapter with zero allocations at run-time.
  */
 @Init(module = ModuleNames.CORE)
-public final class KeyboardInputAdapter
-    extends BaseInputAdapter implements IKeyboardAdapter, InputProcessor {
+public class KeyboardInputAdapter extends BaseInputAdapter implements IKeyboardAdapter, InputProcessor {
 
     private final Map<Integer, KeyInputIdentifier> keyId = new HashMap<>();
 
     public KeyboardInputAdapter() {
-        super("Keyboard"); // TODO to const
-
         /*  build a canonical map from IdentifierDefinition ---------- */
         for (IdentifierDefinition def : IdentifierDefinition.values()) {
             for (IInputIdentifier raw : def.ids()) {
@@ -44,18 +40,21 @@ public final class KeyboardInputAdapter
             Gdx.input.setInputProcessor(null);
     }
 
+    @Override
+    public String getAdapterName() {
+        return "Keyboard";
+    }
+
     /* ───────────────────── InputProcessor (keys) ───────────────────── */
     @Override
     public boolean keyDown(int keycode) {
-        dispatch(new ButtonEvent(getSlot(),
-            resolve(keycode), true, 1f));
+        inputManager.emitButtonDown(this, resolve(keycode), 1f);
         return false;
     }
 
     @Override
     public boolean keyUp(int keycode) {
-        dispatch(new ButtonEvent(getSlot(),
-            resolve(keycode), false, 0f));
+        inputManager.emitButtonUp(this, resolve(keycode), 0f);
         return false;
     }
 

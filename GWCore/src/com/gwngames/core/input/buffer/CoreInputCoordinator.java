@@ -18,11 +18,11 @@ import java.util.Set;
 public class CoreInputCoordinator extends BaseComponent implements IInputCoordinator {
 
     @Inject
-    protected IInputComboManager       comboMgr;
+    protected IInputComboManager comboMgr;
     @Inject
-    protected IInputBuffer             buffer;
+    protected IInputBuffer buffer;
     @Inject
-    protected IInputChainManager       chainMgr;
+    protected IInputChainManager chainMgr;
     @Inject
     protected IInputTelemetry telemetry;
     @Inject(subComp = SubComponentNames.COMBO_TTL_TRIGGER_POLICY)

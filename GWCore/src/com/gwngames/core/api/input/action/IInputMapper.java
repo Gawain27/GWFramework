@@ -39,4 +39,6 @@ public interface IInputMapper extends IInputListener {
 
     @Override
     void onInput(IInputEvent event);
+
+    void endFrame();
 }

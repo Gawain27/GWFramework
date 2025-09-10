@@ -5,11 +5,10 @@ import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.math.Vector2;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.input.ITouchAdapter;
-import com.gwngames.core.data.input.InputType;
+import com.gwngames.core.api.input.ITouchIdentifier;
+import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.event.input.TouchEvent;
 import com.gwngames.core.input.BaseInputAdapter;
-import com.gwngames.core.input.controls.TouchInputIdentifier;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -19,12 +18,9 @@ import java.util.Map;
  * equality & history work as expected across frames.
  */
 @Init(module = ModuleNames.CORE)
-public final class TouchInputAdapter extends BaseInputAdapter
-    implements ITouchAdapter, InputProcessor {
+public class TouchInputAdapter extends BaseInputAdapter implements ITouchAdapter, InputProcessor {
+    private final Map<Integer, ITouchIdentifier> pointerId = new HashMap<>();
 
-    private final Map<Integer, TouchInputIdentifier> pointerId = new HashMap<>();
-
-    public TouchInputAdapter() { super("Touchscreen"); }
 
     @Override public void start() { Gdx.input.setInputProcessor(this); }
 
@@ -34,26 +30,28 @@ public final class TouchInputAdapter extends BaseInputAdapter
             Gdx.input.setInputProcessor(null);
     }
 
+    @Override
+    public String getAdapterName() {
+        return "Touchscreen";
+    }
+
     /* ───────────────────── touch events ───────────────────── */
 
     @Override
     public boolean touchDown(int sx, int sy, int pointer, int button) {
-        dispatch(new TouchEvent(InputType.TOUCH_DOWN,
-            getSlot(), id(pointer), new Vector2(sx, sy), 1f));
+        inputManager.emitTouchDown(this, id(pointer), new Vector2(sx, sy), 1f);
         return false;
     }
 
     @Override
     public boolean touchUp(int sx, int sy, int pointer, int button) {
-        dispatch(new TouchEvent(InputType.TOUCH_UP,
-            getSlot(), id(pointer), new Vector2(sx, sy), 0f));
+        inputManager.emitTouchUp(this, id(pointer), new Vector2(sx, sy), 0f);
         return false;
     }
 
     @Override
     public boolean touchDragged(int sx, int sy, int pointer) {
-        dispatch(new TouchEvent(InputType.TOUCH_DRAG,
-            getSlot(), id(pointer), new Vector2(sx, sy), 1f));
+        inputManager.emitTouchDrag(this, id(pointer), new Vector2(sx, sy), 1f);
         return false;
     }
 
@@ -66,11 +64,11 @@ public final class TouchInputAdapter extends BaseInputAdapter
     @Override public boolean scrolled(float dx,float dy)     { return false; }
 
     /* helper – returns (and caches) the identifier for a pointer */
-    private TouchInputIdentifier id(int pointer) {
+    private ITouchIdentifier id(int pointer) {
         // TODO map screen_zone -> recordWhilePressed
-        return pointerId.computeIfAbsent(
-            pointer,
-            p -> new TouchInputIdentifier(p, true)   // recordWhilePressed = true inside
-        );
+        ITouchIdentifier id = loader.tryCreate(ComponentNames.TOUCH_INPUT);
+        id.setPointer(pointer);
+        id.setRecordWhilePressed(true);
+        return pointerId.computeIfAbsent(pointer, p -> id);
     }
 }

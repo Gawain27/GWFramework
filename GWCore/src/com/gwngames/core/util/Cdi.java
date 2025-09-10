@@ -15,11 +15,11 @@ import java.util.List;
 /**
  * A very minimal “CDI‐style” injector.
  * Call {@code Cdi.inject(myObject);} on any POJO that has fields annotated with {@link Inject}.
- *
  * Supports:
  *  - createNew: true/false (uses BaseComponent.getInstance(..., newInstance))
  *  - subComp: choose a specific sub-component
  *  - loadAll: List<T> with all available implementations (fully injected + post-injected)
+ *  - subTypeOf: when loadAll=true, filter to only implementations of a given interface
  *  - post-injection hook: @PostInject void someMethod()
  */
 public final class Cdi {
@@ -39,7 +39,7 @@ public final class Cdi {
                 Inject inj = f.getAnnotation(Inject.class);
 
                 if (inj.loadAll()) {
-                    // ===== List<T> injection (all implementations) =====
+                    // ===== List<T> injection (all or filtered implementations) =====
                     if (!List.class.isAssignableFrom(f.getType())) {
                         throw new IllegalStateException("@Inject(loadAll=true) field must be a List: " + f);
                     }
@@ -54,17 +54,33 @@ public final class Cdi {
                         throw new IllegalStateException("Component does not allow multiple: " + elemType.getName());
                     }
 
-                    // Create all implementations; ensure they are injected as well
-                    List<?> all = ModuleClassLoader.getInstance().tryCreateAll(meta.component());
+                    // Apply subTypeOf filter if provided
+                    Class<?> subIface = inj.subTypeOf();
+                    List<?> all;
+                    if (subIface != null && subIface != IBaseComp.class) {
+                        if (!subIface.isInterface()) {
+                            throw new IllegalStateException("@Inject(subTypeOf=...) must be an interface: " + subIface.getName());
+                        }
+                        all = ModuleClassLoader.getInstance().tryCreateAll(meta.component(), subIface);
+                    } else {
+                        all = ModuleClassLoader.getInstance().tryCreateAll(meta.component());
+                    }
+
+                    // Recursively inject dependencies on each element
                     for (Object o : all) {
-                        // recursively inject dependencies + post-inject on each element
                         Cdi.inject(o);
                     }
+
                     f.set(target, Collections.unmodifiableList(all));
                     continue;
                 }
 
                 // ===== Single injection (singleton or fresh) =====
+                // Enforce rule: subTypeOf only valid with loadAll=true
+                if (inj.subTypeOf() != IBaseComp.class) {
+                    throw new IllegalStateException("@Inject(subTypeOf=...) requires loadAll=true on field: " + f);
+                }
+
                 Class<?> fieldType = f.getType();
                 if (!IBaseComp.class.isAssignableFrom(fieldType)) {
                     throw new IllegalStateException("@Inject on non-IBaseComp field: " + f);
@@ -75,12 +91,10 @@ public final class Cdi {
 
                 Object wired;
                 if (sub == SubComponentNames.NONE) {
-                    // interface/class default impl
                     wired = newInstance
                         ? BaseComponent.getInstance((Class<? extends IBaseComp>) fieldType, true)
                         : BaseComponent.getInstance((Class<? extends IBaseComp>) fieldType);
                 } else {
-                    // specific sub-component
                     wired = newInstance
                         ? BaseComponent.getInstance((Class<? extends IBaseComp>) fieldType, sub, true)
                         : BaseComponent.getInstance((Class<? extends IBaseComp>) fieldType, sub);

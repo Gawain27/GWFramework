@@ -2,7 +2,6 @@ package com.gwngames.core.event.input;
 
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.event.input.IButtonEvent;
-import com.gwngames.core.data.input.InputType;
 import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.data.ModuleNames;
 
@@ -15,26 +14,13 @@ import com.gwngames.core.data.ModuleNames;
 public class ButtonEvent extends InputEvent implements IButtonEvent {
 
     /** Which physical control generated the event. */
-    private final IInputIdentifier control;
+    private IInputIdentifier control;
 
     /** {@code true} if pressed, {@code false} if released. */
-    private final boolean pressed;
+    private boolean pressed;
 
     /** Analog pressure (0 = none, 1 = full). */
-    private final float pressure;
-
-    public ButtonEvent(int slot,
-                       IInputIdentifier control,
-                       boolean pressed,
-                       float pressure) {
-        super(pressed ? InputType.BUTTON_DOWN : InputType.BUTTON_UP,
-            slot,
-            System.nanoTime());
-
-        this.control  = control;
-        this.pressed  = pressed;
-        this.pressure = pressure;
-    }
+    private float pressure;
 
     /* ───── accessors ───── */
 
@@ -53,4 +39,19 @@ public class ButtonEvent extends InputEvent implements IButtonEvent {
             pressed ? "DOWN" : "UP",
             pressure);
     }
+    @Override
+    public void setControl(IInputIdentifier control) {
+        this.control = control;
+    }
+
+    @Override
+    public void setPressed(boolean pressed) {
+        this.pressed = pressed;
+    }
+
+    @Override
+    public void setPressure(float pressure) {
+        this.pressure = pressure;
+    }
+
 }

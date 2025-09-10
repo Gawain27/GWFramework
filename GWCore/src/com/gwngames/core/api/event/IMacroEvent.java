@@ -12,4 +12,6 @@ public interface IMacroEvent extends IBaseComp {
 
     Array<IEvent> getEvents();
     String getId();
+
+    void setId(String id);
 }

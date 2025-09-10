@@ -1,6 +1,9 @@
 package com.gwngames.core.event.cond;
 
+import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.event.*;
+import com.gwngames.core.base.BaseComponent;
+import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.event.cond.base.ConditionPolicy;
 import com.gwngames.core.event.cond.base.ConditionResult;
 
@@ -9,13 +12,9 @@ import com.gwngames.core.event.cond.base.ConditionResult;
  * finished all of its own events.
  * Behaviour type: WAIT_UNTIL_TRUE
  */
-public final class AfterMacroEventCondition implements IExecutionCondition {
-
-    private final IMacroEvent macroEvent;
-
-    public AfterMacroEventCondition(IMacroEvent macroEvent) {
-        this.macroEvent = macroEvent;
-    }
+@Init(module = ModuleNames.CORE)
+public final class AfterMacroEventCondition extends BaseComponent implements IExecutionCondition {
+    private IMacroEvent macroEvent;
 
     @Override
     public IConditionResult evaluate(IEvent event, IMasterEventQueue master) {
@@ -27,5 +26,9 @@ public final class AfterMacroEventCondition implements IExecutionCondition {
     @Override
     public IConditionPolicy policy() {
         return ConditionPolicy.WAIT_UNTIL_TRUE;
+    }
+
+    public void setMacroEvent(IMacroEvent macroEvent) {
+        this.macroEvent = macroEvent;
     }
 }

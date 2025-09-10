@@ -7,4 +7,6 @@ import com.gwngames.core.data.ComponentNames;
 @Init(component = ComponentNames.CONTROLLER_ADAPTER)
 public interface IControllerAdapter extends IInputAdapter {
     Controller getController();
+
+    void setController(Controller controller);
 }

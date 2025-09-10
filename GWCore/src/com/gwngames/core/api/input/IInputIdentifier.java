@@ -17,4 +17,5 @@ public interface IInputIdentifier extends IBaseComp {
     String getDisplayName();
 
     boolean isRecordWhilePressed();
+    void setRecordWhilePressed(boolean isRecordWhilePressed);
 }

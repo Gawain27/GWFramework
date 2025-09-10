@@ -30,11 +30,16 @@ public final class MasterEventQueueTest extends BaseTest {
     private static final class SimpleSubQueue extends ConcurrentSubQueue<SimpleEvent> {
         private final CountDownLatch latch;
         SimpleSubQueue(int maxParallel, CountDownLatch latch, MasterEventQueue master) {
-            super(maxParallel, master);
+            super();
             this.latch = latch;
         }
         @Override protected void processEvent(SimpleEvent event) {
             latch.countDown(); // mark success for test synchronisation
+        }
+
+        @Override
+        public Class<SimpleEvent> getType() {
+            return SimpleEvent.class;
         }
     }
 
@@ -44,10 +49,17 @@ public final class MasterEventQueueTest extends BaseTest {
      * {@link MasterEventQueue} – not here.
      */
     private static final class FaultySubQueue extends ConcurrentSubQueue<SimpleEvent> {
-        FaultySubQueue(MasterEventQueue master) { super(1, master); }
+        FaultySubQueue(MasterEventQueue master) {
+            super();
+        }
         @Override
         protected void processEvent(SimpleEvent event) throws EventException {
             throw new DummyEventException(DUMMY_TRANSLATABLE);
+        }
+
+        @Override
+        public Class<SimpleEvent> getType() {
+            return SimpleEvent.class;
         }
     }
 
@@ -61,9 +73,9 @@ public final class MasterEventQueueTest extends BaseTest {
 
         MasterEventQueue master = new MasterEventQueue();
         SimpleSubQueue   okQueue = new SimpleSubQueue(2, successLatch, master);
-        master.registerSubQueue(SimpleEvent.class, okQueue);
 
-        MacroEvent macro = new MacroEvent("macro-1");
+        MacroEvent macro = new MacroEvent();
+        macro.setId("macro-1");
         SimpleEvent e1 = new SimpleEvent();
         SimpleEvent e2 = new SimpleEvent();
         macro.addEvent(e1);
@@ -91,12 +103,12 @@ public final class MasterEventQueueTest extends BaseTest {
         CountDownLatch exceptionLatch = new CountDownLatch(1);
 
         MasterEventQueue faultyMaster = new MasterEventQueue();
-        faultyMaster.registerSubQueue(SimpleEvent.class, new FaultySubQueue(faultyMaster));
 
         // Notify the test when the exception bubbles up.
         faultyMaster.setPostExceptionAction((evt, ex) -> exceptionLatch.countDown());
 
-        MacroEvent faultyMacro = new MacroEvent("macro-error");
+        MacroEvent faultyMacro = new MacroEvent();
+        faultyMacro.setId("macro-error");
         faultyMacro.addEvent(new SimpleEvent());
         faultyMaster.enqueueMacroEvent(faultyMacro);
 

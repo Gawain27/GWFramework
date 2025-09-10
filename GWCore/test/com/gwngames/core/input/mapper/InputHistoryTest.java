@@ -84,6 +84,11 @@ public final class InputHistoryTest extends BaseTest {
         }
 
         @Override
+        public void setRecordWhilePressed(boolean isRecordWhilePressed) {
+
+        }
+
+        @Override
         public int getMultId() {
             return 0;
         }

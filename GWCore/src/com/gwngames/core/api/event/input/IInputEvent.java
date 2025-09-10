@@ -2,6 +2,7 @@ package com.gwngames.core.api.event.input;
 
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.event.IEvent;
+import com.gwngames.core.api.input.IInputAdapter;
 import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.data.input.InputType;
 import com.gwngames.core.api.input.action.IInputAction;
@@ -25,6 +26,14 @@ public interface IInputEvent extends IEvent {
 
     /** The action assigned at runtime to the input type */
     IInputAction getAssignedAction();
-    void assignAction(IInputAction action);
 
+    void setTimestamp(long timestamp);
+
+    void setSlot(int slot);
+
+    void setType(InputType type);
+
+    /** Originating adapter (required). */
+    IInputAdapter getAdapter();
+    void setAdapter(IInputAdapter adapter);
 }

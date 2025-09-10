@@ -13,14 +13,16 @@ public class AfterMacroEventConditionTest extends BaseTest {
         setupApplication();
 
         MasterEventQueue master = new MasterEventQueue();
-        MacroEvent macro = new MacroEvent("macro-1");
+        MacroEvent macro = new MacroEvent();
+        macro.setId("macro-1");
 
         SimpleEvent e1 = new SimpleEvent();
         SimpleEvent e2 = new SimpleEvent();
         macro.addEvent(e1);
         macro.addEvent(e2);
 
-        AfterMacroEventCondition cond = new AfterMacroEventCondition(macro);
+        AfterMacroEventCondition cond = new AfterMacroEventCondition();
+        cond.setMacroEvent(macro);
 
         /* 1 — macro not started → WAIT                                   */
         Assertions.assertSame(ConditionResult.WAIT,

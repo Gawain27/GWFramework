@@ -3,13 +3,15 @@ package com.gwngames.core.input.detector;
 import com.badlogic.gdx.Input.Peripheral;
 import com.badlogic.gdx.Gdx;
 
+import com.gwngames.core.api.base.cfg.IConfig;
 import com.gwngames.core.api.build.Init;
+import com.gwngames.core.api.build.Inject;
+import com.gwngames.core.api.build.PostInject;
 import com.gwngames.core.api.input.*;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.SubComponentNames;
-import com.gwngames.core.input.adapter.KeyboardInputAdapter;
-import com.gwngames.core.input.adapter.TouchInputAdapter;
+import com.gwngames.core.data.input.InputParameters;
 
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -17,8 +19,18 @@ import java.util.function.Supplier;
 
 @Init(module = ModuleNames.CORE, subComp = SubComponentNames.PERIPHERAL_DETECTOR)
 public class PeripheralDeviceDetector extends BaseComponent implements IDeviceDetector {
+    @Inject
+    private IConfig config;
+    @Inject
+    private IInputAdapterFactory factory;
 
-    private static final float RECHECK_SECONDS = 1.5f;   // set < 0 to disable polling TODO: to config
+    // set < 0 to disable polling
+    private float RECHECK_SECONDS;
+
+    @PostInject
+    void init(){
+        RECHECK_SECONDS = config.get(InputParameters.INPUT_DEVICE_POLLING);
+    }
 
     private final List<IInputDeviceListener> listeners = new CopyOnWriteArrayList<>();
     private final Map<Peripheral, IInputAdapter> created = new EnumMap<>(Peripheral.class);
@@ -49,8 +61,8 @@ public class PeripheralDeviceDetector extends BaseComponent implements IDeviceDe
     }
 
     private void rescan() {
-        checkPeripheral(Peripheral.HardwareKeyboard, KeyboardInputAdapter::new);
-        checkPeripheral(Peripheral.MultitouchScreen, TouchInputAdapter::new);
+        checkPeripheral(Peripheral.HardwareKeyboard, () -> factory.createKeyboard());
+        checkPeripheral(Peripheral.MultitouchScreen, () -> factory.createTouch());
     }
 
     private void checkPeripheral(Peripheral p, Supplier<IInputAdapter> factory) {

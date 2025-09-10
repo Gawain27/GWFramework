@@ -51,14 +51,35 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem {
 
     protected IDashboardContent dashboardContent;
 
-    @Override public Enum<?> tableKey()        { return DashTable.COMPONENTS; }
-    @Override public Enum<?> categoryKey()     { return DashCategory.ALL; }
-    @Override public Enum<?> itemCategoryKey() { return DashICat.DEFAULT; }
+    @Override
+    public Enum<?> tableKey() {
+        return DashTable.COMPONENTS;
+    }
+    @Override
+    public Enum<?> categoryKey() {
+        return DashCategory.ALL;
+    }
+    @Override
+    public Enum<?> itemCategoryKey() {
+        return DashICat.DEFAULT;
+    }
 
-    @Override public IDashboardHeader categoryHeader()      { return DashboardDefaults.header("Components"); }
-    @Override public IDashboardContent categoryStatistics() { return DashboardDefaults.none(); }
-    @Override public IDashboardHeader itemCategoryHeader()  { return DashboardDefaults.header("All"); }
-    @Override public IDashboardContent itemCategoryStats()  { return DashboardDefaults.none(); }
+    @Override
+    public IDashboardHeader categoryHeader() {
+        return DashboardDefaults.header("Components");
+    }
+    @Override
+    public IDashboardContent categoryStatistics() {
+        return DashboardDefaults.none();
+    }
+    @Override
+    public IDashboardHeader itemCategoryHeader() {
+        return DashboardDefaults.header("All");
+    }
+    @Override
+    public IDashboardContent itemCategoryStats()  {
+        return DashboardDefaults.none();
+    }
 
     /**
      * Single content that renders the tile AND the popup (no layers needed).
@@ -175,9 +196,9 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem {
             f.setAccessible(true);
             Inject inj = f.getAnnotation(Inject.class);
             if (inj.loadAll()) {
-                injectAllImplementations(f, obj);
+                injectAllImplementations(f, obj, inj);   // <-- honors subTypeOf filter
             } else {
-                injectSingle(f, obj, inj);
+                injectSingle(f, obj, inj);               // <-- enforces rule: subTypeOf requires loadAll
             }
             f.setAccessible(false);
         }
@@ -186,7 +207,7 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem {
         return obj;
     }
 
-    private static void injectAllImplementations(Field f, Object host) {
+    private static void injectAllImplementations(Field f, Object host, Inject inj) {
         if (!List.class.isAssignableFrom(f.getType()))
             throw new IllegalStateException("@Inject(loadAll=true) field must be a List : " + f);
 
@@ -195,7 +216,19 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem {
         if (elemMeta == null || !elemMeta.allowMultiple())
             throw new IllegalStateException("Component does not allow multiple: " + elemType);
 
-        List<?> all = ModuleClassLoader.getInstance().tryCreateAll(elemMeta.component());
+        Class<?> subIface = inj.subTypeOf();
+        List<?> all;
+
+        if (subIface != null && subIface != IBaseComp.class) {
+            if (!subIface.isInterface())
+                throw new IllegalStateException("@Inject(subTypeOf=...) must be an interface: " + subIface.getName());
+            // Filter: only implementations that implement/extend subIface
+            all = ModuleClassLoader.getInstance().tryCreateAll(elemMeta.component(), subIface);
+        } else {
+            // Original behavior: all sub-components
+            all = ModuleClassLoader.getInstance().tryCreateAll(elemMeta.component());
+        }
+
         try { f.set(host, Collections.unmodifiableList(all)); }
         catch (IllegalAccessException e) { throw new RuntimeException(e); }
 
@@ -204,6 +237,11 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem {
 
     @SuppressWarnings("unchecked")
     private static void injectSingle(Field f, Object host, Inject inj) {
+        // Enforce: subTypeOf requires loadAll=true
+        if (inj.subTypeOf() != IBaseComp.class) {
+            throw new IllegalStateException("@Inject(subTypeOf=...) requires loadAll=true on field: " + f);
+        }
+
         Class<IBaseComp> depType = (Class<IBaseComp>) f.getType();
         SubComponentNames sub = inj.subComp();
         Supplier<IBaseComp> create = () -> {

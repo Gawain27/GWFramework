@@ -5,6 +5,6 @@ import com.gwngames.core.api.build.Init;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
 
-@Init(module = ModuleNames.INTERFACE, component = ComponentNames.EVENT_LOGGER)
+@Init(module = ModuleNames.INTERFACE, component = ComponentNames.EVENT_LOGGER, allowMultiple = true, forceDefinition = true)
 public interface IEventLogger extends IBaseComp {
 }

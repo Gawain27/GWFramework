@@ -1,17 +1,20 @@
 package com.gwngames.core.input.action;
 
 import com.badlogic.gdx.Input;
+import com.gwngames.core.api.event.input.IButtonEvent;
 import com.gwngames.core.api.event.input.IInputEvent;
 import com.gwngames.core.api.input.IInputIdentifier;
+import com.gwngames.core.api.input.IInputManager;
 import com.gwngames.core.api.input.action.IInputAction;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.BaseTest;
 import com.gwngames.core.event.input.ButtonEvent;
 import com.gwngames.core.input.BaseInputAdapter;
-import com.gwngames.core.input.buffer.FastComboManager;
-import com.gwngames.core.input.buffer.FastInputChainManager;
-import com.gwngames.core.input.buffer.SmartInputBuffer;
+import com.gwngames.core.input.CoreInputTelemetry;
+import com.gwngames.core.input.InputManager;
+import com.gwngames.core.input.buffer.CoreInputCoordinator;
 import com.gwngames.core.input.controls.KeyInputIdentifier;
+import com.gwngames.core.util.Cdi;
 import org.junit.jupiter.api.Assertions;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -43,21 +46,10 @@ public class InputActionManagerMapperTest extends BaseTest {
 
         SimpleMapper(IInputAction act){
             this.act = act;
-
-            /* supply mandatory collaborators expected by BaseInputMapper */
-            /* dummy managers (combos/chains not used in this test) */
-            this.comboMgr = new FastComboManager();
-            this.chainMgr = new FastInputChainManager();
-            this.buffer   = new SmartInputBuffer(4);
-
-            /* install a history instance to avoid NPE in super.onInput() */
-            try {
-                var f = BaseInputMapper.class.getDeclaredField("history");
-                f.setAccessible(true);
-                f.set(this, new InputHistory());
-            } catch (ReflectiveOperationException e) {
-                throw new IllegalStateException("cannot init history", e);
-            }
+            this.coordinator = new CoreInputCoordinator();
+            this.telemetry = new CoreInputTelemetry();
+            Cdi.inject(coordinator);
+            Cdi.inject(telemetry);
         }
 
         /* direct identifier→action mapping (no combos/chains) */
@@ -79,10 +71,22 @@ public class InputActionManagerMapperTest extends BaseTest {
 
     /** stub adapter that can dispatch arbitrary events */
     private static final class StubAdapter extends BaseInputAdapter {
-        StubAdapter(String name, int slot){ super(name); setSlot(slot); }
+        StubAdapter(int slot){ super(); setSlot(slot); }
         @Override public void start(){ }
         @Override public void stop() { }
-        void fire(IInputEvent e){ dispatch(e); }
+
+        @Override
+        public String getAdapterName() {
+            return "StubAdapter";
+        }
+
+        void fire(IButtonEvent e){
+            if (e.isPressed()){
+                inputManager.emitButtonUp(this, e.getControl(), e.getPressure());
+            } else {
+                inputManager.emitButtonDown(this, e.getControl(), e.getPressure());
+            }
+        }
     }
 
     /* ───────────────────────── BaseTest entry-point ─────────────────── */
@@ -99,18 +103,21 @@ public class InputActionManagerMapperTest extends BaseTest {
 
         SimpleMapper mapper = new SimpleMapper(act);
 
-        StubAdapter pad0 = new StubAdapter("Pad-0", 0);
-        StubAdapter pad1 = new StubAdapter("Pad-1", 1);
+        StubAdapter pad0 = new StubAdapter( 0);
+        StubAdapter pad1 = new StubAdapter(1);
 
         /* attach to pad0 */
         mgr.attachMapper(mapper, pad0);
         mapper.setAdapter(pad0);
         Assertions.assertSame(pad0, mgr.adapterOf(mapper));
 
-        pad0.fire(new ButtonEvent(0, new KeyInputIdentifier(Input.Keys.SPACE, true), true, 1f));
+        IInputManager manager = new InputManager();
+        Cdi.inject(manager);
+
+        pad0.fire(manager.createButton(pad0, new KeyInputIdentifier(Input.Keys.SPACE, true), true, 1f));
         Assertions.assertEquals(1, act.hits(), "Action should fire through pad0");
 
-        pad1.fire(new ButtonEvent(1, new KeyInputIdentifier(Input.Keys.SPACE, true), true, 1f));
+        pad1.fire(manager.createButton(pad1, new KeyInputIdentifier(Input.Keys.SPACE, true), true, 1f));
         Assertions.assertEquals(1, act.hits(), "Not yet bound to pad1");
 
         /* re-attach to pad1 (auto-detaches from pad0) */
@@ -118,10 +125,10 @@ public class InputActionManagerMapperTest extends BaseTest {
         mapper.setAdapter(pad1);
         Assertions.assertSame(pad1, mgr.adapterOf(mapper));
 
-        pad0.fire(new ButtonEvent(0, new KeyInputIdentifier(Input.Keys.SPACE, true), true, 1f));
+        pad0.fire(manager.createButton(pad0, new KeyInputIdentifier(Input.Keys.SPACE, true), true, 1f));
         Assertions.assertEquals(1, act.hits(), "Old adapter must no longer trigger");
 
-        pad1.fire(new ButtonEvent(1, new KeyInputIdentifier(Input.Keys.SPACE, true), true, 1f));
+        pad1.fire(manager.createButton(pad1, new KeyInputIdentifier(Input.Keys.SPACE, true), true, 1f));
         Assertions.assertEquals(2, act.hits(), "Action fires through new adapter");
 
         /* detach mapper entirely */
@@ -129,7 +136,7 @@ public class InputActionManagerMapperTest extends BaseTest {
         mapper.setAdapter(null);
         Assertions.assertNull(mgr.adapterOf(mapper));
 
-        pad1.fire(new ButtonEvent(1, new KeyInputIdentifier(Input.Keys.SPACE, true), true, 1f));
+        pad1.fire(manager.createButton(pad1, new KeyInputIdentifier(Input.Keys.SPACE, true), true, 1f));
         Assertions.assertEquals(2, act.hits(), "Detached mapper should ignore input");
     }
 }

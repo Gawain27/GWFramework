@@ -63,6 +63,12 @@ public final class InputComboManagerTest extends BaseTest {
         @Override public String getComponentType() { return "key"; }
         @Override public String getDisplayName()   { return name; }
         @Override public boolean isRecordWhilePressed() { return true; }
+
+        @Override
+        public void setRecordWhilePressed(boolean isRecordWhilePressed) {
+
+        }
+
         @Override public int getMultId() { return 0; }
         @Override public String toString() { return name; }
         @Override public int hashCode() { return name.hashCode(); }

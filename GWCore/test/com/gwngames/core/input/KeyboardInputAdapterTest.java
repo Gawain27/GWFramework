@@ -272,12 +272,12 @@ public class KeyboardInputAdapterTest extends BaseTest {
     /* ───────────────────────── BaseTest entry-point ───────────────────── */
     @Override
     protected void runTest() {
-        /* 1 — install dummy Gdx singletons */
+        /* install dummy Gdx singletons */
         setupApplication();
         DummyInputWithProcessor input = new DummyInputWithProcessor();
         com.badlogic.gdx.Gdx.input = input;
 
-        /* 2 — instantiate adapter & listener */
+        /* instantiate adapter & listener */
         KeyboardInputAdapter adapter = new KeyboardInputAdapter();
 
         AtomicInteger downCnt = new AtomicInteger();
@@ -301,14 +301,19 @@ public class KeyboardInputAdapterTest extends BaseTest {
                     }
                 }
             }
+
+            @Override
+            public String identity() {
+                return "";
+            }
         };
         adapter.addListener(listener);
 
-        /* 3 — start() must register as InputProcessor */
+        /* start() must register as InputProcessor */
         adapter.start();
         Assertions.assertSame(adapter, input.getInputProcessor(), "Adapter should install itself as InputProcessor");
 
-        /* 4 — simulate keyDown + keyUp on the processor */
+        /* simulate keyDown + keyUp on the processor */
         int key = Keys.Q;
 
         input.getInputProcessor().keyDown(key);

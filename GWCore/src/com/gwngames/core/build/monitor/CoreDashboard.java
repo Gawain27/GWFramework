@@ -11,8 +11,10 @@ import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.api.build.PostInject;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
+import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.base.log.LogBus;
 import com.gwngames.core.data.ComponentNames;
+import com.gwngames.core.data.LogFiles;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.data.cfg.BuildParameters;
@@ -31,7 +33,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 @Init(module = ModuleNames.CORE)
 public final class CoreDashboard extends BaseComponent implements IDashboard, AutoCloseable {
-
+    FileLogger log = FileLogger.get(LogFiles.MONITOR);
     @Inject
     private IConfig config;
     @Inject
@@ -207,7 +209,7 @@ public final class CoreDashboard extends BaseComponent implements IDashboard, Au
             .append("<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>")
             .append("<title>Dashboard</title><style>")
             .append(themeCss)
-            .append(ESSENTIAL_CSS) // ← always append essential modal CSS
+            .append(ESSENTIAL_CSS) // always append essential modal CSS
             .append("</style></head><body>");
 
         sb.append(renderRoot());

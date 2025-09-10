@@ -1,13 +1,17 @@
 package com.gwngames.core.event.queue;
 
 import com.gwngames.core.api.build.Init;
+import com.gwngames.core.api.build.Inject;
+import com.gwngames.core.api.build.PostInject;
 import com.gwngames.core.api.event.*;
 import com.gwngames.core.api.ex.EventException;
+import com.gwngames.core.api.ex.UnknownEventException;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.LogFiles;
 import com.badlogic.gdx.utils.*;
 import com.gwngames.core.data.ModuleNames;
+import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.event.base.AbstractEvent;
 import com.gwngames.core.event.base.MacroEvent;
 import com.gwngames.core.event.cond.base.ConditionPolicy;
@@ -15,6 +19,7 @@ import com.gwngames.core.event.cond.base.ConditionResult;
 import com.gwngames.core.event.cond.base.GlobalRule;
 import com.gwngames.core.util.CollectionUtils;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,17 +27,29 @@ import java.util.function.BiConsumer;
 
 @Init(module = ModuleNames.CORE)
 public class MasterEventQueue extends BaseComponent implements IMasterEventQueue {
+    private final FileLogger logger = FileLogger.get(LogFiles.EVENT);
+
+    // auto starts the logging process
+    @Inject(subComp = SubComponentNames.EVENT_STATUS_LOGGER)
+    private IEventLogger eventStatusLogger;
+    @Inject(loadAll = true)
+    private List<IEventQueue> concreteSubQueues;
     private final Queue<IMacroEvent> macroQueue = new Queue<>();
     private final ObjectSet<IEvent> executedEvents = new ObjectSet<>();
     private final ObjectSet<IMacroEvent> completedMacros = new ObjectSet<>();
     private final ObjectMap<Class<? extends IEvent>, ConcurrentSubQueue<? extends IEvent>> subQueues = new ObjectMap<>();
     private final Map<String, GlobalRule> globalRules = new ConcurrentHashMap<>();
-    private final FileLogger logger = FileLogger.get(LogFiles.EVENT);
     private BiConsumer<IEvent, EventException> postExceptionAction;
     private final Map<String, IEventTrigger> triggers = new ConcurrentHashMap<>();
 
-    public synchronized void registerSubQueue(Class<? extends IEvent> cls, ConcurrentSubQueue<? extends IEvent> queue) {
-        subQueues.put(cls, queue);
+    @PostInject
+    public void registerSubQueues() {
+        for (IEventQueue q : concreteSubQueues){
+            if (q instanceof ConcurrentSubQueue<? extends IEvent>){
+                Class<? extends IEvent> qClass = ((ConcurrentSubQueue<? extends IEvent>) q).getType();
+                    subQueues.put(qClass, (ConcurrentSubQueue<? extends IEvent>) q);
+            }
+        }
     }
 
     @Override
@@ -44,7 +61,9 @@ public class MasterEventQueue extends BaseComponent implements IMasterEventQueue
     @Override
     public synchronized void enqueueEvent(IEvent ev) {
         /* wrap into a synthetic macro so the usual flow works */
-        MacroEvent wrap = new MacroEvent("single-" + ev.getClass().getSimpleName()+ "-" + UUID.randomUUID());
+        // TODO create from event manager
+        MacroEvent wrap = new MacroEvent();
+        wrap.setId("single-" + ev.getClass().getSimpleName()+ "-" + UUID.randomUUID());
         wrap.addEvent(ev);
         enqueueMacroEvent(wrap);
     }
@@ -128,10 +147,14 @@ public class MasterEventQueue extends BaseComponent implements IMasterEventQueue
 
     @Override
     public void handleEventException(IEvent event, EventException ex) {
-        logger.error("EventException in event [%s] from MacroEvent [%s]: %s",
-            event.getClass().getSimpleName(),
-            event.getMacroEvent().getId(),
-            ex.getMessage());
+        if (ex instanceof UnknownEventException){
+            logger.error("Unknown event type: " + event.getClass().getName());
+        } else if (event.getMacroEvent() != null) {
+            logger.error("EventException in event [%s] from MacroEvent [%s]: %s",
+                event.getClass().getSimpleName(),
+                event.getMacroEvent().getId(),
+                ex.getMessage());
+        }
 
         if (postExceptionAction != null) {
             postExceptionAction.accept(event, ex);

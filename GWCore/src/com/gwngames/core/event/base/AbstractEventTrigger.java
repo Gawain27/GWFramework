@@ -1,6 +1,7 @@
 package com.gwngames.core.event.base;
 
 import com.gwngames.core.api.build.Inject;
+import com.gwngames.core.api.build.PostInject;
 import com.gwngames.core.api.event.IEventTrigger;
 import com.gwngames.core.api.event.IMasterEventQueue;
 import com.gwngames.core.base.BaseComponent;
@@ -12,14 +13,15 @@ import java.util.UUID;
 */
 public abstract class AbstractEventTrigger extends BaseComponent implements IEventTrigger {
 
-    private final String id;
+    private String id;
     private volatile boolean enabled = true;
 
     @Inject
     protected IMasterEventQueue masterEventQueue;
 
-    protected AbstractEventTrigger() {
-        this.id = "trigger-"+getClass().getSimpleName()+"-"+UUID.randomUUID().toString();
+    @PostInject
+    void init(){
+        this.id = "trigger-"+getClass().getSimpleName()+"-"+UUID.randomUUID();
     }
 
     @Override

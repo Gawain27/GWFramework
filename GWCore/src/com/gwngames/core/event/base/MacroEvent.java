@@ -6,13 +6,12 @@ import com.gwngames.core.api.event.IEvent;
 import com.gwngames.core.api.event.IMacroEvent;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.data.ModuleNames;
+import com.gwngames.core.util.StringUtils;
 
 @Init(module = ModuleNames.CORE)
 public class MacroEvent extends BaseComponent implements IMacroEvent {
-    private final String id;
+    private String id;
     private final Array<IEvent> events = new Array<>();
-
-    public MacroEvent(String id) { this.id = id; }
 
     @Override
     public void addEvent(IEvent event) {
@@ -24,5 +23,15 @@ public class MacroEvent extends BaseComponent implements IMacroEvent {
     public Array<IEvent> getEvents() { return events; }
 
     @Override
-    public String getId() { return id; }
+    public String getId() {
+        return id;
+    }
+
+    @Override
+    public void setId(String id) {
+        if (!StringUtils.isEmpty(this.id)) return;
+        if (StringUtils.isEmpty(id))
+            throw new IllegalArgumentException("id cannot be empty");
+        this.id = id;
+    }
 }

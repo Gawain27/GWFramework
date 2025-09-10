@@ -8,13 +8,20 @@ import com.gwngames.core.util.ControllerMappingUtil;
 
 @Init(module = ModuleNames.CORE)
 public class ControllerAxisInputIdentifier extends BaseInputIdentifier implements IAxisIdentifier {
-    private final Controller controller;
-    private final int        axisCode;
+    private Controller controller;
+    private int axisCode;
+
+    public ControllerAxisInputIdentifier(){}
 
     public ControllerAxisInputIdentifier(Controller controller, int axisCode, boolean recordWhilePressed) {
         super(recordWhilePressed);
         this.controller = controller;
         this.axisCode   = axisCode;
+    }
+
+    @Override
+    public void setController(Controller controller) {
+        this.controller = controller;
     }
 
     @Override
@@ -25,6 +32,11 @@ public class ControllerAxisInputIdentifier extends BaseInputIdentifier implement
     @Override
     public int getAxisCode() {
         return axisCode;
+    }
+
+    @Override
+    public void setAxisCode(int axisCode) {
+        this.axisCode = axisCode;
     }
 
     @Override

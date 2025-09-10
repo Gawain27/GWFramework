@@ -1,7 +1,6 @@
 package com.gwngames.core.api.ex;
 
-import static com.gwngames.core.api.ex.ExceptionLevel.CRITICAL;
-import static com.gwngames.core.api.ex.ExceptionLevel.HIGH;
+import static com.gwngames.core.api.ex.ExceptionLevel.*;
 
 /**
  * Exception codes are bundles that categorize different exceptions<p>

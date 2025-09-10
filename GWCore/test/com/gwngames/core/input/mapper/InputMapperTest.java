@@ -110,10 +110,6 @@ public final class InputMapperTest extends BaseTest {
     /* mapper stub ------------------------------------------------------- */
     private static final class TestMapper extends BaseInputMapper {
         TestMapper(IInputComboManager cm, IInputChainManager chm, IInputBuffer buf, IInputChain chain) {
-            this.comboMgr = cm;
-            this.chainMgr = chm;
-            this.buffer   = buf;
-            this.history  = new InputHistory();
             map(chain, Set.of(InputContext.GAMEPLAY), new DummyAction());
         }
         @Override public void map  (String c, IInputIdentifier id, IInputAction a) {}
@@ -133,7 +129,6 @@ public final class InputMapperTest extends BaseTest {
     private static final class BtnEvt extends ButtonEvent {
         private final IInputIdentifier id; private final boolean pressed;
         BtnEvt(IInputIdentifier id, boolean pressed) {
-            super(0, id, pressed, 1);
             this.id = id; this.pressed = pressed;
         }
         @Override public IInputIdentifier getControl() { return id;     }

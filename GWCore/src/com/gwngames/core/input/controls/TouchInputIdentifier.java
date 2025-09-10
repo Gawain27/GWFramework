@@ -1,11 +1,8 @@
 package com.gwngames.core.input.controls;
 
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.api.input.ITouchIdentifier;
-import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.SubComponentNames;
 
 /**
  * Identifier for a particular touch pointer (finger or stylus).
@@ -13,8 +10,9 @@ import com.gwngames.core.data.SubComponentNames;
  */
 @Init(module = ModuleNames.CORE)
 public class TouchInputIdentifier extends BaseInputIdentifier implements ITouchIdentifier {
+    private int pointer;  // LibGDX pointer index (0,1,2...)
 
-    private final int pointer;  // LibGDX pointer index (0,1,2...)
+    public TouchInputIdentifier() {}
 
     public TouchInputIdentifier(int pointer, boolean recordWhilePressed) {
         super(recordWhilePressed);
@@ -22,7 +20,13 @@ public class TouchInputIdentifier extends BaseInputIdentifier implements ITouchI
     }
 
     @Override
-    public int getPointer() { return pointer; }
+    public int getPointer() {
+        return pointer;
+    }
+    @Override
+    public void setPointer(int pointer) {
+        this.pointer = pointer;
+    }
 
     /* ------------- IInputIdentifier metadata ------------- */
 

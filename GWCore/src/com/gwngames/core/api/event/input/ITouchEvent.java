@@ -10,4 +10,10 @@ import com.gwngames.core.data.ModuleNames;
 public interface ITouchEvent extends IInputEvent{
     public Vector2 getPosition();
     public float getPressure();
+
+    void setControl(IInputIdentifier control);
+
+    void setPosition(Vector2 position);
+
+    void setPressure(float pressure);
 }

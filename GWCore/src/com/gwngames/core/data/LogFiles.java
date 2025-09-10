@@ -9,6 +9,9 @@ public class LogFiles {
     public static final String ERROR = "../log/error.log";
     public static final String TEST = "../log/test/test.log";
     public static final String EVENT = "../log/event/event.log";
+    public static final String EVENT_STATUS = "../log/event/event_status.log";
     public static final String ASSET = "../log/cfg/assets.log";
     public static final String INPUT = "../log/event/input.log";
+    public static final String MONITOR = "../log/monitor.log";
+
 }

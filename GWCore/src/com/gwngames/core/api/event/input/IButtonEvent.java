@@ -8,4 +8,10 @@ import com.gwngames.core.data.ComponentNames;
 public interface IButtonEvent extends IInputEvent{
     boolean isPressed();
     float getPressure();
+
+    void setControl(IInputIdentifier control);
+
+    void setPressed(boolean pressed);
+
+    void setPressure(float pressure);
 }

@@ -13,14 +13,16 @@ public class AfterEventConditionTest extends BaseTest {
         setupApplication();
 
         MasterEventQueue master = new MasterEventQueue();
-        MacroEvent macro = new MacroEvent("macro-X");
+        MacroEvent macro = new MacroEvent(); //TODO use event manager
+        macro.setId("macro-X");
 
         SimpleEvent prerequisite = new SimpleEvent();
         SimpleEvent candidate    = new SimpleEvent();
         macro.addEvent(prerequisite);
         macro.addEvent(candidate);
 
-        AfterEventCondition cond = new AfterEventCondition(prerequisite);
+        AfterEventCondition cond = new AfterEventCondition();
+        cond.setPrerequisite(prerequisite);
 
         /* 1 — prerequisite not executed → result is WAIT                */
         Assertions.assertSame(ConditionResult.WAIT,

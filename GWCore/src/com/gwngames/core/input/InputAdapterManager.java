@@ -1,32 +1,34 @@
 package com.gwngames.core.input;
 
+import com.gwngames.core.api.base.cfg.IClassLoader;
+import com.gwngames.core.api.base.cfg.IConfig;
 import com.gwngames.core.api.build.Init;
+import com.gwngames.core.api.build.Inject;
+import com.gwngames.core.api.build.PostInject;
 import com.gwngames.core.api.input.*;
 
 import com.gwngames.core.base.BaseComponent;
+import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.input.detector.ControllerDeviceDetector;
-import com.gwngames.core.input.detector.PeripheralDeviceDetector;
-
+import com.gwngames.core.data.SubComponentNames;
+import com.gwngames.core.data.input.InputParameters;
 
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 @Init(module = ModuleNames.CORE)
 public class InputAdapterManager extends BaseComponent implements IInputAdapterManager, IInputDeviceListener{
-    /* ───────────────────────── constants & singleton ───────────────────────── */
-    public static final int MAX_SLOTS = 4; // todo: to config
-    private static final InputAdapterManager INSTANCE = new InputAdapterManager();
+    @Inject
+    private IClassLoader loader;
+    @Inject
+    private IConfig config;
 
-    public static InputAdapterManager get() { return INSTANCE; }
-
-    /* ───────────────────────── state ───────────────────────── */
-
+    private int MAX_SLOTS;
     /** slot-assigned adapters (index = slot) */
-    private final IInputAdapter[] slots = new IInputAdapter[MAX_SLOTS];
+    private IInputAdapter[] slots;
 
     /** every adapter detected in the running app */
-    private final List<IInputAdapter> allAdapters    = new CopyOnWriteArrayList<>();
+    private final List<IInputAdapter> allAdapters = new CopyOnWriteArrayList<>();
     /** adapters currently occupying slots */
     private final List<IInputAdapter> activeAdapters = new CopyOnWriteArrayList<>();
 
@@ -41,12 +43,21 @@ public class InputAdapterManager extends BaseComponent implements IInputAdapterM
 
     /* ───────────────────────── ctor ───────────────────────── */
 
-    private InputAdapterManager() {
+    public InputAdapterManager() {
         /* Register two out-of-the-box detectors:
            – gamepad hot-plug via LibGDX Controllers
-           – keyboard / multitouch peripherals                               */
-        addDetector(new ControllerDeviceDetector());
-        addDetector(new PeripheralDeviceDetector());   // polls keyboard/touch availability
+           – keyboard / multitouch peripherals */
+        IDeviceDetector controllerDeviceDetector = loader.tryCreate(ComponentNames.DEVICE_DETECTOR, SubComponentNames.CONTROLLER_DETECTOR);
+        IDeviceDetector perifDeviceDetector = loader.tryCreate(ComponentNames.DEVICE_DETECTOR, SubComponentNames.PERIPHERAL_DETECTOR);
+
+        addDetector(controllerDeviceDetector);
+        addDetector(perifDeviceDetector);   // polls keyboard/touch availability
+    }
+
+    @PostInject
+    void init() {
+        this.MAX_SLOTS = config.get(InputParameters.INPUT_MAX_DEVICES);
+        slots = new IInputAdapter[MAX_SLOTS];
     }
 
     /* ───────────────────────── detector management ───────────────────────── */
@@ -124,6 +135,13 @@ public class InputAdapterManager extends BaseComponent implements IInputAdapterM
     @Override
     public synchronized void onAdapterConnected(IInputAdapter adapter) {
         allAdapters.add(adapter);
+        //FIXME for now we do autoconnect, but we'll have to improve this
+        for (int i = 0; i < MAX_SLOTS; i++) {
+            if (slots[i] == null) {
+                register(i, adapter);
+                break;
+            }
+        }
         deviceListeners.forEach(l -> l.onAdapterConnected(adapter));
     }
 

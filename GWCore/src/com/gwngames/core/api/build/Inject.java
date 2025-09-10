@@ -1,5 +1,7 @@
 package com.gwngames.core.api.build;
 
+import com.gwngames.core.api.base.IBaseComp;
+import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.data.SubComponentNames;
 
 import java.lang.annotation.ElementType;
@@ -20,6 +22,7 @@ import java.util.function.Predicate;
 public @interface Inject {
     /** If true (and allowMultiple must be true!) then inject all concrete components into the list field */
     boolean loadAll() default false;
+    Class<? extends IBaseComp> subTypeOf() default IBaseComp.class;
     /** If true, create a new temporary comp every time annotated component is injected */
     boolean createNew() default false;
     /** If true, concrete class injected will never unload. */

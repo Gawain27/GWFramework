@@ -14,10 +14,6 @@ public class ManualTrigger extends AbstractEventTrigger {
     private IEvent     singlePayload;
     private volatile boolean pending = false;
 
-    public ManualTrigger() {
-        super();
-    }
-
     /* setters so external code can change the payload */
     public void setMacroPayload (MacroEvent m) { this.macroPayload  = m; }
     public void setSinglePayload(IEvent e)     { this.singlePayload = e; }

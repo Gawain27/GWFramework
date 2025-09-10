@@ -1,7 +1,5 @@
 package com.gwngames.core.api.base;
 
-import com.gwngames.core.base.log.FileLogger;
-import com.gwngames.core.data.LogFiles;
 import com.gwngames.core.util.ComponentUtils;
 
 import java.lang.reflect.Field;
@@ -12,8 +10,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * Root marker for every framework component (including enums).
  */
 public interface IBaseComp {
-    FileLogger log = FileLogger.get(LogFiles.SYSTEM);
-
     /** mult-ids for enum constants (populated by ModuleClassLoader via setMultId). */
     Map<IBaseComp, Integer> ENUM_IDS = new ConcurrentHashMap<>();
 

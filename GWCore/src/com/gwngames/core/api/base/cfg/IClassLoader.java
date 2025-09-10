@@ -142,6 +142,11 @@ public interface IClassLoader extends IBaseComp {
     /* -------------------------------------------------------------------- */
     /*  ALL SUBCOMPONENTS (allowMultiple = true)                            */
     /* -------------------------------------------------------------------- */
+    <T> List<T> tryCreateAll(ComponentNames comp, Class<?> mustImplement, Object... args);
+
+    /* -------------------------------------------------------------------- */
+    /*  ALL SUBCOMPONENTS (allowMultiple = true)                            */
+    /* -------------------------------------------------------------------- */
     <T> List<T> tryCreateAll(ComponentNames comp, Object... args);
 
     /* -------------------------------------------------------------------- */

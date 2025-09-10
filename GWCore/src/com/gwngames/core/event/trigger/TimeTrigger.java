@@ -14,31 +14,11 @@ import com.gwngames.core.event.base.AbstractEventTrigger;
 @Init(module = ModuleNames.CORE)
 public class TimeTrigger extends AbstractEventTrigger {
 
-    private final long intervalMs;
-    private final boolean repeat;
-    private final IMacroEvent macroPayload;   // alternative to single event
-    private final IEvent     singlePayload;  // alternative to macro
+    private long intervalMs;
+    private boolean repeat;
+    private IMacroEvent macroPayload;   // alternative to single event
+    private IEvent singlePayload;  // alternative to macro
     private long nextFireAt;
-
-    /* one-shot macro constructor */
-    public TimeTrigger(long delayMs, IMacroEvent macro) {
-        super();
-        this.intervalMs   = delayMs;
-        this.repeat       = false;
-        this.macroPayload = macro;
-        this.singlePayload = null;
-        this.nextFireAt   = TimeUtils.millis() + delayMs;
-    }
-
-    /* repeated single-event constructor */
-    public TimeTrigger(long everyMs, IEvent event, boolean repeat) {
-        super();
-        this.intervalMs   = everyMs;
-        this.repeat       = repeat;
-        this.singlePayload = event;
-        this.macroPayload  = null;
-        this.nextFireAt    = TimeUtils.millis() + everyMs;
-    }
 
     @Override
     public boolean pollAndFire(float delta) {
@@ -61,5 +41,45 @@ public class TimeTrigger extends AbstractEventTrigger {
             setEnabled(false);             // one-shot complete
         }
         return true;
+    }
+
+    public long getIntervalMs() {
+        return intervalMs;
+    }
+
+    public void setIntervalMs(long intervalMs) {
+        this.intervalMs = intervalMs;
+    }
+
+    public boolean isRepeat() {
+        return repeat;
+    }
+
+    public void setRepeat(boolean repeat) {
+        this.repeat = repeat;
+    }
+
+    public IMacroEvent getMacroPayload() {
+        return macroPayload;
+    }
+
+    public void setMacroPayload(IMacroEvent macroPayload) {
+        this.macroPayload = macroPayload;
+    }
+
+    public IEvent getSinglePayload() {
+        return singlePayload;
+    }
+
+    public void setSinglePayload(IEvent singlePayload) {
+        this.singlePayload = singlePayload;
+    }
+
+    public long getNextFireAt() {
+        return nextFireAt;
+    }
+
+    public void setNextFireAt(long nextFireAt) {
+        this.nextFireAt = nextFireAt;
     }
 }

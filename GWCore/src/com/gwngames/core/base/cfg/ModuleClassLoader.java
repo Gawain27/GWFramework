@@ -397,6 +397,26 @@ public final class ModuleClassLoader extends ClassLoader implements IClassLoader
     /*  ALL SUBCOMPONENTS (allowMultiple = true)                            */
     /* -------------------------------------------------------------------- */
     @Override
+    public <T> List<T> tryCreateAll(ComponentNames comp, Class<?> mustImplement, Object... args) {
+        if (mustImplement == null || !mustImplement.isInterface()) {
+            throw new IllegalStateException("mustImplement must be a non-null interface");
+        }
+        try {
+            List<Class<?>> clz = findSubComponents(comp);
+            List<T> out = new ArrayList<>();
+            for (Class<?> c : clz) {
+                // accept if the concrete class implements the interface directly or via super-interfaces
+                if (mustImplement.isAssignableFrom(c)) {
+                    out.addAll(instancesOf(c, args));
+                }
+            }
+            return out;
+        } catch (ClassNotFoundException e) {
+            return java.util.Collections.emptyList();
+        }
+    }
+
+    @Override
     public <T> List<T> tryCreateAll(ComponentNames comp, Object... args) {
         try {
             List<Class<?>> clz = findSubComponents(comp);

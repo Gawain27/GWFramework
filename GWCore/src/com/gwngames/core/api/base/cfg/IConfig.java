@@ -3,7 +3,6 @@ package com.gwngames.core.api.base.cfg;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.cfg.IParam;
-import com.gwngames.core.api.cfg.ParamKey;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.util.ParamRegistry;

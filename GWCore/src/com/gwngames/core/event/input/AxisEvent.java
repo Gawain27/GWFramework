@@ -2,7 +2,6 @@ package com.gwngames.core.event.input;
 
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.event.input.IAxisEvent;
-import com.gwngames.core.data.input.InputType;
 import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.data.ModuleNames;
 
@@ -14,29 +13,20 @@ import com.gwngames.core.data.ModuleNames;
 @Init(module = ModuleNames.CORE)
 public final class AxisEvent extends InputEvent implements IAxisEvent {
 
-    private final IInputIdentifier control;
+    private IInputIdentifier control;
 
     /** Raw value straight from the API. */
-    private final float rawValue;
+    private float rawValue;
 
     /** Application-level value (e.g. after dead-zone). */
-    private final float normalizedValue;
+    private float normalizedValue;
 
-    public AxisEvent(int   slot,
-                     IInputIdentifier control,
-                     float rawValue,
-                     float normalizedValue) {
-        super(InputType.AXIS_MOVE, slot, System.nanoTime());
-
-        this.control          = control;
-        this.rawValue         = rawValue;
-        this.normalizedValue  = normalizedValue;
-    }
 
     /* ───── accessors ───── */
 
     @Override
     public IInputIdentifier getControl()        { return control; }
+
     @Override
     public float            getRawValue()       { return rawValue; }
     @Override
@@ -49,6 +39,21 @@ public final class AxisEvent extends InputEvent implements IAxisEvent {
             control.getDisplayName(),
             rawValue,
             normalizedValue);
+    }
+
+    @Override
+    public void setControl(IInputIdentifier control) {
+        this.control = control;
+    }
+
+    @Override
+    public void setRawValue(float rawValue) {
+        this.rawValue = rawValue;
+    }
+
+    @Override
+    public void setNormalizedValue(float normalizedValue) {
+        this.normalizedValue = normalizedValue;
     }
 }
 

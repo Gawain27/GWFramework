@@ -3,8 +3,10 @@ package com.gwngames.core.input;
 import com.gwngames.core.api.input.*;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.BaseTest;
+import com.gwngames.core.util.Cdi;
 import org.junit.jupiter.api.Assertions;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -21,6 +23,12 @@ public class InputAdapterManagerTest extends BaseTest {
         @Override public void stop (){started=false;}
         @Override public void addListener(IInputListener l){}
         @Override public void removeListener(IInputListener l){}
+
+        @Override
+        public List<IInputListener> getListeners() {
+            return List.of();
+        }
+
         @Override public String getAdapterName(){return name;}
         @Override public int getSlot(){return slot;}
         @Override public void setSlot(int s){slot=s;}
@@ -43,7 +51,8 @@ public class InputAdapterManagerTest extends BaseTest {
     protected void runTest() {
         setupApplication();
 
-        InputAdapterManager mgr = InputAdapterManager.get();
+        InputAdapterManager mgr = new InputAdapterManager();
+        Cdi.inject(mgr);
 
         /* clear any residual slots */
         mgr.getActiveAdapters().forEach(a -> mgr.unregister(a.getSlot()));

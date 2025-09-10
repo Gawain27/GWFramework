@@ -10,4 +10,5 @@ import com.gwngames.core.data.ModuleNames;
 public interface IInputListener extends IBaseComp {
     /** Called whenever an InputEvent is dispatched. */
     void onInput(IInputEvent event);
+    String identity();
 }

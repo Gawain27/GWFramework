@@ -15,6 +15,7 @@ public enum ModuleNames {
 
     // Project Modules
     NEEDLE_OF_SILVER("NeedleOfSilver", 100),
+    DEVELOPMENT("development",900),
 
     // Starter
     STARTER("Starter", 1000),

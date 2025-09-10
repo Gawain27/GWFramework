@@ -1,0 +1,14 @@
+{
+  "gameType": "development",
+  "projects": [
+    {
+      "name": "gwcore"
+    },
+    {
+      "name": "gw2d"
+    },
+    {
+      "name": "development"
+    }
+  ]
+}

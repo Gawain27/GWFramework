@@ -1,18 +1,48 @@
 // ---------------------------------------------------------------------
-// settings.gradle : Defines the project name and submodules
+// settings.gradle : Auto-generated behavior at settings phase
+// Reads configs/<configSet>.json and includes projects accordingly.
 // ---------------------------------------------------------------------
+import groovy.json.JsonSlurper
+
 rootProject.name = "GWFramework"
 
-// Subprojects included:
-include(
-  // Starter projects
-  'tools:translation-editor',
-  "gwstarter",
+// ----- locate configSet (CLI -PconfigSet=..., or fallback to config.ini) -----
+def CONFIG_INI    = 'config.ini'
+def CONFIG_FOLDER = 'configs'
 
-  // Actual game projects
-  "needle-of-silver",
+def configSet = gradle.startParameter.projectProperties.get('configSet')
+if (!configSet) {
+  def ini = file(CONFIG_INI)
+  if (ini.exists()) {
+    def p = new Properties()
+    ini.withReader { p.load(it) }
+    configSet = p.getProperty('config_set')
+  }
+}
+if (!configSet) {
+  throw new GradleException('❌ Pass -PconfigSet=<game> or define config.ini')
+}
+println "✅ settings: configSet = ${configSet}"
 
-  // Core features
-  "gw2d",
-  "gwcore"
-)
+// ----- parse the JSON -----
+def cfgFile = file("${CONFIG_FOLDER}/${configSet}.json")
+if (!cfgFile.exists()) throw new GradleException("❌ No such file ${cfgFile}")
+def parsed = new JsonSlurper().parse(cfgFile) as Map
+
+def gameType = (parsed.gameType ?: '').toString()
+
+// fixed modules we always include first
+def fixed = ['tools:translation-editor', 'gwstarter']
+
+// collect projects from JSON (keep order, de-dupe)
+def configNames = ((parsed.projects ?: [])*.name)
+  .findAll { it } // non-empty
+  .collect { it.toString() }
+  .unique()
+
+def includes = fixed + configNames
+
+println "📦 settings: including -> ${includes} (gameType='${gameType}')"
+
+// ----- actually include them -----
+include(*includes as String[])

@@ -1,4 +1,4 @@
-package com.gwngames.nos;
+package com.gwngames.development;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input.Keys;
@@ -35,7 +35,7 @@ import com.gwngames.core.data.ModuleNames;
 public class DevelopmentLauncher extends BaseComponent implements IGameLauncher {
     @Override
     public String getLauncherName() {
-        return "Needle of Silver";
+        return "Development";
     }
 
     /** The player character, has state and state time, */

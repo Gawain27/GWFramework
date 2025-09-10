@@ -32,7 +32,6 @@ public abstract class ConcurrentSubQueue<T extends IEvent>
 
     /* ─────────────────── smart enqueue (front vs back) ────────────────── */
     @SuppressWarnings("unchecked")
-    @Override
     public void enqueue(IEvent ev) {
         if (master.canExecute(ev))
             eventQueue.offerFirst((T) ev);   // ready → front

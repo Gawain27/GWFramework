@@ -34,5 +34,5 @@ public interface IInputManager extends IBaseComp {
 
 
     /** Enqueue any pre-built input event. */
-    void emit(IInputEvent event);
+    void emit(IInputEvent event, boolean directly);
 }

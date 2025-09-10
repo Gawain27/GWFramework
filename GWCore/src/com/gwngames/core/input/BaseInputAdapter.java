@@ -1,7 +1,6 @@
 package com.gwngames.core.input;
 
 import com.gwngames.core.api.base.cfg.IClassLoader;
-import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.api.input.IInputAdapter;
 import com.gwngames.core.api.input.IInputListener;

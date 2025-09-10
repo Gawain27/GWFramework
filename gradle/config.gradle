@@ -3,7 +3,7 @@
 * ========================================================================= */
 import groovy.json.JsonSlurper
 import groovy.transform.Field
-import java.util.Properties
+import org.apache.groovy.json.internal.LazyMap
 
 @Field final String CONFIG_INI    = 'config.ini'
 @Field final String CONFIG_FOLDER = 'configs'
@@ -19,8 +19,6 @@ if (!configSet) {
 }
 if (!configSet) throw new GradleException('❌ Pass -PconfigSet=<game> or define config.ini')
 
-println "✅ configSet = $configSet"
-
 File cfgFile = file("$CONFIG_FOLDER" + "/" + "$configSet" + ".json")
 if (!cfgFile.exists()) throw new GradleException("❌ No such file $cfgFile")
 Map parsedConfig = new JsonSlurper().parse(cfgFile) as Map
@@ -30,7 +28,7 @@ List<Project> includedProjects = parsedConfig.projects.collect { project(":${it.
   project(':gwstarter')
 ext.includedProjects      = includedProjects
 ext.includedProjectNames  = includedProjects*.name as Set<String>
-ext.parsedConfig          = parsedConfig
+ext.parsedConfig          = parsedConfig as LazyMap
 ext.configSet             = configSet
 ext.translationKeysGlobal = [:]          // Map<String, String>
 ext.projectLevels         = [:]

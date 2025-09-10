@@ -5,6 +5,7 @@ import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.api.base.cfg.IClassLoader;
 import com.gwngames.core.api.event.IEventQueue;
+import com.gwngames.core.api.event.IMasterEventQueue;
 import com.gwngames.core.api.event.input.*;
 import com.gwngames.core.api.input.IInputAdapter;
 import com.gwngames.core.api.input.IInputIdentifier;
@@ -21,7 +22,8 @@ import com.gwngames.core.data.input.InputType;
  */
 @Init(component = ComponentNames.INPUT_MANAGER, module = ModuleNames.CORE)
 public final class InputManager extends BaseComponent implements IInputManager {
-
+    @Inject
+    private IMasterEventQueue masterEventQueue;
     @Inject(subComp = SubComponentNames.INPUT_QUEUE)
     private IEventQueue inputQueue;
 
@@ -96,22 +98,22 @@ public final class InputManager extends BaseComponent implements IInputManager {
     /* ---------- EMIT ---------- */
 
     @Override public void emitButtonDown(IInputAdapter adapter, IInputIdentifier id, float pressure) {
-        emit(createButton(adapter, id, true, pressure));
+        emit(createButton(adapter, id, true, pressure), true);
     }
     @Override public void emitButtonUp(IInputAdapter adapter, IInputIdentifier id, float pressure) {
-        emit(createButton(adapter, id, false, pressure));
+        emit(createButton(adapter, id, false, pressure), true);
     }
     @Override public void emitAxis(IInputAdapter adapter, IInputIdentifier id, float rawValue, float normalizedValue) {
-        emit(createAxis(adapter, id, rawValue, normalizedValue));
+        emit(createAxis(adapter, id, rawValue, normalizedValue), true);
     }
     @Override public void emitTouchDown(IInputAdapter adapter, IInputIdentifier id, Vector2 pos, float pressure) {
-        emit(createTouchDown(adapter, id, pos, pressure));
+        emit(createTouchDown(adapter, id, pos, pressure), true);
     }
     @Override public void emitTouchDrag(IInputAdapter adapter, IInputIdentifier id, Vector2 pos, float pressure) {
-        emit(createTouchDrag(adapter, id, pos, pressure));
+        emit(createTouchDrag(adapter, id, pos, pressure), true);
     }
     @Override public void emitTouchUp(IInputAdapter adapter, IInputIdentifier id, Vector2 pos, float pressure) {
-        emit(createTouchUp(adapter, id, pos, pressure));
+        emit(createTouchUp(adapter, id, pos, pressure), true);
     }
 
     @Override
@@ -131,15 +133,26 @@ public final class InputManager extends BaseComponent implements IInputManager {
 
     @Override
     public void emitAction(IInputAdapter adapter, IInputAction action, IInputIdentifier control) {
-        emit(createActionEvent(adapter, action, control));
+        emit(createActionEvent(adapter, action, control), false);
     }
 
+    /**
+     * Emit directly to inputQueue or follow logical process through IMasterEventQueue
+     * */
     @Override
-    public void emit(IInputEvent event) {
-        if (inputQueue == null) {
-            logError("[InputManager] INPUT_QUEUE not available; event dropped: {}", event);
-            return;
+    public void emit(IInputEvent event, boolean directly) {
+        if (directly){
+            if (inputQueue == null) {
+                logError("[InputManager] INPUT_QUEUE not available; event dropped: {}", event);
+                return;
+            }
+            inputQueue.enqueue(event);
+        } else {
+            if (masterEventQueue == null) {
+                logError("[InputManager] MASTER EVENT QUEUE not available; event dropped: {}", event);
+                return;
+            }
+            masterEventQueue.enqueueEvent(event);
         }
-        inputQueue.enqueue(event);
     }
 }

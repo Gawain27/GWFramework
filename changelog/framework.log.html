@@ -11,7 +11,16 @@
 
 <table>
     <tr><th style="width:110px">Version</th><th style="width:160px">Date</th><th>Highlights</th></tr>
-    <!-- ---------- 0.0.13L -------------------------------------------------- -->
+    <!-- ---------- 0.0.14M -------------------------------------------------- -->
+<tr>
+    <td>
+        <span class="tag" style="color:var(--v7)">0.0.14&nbsp;M</span>
+    </td>
+    <td>26&nbsp;October&nbsp;2025</td>
+    <td> Dynamic&nbsp;class&nbsp;weaving for ClosestComponent, new <code>callSuper()</code> and reflective <code>superField()</code> helpers, improved @Init scanning, and registry stability fixes.
+    </td>
+</tr>
+<!-- ---------- 0.0.13L -------------------------------------------------- -->
 <tr>
     <td>
         <span class="tag" style="color:var(--v6)">0.0.13&nbsp;L</span>
@@ -102,6 +111,65 @@
     <td>First public “starter” release.</td></tr>      <!--  🡐 Gradle drops rows here -->
 </table>
 
+<!-- ---------- 0.0.14M -------------------------------------------------- -->
+<details>
+    <summary style="color:var(--v7)">
+        <span class="tag" style="color:var(--v7)">0.0.14&nbsp;M</span>
+        <em style="flex:1">“Closest&nbsp;Super&nbsp;&amp;&nbsp;Runtime&nbsp;Weaver” – released&nbsp;26&nbsp;October&nbsp;2025</em>
+    </summary>
+    <div class="entry-body">
+
+        <h3>🧬 ClosestComponent Runtime Weaving</h3>
+        <ul>
+            <li>Introduced <strong>ClosestWeaver</strong> – bytecode transformer using ASM 9 that dynamically rewrites subclasses of
+                <code>ClosestComponent</code> to extend their nearest lower implementation (e.g.&nbsp;<code>PippoHigher → PippoLower</code>).</li>
+            <li>Rewrites superclass and constructor <code>invokespecial</code> calls for verifier-safe initialization.</li>
+            <li>Supports virtual dispatch from lower→higher modules verified by <strong>ClosestComponentWeavingTest</strong>.</li>
+        </ul>
+
+        <h3>🪞 Super-Call &amp; Reflection Helpers</h3>
+        <ul>
+            <li>Added <code>callSuper()</code> and <code>callSuperReplaceArgs(Object...)</code> markers to
+                <code>ClosestComponent</code>; the weaver rewrites them into direct <code>invokespecial</code> calls to the real super method.</li>
+            <li>Automatic boxing/unboxing and return-type normalization ensure seamless use in any context.</li>
+            <li>New reflective helper <code>superField(name[, type])</code> allows safe access to inherited private/protected fields
+                from the dynamically rewritten superclass chain, with caching and primitive wrapping.</li>
+        </ul>
+
+        <h3>🧩 Loader &amp; Registry Reliability</h3>
+        <ul>
+            <li><strong>ModuleClassLoader</strong> scanning corrected: reliably discovers <code>@Init</code>-annotated
+                interfaces and implementations from both JARs and class directories.</li>
+            <li>Fixed <code>No interface for component SUBTYPE_REGISTRY</code> issue —
+                <code>AssetSubTypeRegistry</code> now correctly registers via <code>@Init</code> metadata.</li>
+            <li>Improved <code>BaseComponent.createAndInject</code> diagnostics with <code>FileLogger</code> output for instantiation failures.</li>
+        </ul>
+
+        <h3>🧪 Comprehensive Weaving Tests</h3>
+        <ul>
+            <li><strong>ClosestCallSuperWeavingTest</strong> validates rewritten super-calls with and without arguments,
+                confirming that <code>callSuper()</code> dispatches correctly post-weave.</li>
+            <li>Bytecode verifier issues (<code>Bad &lt;init&gt;</code>, <code>NoSuchMethodError</code>) resolved through targeted constructor
+                and call-site rewriting.</li>
+            <li>Includes <strong>BaseTest</strong> convenience setup for isolated, deterministic LibGDX stubs.</li>
+        </ul>
+
+        <h3>🧠 Developer Experience</h3>
+        <ul>
+            <li>All dynamic weaving and reflection features are fully test-covered and logged via <code>../log/test/test.log</code>.</li>
+            <li>New reflection utilities (field caching, primitive wrapping) improve runtime safety and speed.</li>
+            <li>Gradle/JUnit tests run cleanly with automatic dummy application injection.</li>
+        </ul>
+
+        <h3>✅ Outcome</h3>
+        <ul>
+            <li>Modules can now override and extend behavior dynamically through <code>ClosestComponent</code>.</li>
+            <li>Developers can explicitly invoke true super-methods and access inherited fields at runtime.</li>
+            <li>ModuleClassLoader and registry scanning are robust again, enabling consistent dependency injection.</li>
+        </ul>
+
+    </div>
+</details>
 <!-- ---------- 0.0.13L -------------------------------------------------- -->
 <details>
     <summary style="color:var(--v6)">

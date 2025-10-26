@@ -1,7 +1,6 @@
 package com.gwngames.core.util;
 
 import com.gwngames.core.base.cfg.ModuleClassLoader;
-import com.gwngames.core.base.cfg.ModuleClassLoader.ProjectLoader;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.LogFiles;
 
@@ -42,24 +41,32 @@ public final class ClassUtils {
     /**
      * Return every class on the game class-path that bears the given annotation.
      */
-    public static List<Class<?>> getAnnotatedClasses(
-        Class<? extends Annotation> anno) {
-        return getAnnotatedClasses(anno, null);
+    public static List<Class<?>> getAnnotatedClasses(Class<? extends Annotation> anno) {
+        // Use the loader’s full scan (jars + dirs + app classpath fallback)
+        return ModuleClassLoader.getInstance().scanForAnnotated(anno);
     }
 
     /**
      * Return classes bearing the given annotation but **only** from module
-     * JARs whose <em>level</em> equals {@code levelFilter}.  Pass
-     * {@code null} for “all levels”.
+     * JARs whose level equals {@code levelFilter}. If {@code levelFilter} is null,
+     * delegate to the loader’s full scan.
      */
     public static List<Class<?>> getAnnotatedClasses(
         Class<? extends Annotation> anno, Integer levelFilter) {
 
         ModuleClassLoader mcl = ModuleClassLoader.getInstance();
-        List<Class<?>> out = new ArrayList<>();
 
-        for (ProjectLoader pl : mcl.getClassLoaders()) {
-            if (levelFilter != null && pl.level() != levelFilter) continue;
+        if (levelFilter == null) {
+            // Full, robust scan (will find @Init in class directories during tests)
+            List<Class<?>> found = mcl.scanForAnnotated(anno);
+            log.debug("Found {} classes with @{}", found.size(), anno.getSimpleName());
+            return found;
+        }
+
+        // ───────── Legacy filtered scan by project “level” (JARs only) ─────────
+        List<Class<?>> out = new ArrayList<>();
+        for (ModuleClassLoader.ProjectLoader pl : mcl.getClassLoaders()) {
+            if (!Objects.equals(levelFilter, pl.level())) continue;
 
             URLClassLoader cl = pl.cl();
             for (URL url : cl.getURLs()) {
@@ -71,21 +78,18 @@ public final class ClassUtils {
                     while (e.hasMoreElements()) {
                         JarEntry je = e.nextElement();
                         if (!je.getName().endsWith(".class")) continue;
-
-                        String cn = je.getName()
-                            .replace('/', '.')
-                            .replace(".class", "");
+                        String cn = je.getName().replace('/', '.').replace(".class", "");
                         try {
                             Class<?> c = Class.forName(cn, false, cl);
                             if (c.getAnnotation(anno) != null) out.add(c);
-                        } catch (Throwable ignored) { /* class may not load */ }
+                        } catch (Throwable ignored) { }
                     }
                 } catch (IOException ioe) {
                     log.error("Error reading {}", f, ioe);
                 }
             }
         }
-        log.debug("Found {} classes with @{}", out.size(), anno.getSimpleName());
+        log.debug("Found {} classes with @{} at level {}", out.size(), anno.getSimpleName(), levelFilter);
         return out;
     }
 }

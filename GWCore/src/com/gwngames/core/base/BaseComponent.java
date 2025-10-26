@@ -93,9 +93,9 @@ public abstract class BaseComponent implements IBaseComp {
             f.setAccessible(true);
             Inject inj = f.getAnnotation(Inject.class);
             if (inj.loadAll()) {
-                injectAllImplementations(f, obj, inj);   // <-- honors subTypeOf filter
+                injectAllImplementations(f, obj, inj);   // <-- now returns LazyProxy list
             } else {
-                injectSingle(f, obj, inj);               // <-- enforces rule: subTypeOf requires loadAll
+                injectSingle(f, obj, inj);               // unchanged
             }
             f.setAccessible(false);
         }
@@ -104,32 +104,71 @@ public abstract class BaseComponent implements IBaseComp {
         return obj;
     }
 
+    /**
+     * Creates a List of LazyProxy elements for all allowed implementations.
+     * Honors {@code subTypeOf} filter like before, but does NOT eagerly expose real instances.
+     * Notes:
+     *  - We still need to discover candidates via the loader. The current loader API returns instances;
+     *    we use those only to learn the concrete classes, then build suppliers that create on first use.
+     */
+    @SuppressWarnings({"unchecked","rawtypes"})
     private static void injectAllImplementations(Field f, Object host, Inject inj) {
         if (!List.class.isAssignableFrom(f.getType()))
             throw new IllegalStateException("@Inject(loadAll=true) field must be a List : " + f);
 
-        Class<?> elemType = extractGenericType(f);
-        Init elemMeta = elemType.getAnnotation(Init.class);
+        final Class<?> elemType = extractGenericType(f);
+        if (!IBaseComp.class.isAssignableFrom(elemType))
+            throw new IllegalStateException("@Inject(loadAll=true) element type must extend IBaseComp : " + elemType);
+
+        final Init elemMeta = elemType.getAnnotation(Init.class);
         if (elemMeta == null || !elemMeta.allowMultiple())
             throw new IllegalStateException("Component does not allow multiple: " + elemType);
 
-        Class<?> subIface = inj.subTypeOf();
-        List<?> all;
+        final Class<?> subIface = inj.subTypeOf();
+        final ModuleClassLoader loader = ModuleClassLoader.getInstance();
 
-        if (subIface != null && subIface != IBaseComp.class) {
-            if (!subIface.isInterface())
-                throw new IllegalStateException("@Inject(subTypeOf=...) must be an interface: " + subIface.getName());
-            // Filter: only implementations that implement/extend subIface
-            all = ModuleClassLoader.getInstance().tryCreateAll(elemMeta.component(), subIface);
-        } else {
-            // Original behavior: all sub-components
-            all = ModuleClassLoader.getInstance().tryCreateAll(elemMeta.component());
+        // Discover implementations (existing API yields instances).
+        final List<?> discovered = (subIface != null && subIface != IBaseComp.class)
+            ? loader.tryCreateAll(elemMeta.component(), subIface)
+            : loader.tryCreateAll(elemMeta.component());
+
+        // Build a proxy per element that creates its concrete impl lazily on first call.
+        final boolean immortal = inj.immortal();
+        final List proxies = new ArrayList(discovered.size());
+
+        for (Object impl : discovered) {
+            final Class<? extends IBaseComp> implClass = ((IBaseComp) impl).getClass();
+
+            // Supplier that creates a fresh instance of the concrete class on first use.
+            final Supplier<IBaseComp> supplier = new Supplier<>() {
+                private volatile IBaseComp cached;
+                @Override public IBaseComp get() {
+                    IBaseComp t = cached;
+                    if (t == null) {
+                        synchronized (this) {
+                            t = cached;
+                            if (t == null) {
+                                t = (IBaseComp) loader.createInstance(implClass);
+                                cached = t;
+                            }
+                        }
+                    }
+                    return t;
+                }
+                @Override public String toString() { return "supplier(" + implClass.getSimpleName() + ")"; }
+            };
+
+            Object proxy = LazyProxy.of((Class) elemType, (Supplier) supplier, immortal);
+            proxies.add(proxy);
         }
 
-        try { f.set(host, Collections.unmodifiableList(all)); }
-        catch (IllegalAccessException e) { throw new RuntimeException(e); }
+        try {
+            f.set(host, Collections.unmodifiableList(proxies));
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException(e);
+        }
 
-        LOG.debug("Injected {} implementations into {}", all.size(), f);
+        LOG.debug("Injected {} LazyProxy implementations into {}", proxies.size(), f);
     }
 
     @SuppressWarnings("unchecked")

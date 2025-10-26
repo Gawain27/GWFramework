@@ -7,11 +7,11 @@ import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.base.cfg.IClassLoader;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.ex.ErrorPopupException;
-import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.cfg.i18n.CoreTranslation;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.*;
 import com.gwngames.core.util.ComponentUtils;
+import com.gwngames.core.util.TransformingURLClassLoader;
 
 import java.io.*;
 import java.lang.annotation.Annotation;
@@ -42,6 +42,8 @@ public final class ModuleClassLoader extends ClassLoader implements IClassLoader
     private static final List<Class<?>> interfaceTypes = new ArrayList<>();
     /** Concrete classes kept after duplicate-pruning. */
     private static final List<Class<?>> concreteTypes  = new ArrayList<>();
+    /** Keyed by "COMPONENT#SUB" (SUB can be NONE). Each list is sorted by modulePriority DESC.*/
+    private final Map<String, List<Class<?>>> allConcreteByKey = new ConcurrentHashMap<>();
 
     private final Map<Class<?>, Object> singletons = new ConcurrentHashMap<>();
 
@@ -54,6 +56,7 @@ public final class ModuleClassLoader extends ClassLoader implements IClassLoader
     /* per-instance state */
     private final List<URLClassLoader> loaders      = new ArrayList<>();
     private final Map<URLClassLoader, JarFile> jars = new LinkedHashMap<>();
+    private final List<URLClassLoader> dirLoaders = new ArrayList<>();
     private final List<ProjectLoader> classLoaders = new ArrayList<>();
 
     /* ==================================================================== */
@@ -79,6 +82,7 @@ public final class ModuleClassLoader extends ClassLoader implements IClassLoader
         log.debug("ModuleClassLoader created with parent ClassLoader: {}", getParent());
         initLoaders();
         initJars();
+        addAppClasspathRootsToScan();
         log.info("ModuleClassLoader setup completed with {} class loaders and {} JARs.",
             loaders.size(), jars.size());
     }
@@ -146,7 +150,7 @@ public final class ModuleClassLoader extends ClassLoader implements IClassLoader
             File jar = new File(root, (String) p.get("jar"));
             if (!jar.exists()) continue;
             try {
-                URLClassLoader cl = createNamedLoader(jar);
+                URLClassLoader cl = new TransformingURLClassLoader(jar.getName(), new URL[]{jar.toURI().toURL()}, this, this);
                 loaders.add(cl);
                 classLoaders.add(new ProjectLoader(cl, (int) Double.parseDouble(String.valueOf(p.get("level")))));
                 loaderCount++;
@@ -159,6 +163,10 @@ public final class ModuleClassLoader extends ClassLoader implements IClassLoader
         log.info("{} project class loaders initialized.", loaderCount);
     }
 
+    /**
+     * @see TransformingURLClassLoader
+     * */
+    @Deprecated()
     private URLClassLoader createNamedLoader(File jar) throws MalformedURLException {
         URL url = jar.toURI().toURL();
         try {   // Java 9+
@@ -170,21 +178,63 @@ public final class ModuleClassLoader extends ClassLoader implements IClassLoader
         }
     }
 
+    /** Add application classpath roots (dirs and jars) to our scan sets, so tests/dev work. */
+    private void addAppClasspathRootsToScan() {
+        try {
+            String cp = System.getProperty("java.class.path");
+            if (cp == null || cp.isBlank()) {
+                log.debug("No java.class.path detected; skipping app classpath scan.");
+                return;
+            }
+            String[] entries = cp.split(File.pathSeparator);
+            int addedDirs = 0, addedJars = 0;
+
+            for (String e : entries) {
+                if (e == null || e.isBlank()) continue;
+                File f = new File(e);
+                if (!f.exists()) continue;
+
+                URL url = f.toURI().toURL();
+                // Use a tiny throwaway URLClassLoader just for scanning.
+                URLClassLoader cl = new URLClassLoader("appcp:" + f.getName(), new URL[]{url}, getParent());
+
+                if (f.isDirectory()) {
+                    dirLoaders.add(cl);
+                    addedDirs++;
+                } else if (f.getName().endsWith(".jar")) {
+                    try {
+                        jars.put(cl, new JarFile(f));
+                        addedJars++;
+                    } catch (IOException ioe) {
+                        log.debug("Skipping unreadable JAR on classpath: {}", f, ioe);
+                    }
+                }
+            }
+            log.info("App classpath scan enabled: +{} dirs, +{} jars", addedDirs, addedJars);
+        } catch (Throwable t) {
+            log.debug("Failed to attach app classpath to scan.", t);
+        }
+    }
+
     private void initJars() {
-        int jarCount = 0;
+        int jarCount = 0, dirCount = 0;
         for (URLClassLoader l : loaders) {
             for (URL u : l.getURLs()) {
                 File f = new File(u.getFile());
-                if (!f.getName().endsWith(".jar")) continue;
-                try {
-                    jars.put(l, new JarFile(f));
-                    jarCount++;
-                } catch (IOException e) {
-                    log.error("Error opening JAR file {}", f, e);
+                if (f.isDirectory()) {
+                    dirLoaders.add(l);
+                    dirCount++;
+                } else if (f.getName().endsWith(".jar")) {
+                    try {
+                        jars.put(l, new JarFile(f));
+                        jarCount++;
+                    } catch (IOException e) {
+                        log.error("Error opening JAR file {}", f, e);
+                    }
                 }
             }
         }
-        log.info("Initialized {} JAR files.", jarCount);
+        log.info("Initialized {} JAR files and {} class directories.", jarCount, dirCount);
     }
 
     /* ==================================================================== */
@@ -218,17 +268,18 @@ public final class ModuleClassLoader extends ClassLoader implements IClassLoader
     /* ==================================================================== */
     private synchronized void ensureTypesLoaded() {
         if (!interfaceTypes.isEmpty() || !concreteTypes.isEmpty()) return;
-
         log.info("Scanning for @Init-annotated types …");
+
         List<Class<?>> found = scanForAnnotated(Init.class);
         log.info("Found {} @Init-annotated classes.", found.size());
 
         Map<String, Class<?>> bestMulti = new HashMap<>();
+        // NEW: collect all candidates per (component, subComp)
+        Map<String, List<Class<?>>> allByKeyTmp = new HashMap<>();
 
         for (Class<?> c : found) {
             Init an = IClassLoader.resolvedInit(c);
 
-            /* ---------- interface branch ----------------------------------- */
             if (c.isInterface()) {
                 if (IBaseComp.class.isAssignableFrom(c)) {
                     interfaceTypes.add(c);
@@ -238,33 +289,46 @@ public final class ModuleClassLoader extends ClassLoader implements IClassLoader
                 continue;
             }
 
-            /* ---------- concrete branch ------------------------------------ */
+            // Only consider concrete classes that implement some IBaseComp interface
+            boolean implementsIBaseComp = Arrays.stream(c.getInterfaces())
+                .anyMatch(IBaseComp.class::isAssignableFrom);
+            if (!implementsIBaseComp) continue;
+
+            // Index ALL concrete classes by (component, subComp) – including NONE
+            String groupKey = IClassLoader.keyOf(an.component(), an.subComp());
+            allByKeyTmp.computeIfAbsent(groupKey, k -> new ArrayList<>()).add(c);
+
+            // Existing behavior: if subComp == NONE, we keep it; for multi we record best
             if (an.subComp() == SubComponentNames.NONE) {
                 concreteTypes.add(c);
                 continue;
             }
 
-            /* choose highest-priority impl per (component, subComp) */
-            String key = an.component().name() + "#" + an.subComp().name();
-            Class<?> incumbent = bestMulti.get(key);
+            // choose highest-priority impl per (component, subComp)
+            String k = an.component().name() + "#" + an.subComp().name();
+            Class<?> incumbent = bestMulti.get(k);
             if (incumbent == null ||
                 an.module().modulePriority >
                     IClassLoader.resolvedInit(incumbent).module().modulePriority) {
-                bestMulti.put(key, c);
+                bestMulti.put(k, c);
             }
         }
+
         concreteTypes.addAll(bestMulti.values());
+        log.info("{} interface types and {} concrete types registered.", interfaceTypes.size(), concreteTypes.size());
 
-        log.info("{} interface types and {} concrete types registered.",
-            interfaceTypes.size(), concreteTypes.size());
+        // Sort & freeze the all-candidates index by modulePriority DESC
+        for (Map.Entry<String, List<Class<?>>> e : allByKeyTmp.entrySet()) {
+            e.getValue().sort(Comparator.comparingInt(
+                (Class<?> cl) -> IClassLoader.resolvedInit(cl).module().modulePriority
+            ).reversed());
+            allConcreteByKey.put(e.getKey(), List.copyOf(e.getValue()));
+        }
 
-    /* ──────────────────────────────────────────────────────────────
-       Ensure enum constants receive a mult-id NOW, so later calls to
-       IBaseComp#getMultId() never throw.
-       ──────────────────────────────────────────────────────────── */
+        /* existing enum pre-assignment logic follows unchanged … */
         for (Class<?> c : concreteTypes) {
             if (c.isEnum()) {
-                instancesOf(c);               // walks constants, calls setMultId()
+                instancesOf(c); // walks constants, calls setMultId()
                 log.debug("Added enum: {}", c.getSimpleName());
             }
         }
@@ -273,15 +337,46 @@ public final class ModuleClassLoader extends ClassLoader implements IClassLoader
     @Override
     public List<Class<?>> scanForAnnotated(Class<? extends Annotation> ann) {
         List<Class<?>> out = new ArrayList<>();
-        jars.forEach((loader, jar) ->
-            jar.entries().asIterator().forEachRemaining(e -> {
-                if (!e.getName().endsWith(".class")) return;
-                String cn = e.getName().replace('/', '.').replace(".class", "");
-                try {
-                    Class<?> c = loader.loadClass(cn);
-                    if (c.getAnnotation(ann) != null) out.add(c);
-                } catch (Throwable ignored) { }
-            }));
+
+        // 1) JARs (existing behavior)
+        jars.forEach((loader, jar) -> jar.entries().asIterator().forEachRemaining(e -> {
+            if (!e.getName().endsWith(".class")) return;
+            String cn = e.getName().replace('/', '.').replace(".class", "");
+            try {
+                Class<?> c = loader.loadClass(cn);
+                if (c.getAnnotation(ann) != null) out.add(c);
+            } catch (Throwable ignored) {}
+        }));
+
+        // 2) Directories (new)
+        for (URLClassLoader l : dirLoaders) {
+            for (URL u : l.getURLs()) {
+                File root = new File(u.getFile());
+                if (!root.isDirectory()) continue;
+                final int rootLen = root.getAbsolutePath().length() + 1;
+                Deque<File> stack = new ArrayDeque<>();
+                stack.push(root);
+                while (!stack.isEmpty()) {
+                    File cur = stack.pop();
+                    File[] kids = cur.listFiles();
+                    if (kids == null) continue;
+                    for (File k : kids) {
+                        if (k.isDirectory()) {
+                            stack.push(k);
+                        } else if (k.getName().endsWith(".class")) {
+                            String abs = k.getAbsolutePath();
+                            String rel = abs.substring(rootLen).replace(File.separatorChar, '.');
+                            String cn = rel.substring(0, rel.length() - ".class".length());
+                            try {
+                                Class<?> c = l.loadClass(cn);
+                                if (c.getAnnotation(ann) != null) out.add(c);
+                            } catch (Throwable ignored) {}
+                        }
+                    }
+                }
+            }
+        }
+
         return out;
     }
 
@@ -534,6 +629,47 @@ public final class ModuleClassLoader extends ClassLoader implements IClassLoader
         return ComponentUtils.lookup(id).map(type::cast);
     }
 
+    @Override
+    public Class<?> findNextLowerFor(ComponentNames comp,
+                                     SubComponentNames sub,
+                                     int currentPriority) throws ClassNotFoundException {
+        ensureTypesLoaded();
+        final String k = IClassLoader.keyOf(comp, sub);
+        final List<Class<?>> chain = allConcreteByKey.get(k);
+
+        if (chain == null || chain.isEmpty()) {
+            throw new ClassNotFoundException("No implementations registered for " + comp + "/" + sub);
+        }
+
+        // chain is DESC by priority, so the first with p < currentPriority is the closest lower
+        for (Class<?> candidate : chain) {
+            final Init meta = IClassLoader.resolvedInit(candidate);
+            final int p = meta.module().modulePriority;
+            if (p < currentPriority) {
+                log.debug("findNextLowerFor({}, {}, prio={}): {} (prio={})",
+                    comp, sub, currentPriority, candidate.getName(), p);
+                return candidate;
+            }
+        }
+
+        throw new ClassNotFoundException(
+            "No lower implementation below priority " + currentPriority + " for " + comp + "/" + sub);
+    }
+
+    /** Convenience overload if you have the current module enum. */
+    @Override
+    public Class<?> findNextLowerFor(ComponentNames comp,
+                                     SubComponentNames sub,
+                                     ModuleNames currentModule) throws ClassNotFoundException {
+        return findNextLowerFor(comp, sub, currentModule.modulePriority);
+    }
+
+    /** Convenience overload when you already have a @Init-bearing class loaded. */
+    @Override
+    public Class<?> findNextLowerFor(Class<?> currentClass) throws ClassNotFoundException {
+        final Init cur = IClassLoader.resolvedInit(currentClass);
+        return findNextLowerFor(cur.component(), cur.subComp(), cur.module().modulePriority);
+    }
 
     /* ==================================================================== */
     /*  Helper DTO                                                          */

@@ -101,7 +101,7 @@ public class FileLogger {
                 IS_BASECOMP_CACHE.put(cn, is);
                 hit = is;
             }
-            if (Boolean.TRUE.equals(hit)) return cn; // class-level key
+            if (hit) return cn; // class-level key
         }
         return null;
     }
@@ -110,7 +110,7 @@ public class FileLogger {
         try {
             return (args == null || args.length == 0) ? msg : String.format(msg, args);
         } catch (Exception e) {
-            return msg + (args == null || args.length == 0 ? "" : " " + Arrays.toString(args));
+            return msg + " " + Arrays.toString(args);
         }
     }
 

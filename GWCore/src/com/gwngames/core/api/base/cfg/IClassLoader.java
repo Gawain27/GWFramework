@@ -158,4 +158,40 @@ public interface IClassLoader extends IBaseComp {
     Object createInstance(Class<?> clazz, Object... params);
 
     <T extends IBaseComp> Optional<T> lookup(int id, Class<T> type);
+
+    static String keyOf(ComponentNames comp, SubComponentNames sub) {
+        return comp.name() + "#" + sub.name();
+    }
+
+    /**
+     * Returns the closest lower-priority concrete implementation for the given
+     * (component, sub) pair, relative to {@code currentPriority}.
+     * <br><br>
+     * Requires: ensureTypesLoaded() has populated allConcreteByKey with lists
+     * sorted by modulePriority DESC (highest first).
+     *
+     * @throws ClassNotFoundException if no lower implementation exists.
+     */
+    Class<?> findNextLowerFor(ComponentNames comp,
+                              SubComponentNames sub,
+                              int currentPriority) throws ClassNotFoundException;
+
+    /**
+     * @see #findNextLowerFor(ComponentNames, SubComponentNames, int)
+     * */
+    Class<?> findNextLowerFor(ComponentNames comp,
+                              SubComponentNames sub,
+                              ModuleNames currentModule) throws ClassNotFoundException;
+
+    /**
+     * Finds the closest lower-priority concrete implementation for the SAME (component, subComp)
+     * as the given class. For example, from NEEDLE_OF_SILVER (100) it will try GAME2D (15),
+     * then CORE (5), etc., returning the first match.
+     *
+     * @param currentClass the higher-priority concrete class requesting a lower super
+     * @return the Class<?> of the closest lower implementation
+     * @throws ClassNotFoundException if no lower implementation exists
+     * @throws IllegalStateException if currentClass is not a concrete @Init component
+     */
+    Class<?> findNextLowerFor(Class<?> currentClass) throws ClassNotFoundException;
 }

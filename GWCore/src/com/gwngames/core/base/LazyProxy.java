@@ -15,16 +15,21 @@ import java.util.function.Supplier;
 
 /**
  * Lightweight dynamic proxy that:
- *  • lazily creates the real instance on first access
- *  • evicts it after TTL unless immortal == true
- *  • supports default interface methods
- *  • UNWRAPS reflective exceptions so callers see the real cause
+ * • lazily creates the real instance on first access
+ * • evicts it after TTL unless immortal == true
+ * • supports default interface methods
+ * • UNWRAPS reflective exceptions so callers see the real cause
  */
 public final class LazyProxy {
 
-    /** Idle time in ms before a non-immortal instance is evicted. */
+    /**
+     * Idle time in ms before a non-immortal instance is evicted.
+     */
     private static volatile long TTL_MS = Long.getLong("gw.lazy.ttl", 5 * 60_000);
-    public static void setTtl(long ttlMillis) { TTL_MS = ttlMillis; }
+
+    public static void setTtl(long ttlMillis) {
+        TTL_MS = ttlMillis;
+    }
 
     public static <T extends IBaseComp> T of(Class<T> iface, Supplier<T> supplier, boolean immortal) {
         if (!iface.isInterface()) return supplier.get();
@@ -35,6 +40,7 @@ public final class LazyProxy {
             new Handler<>(supplier, immortal));
         return proxy;
     }
+
     public static <T extends IBaseComp> T of(Class<T> iface, Supplier<T> supplier) {
         return of(iface, supplier, false);
     }
@@ -56,9 +62,12 @@ public final class LazyProxy {
         public Object invoke(Object proxy, Method m, Object[] args) throws Throwable {
             // Object methods don't touch target
             switch (m.getName()) {
-                case "hashCode": return System.identityHashCode(proxy);
-                case "equals":   return proxy == (args != null && args.length > 0 ? args[0] : null);
-                case "toString": return "LazyProxy<" + supplier + ">";
+                case "hashCode":
+                    return System.identityHashCode(proxy);
+                case "equals":
+                    return proxy == (args != null && args.length > 0 ? args[0] : null);
+                case "toString":
+                    return "LazyProxy<" + supplier + ">";
             }
 
             long now = System.currentTimeMillis();
@@ -122,5 +131,6 @@ public final class LazyProxy {
         }
     }
 
-    private LazyProxy() {}
+    private LazyProxy() {
+    }
 }

@@ -8,9 +8,7 @@ import com.gwngames.core.api.base.cfg.ILocale;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.BaseTest;
-import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.SubComponentNames;
 import org.junit.jupiter.api.Assertions;
 
 import java.util.List;
@@ -21,18 +19,18 @@ public final class AssetSubTypeRegistryTest extends BaseTest {
 
     /* ──────────────────  dummy Locale component for DI  ───────────── */
 
-    @Init(module = ModuleNames.CORE, component = ComponentNames.LOCALE, subComp   = SubComponentNames.NONE)
-    public static final class TestLocale extends BaseComponent implements ILocale {
+    @Init(module = ModuleNames.TEST)
+    public static class TestLocale extends BaseComponent implements ILocale {
         @Override public Locale getLocale() { return Locale.ENGLISH; }
     }
 
     /* ──────────────────  custom sub-type for dynamic registration  ── */
 
-    private static final class XyzExt extends BaseComponent implements IFileExtension {
+    private static class XyzExt extends BaseComponent implements IFileExtension {
         @Override public String ext() { return "xyz"; }
     }
 
-    private static final class XyzSubType extends BaseComponent implements IAssetSubType {
+    private static class XyzSubType extends BaseComponent implements IAssetSubType {
         @Override public String        id()            { return "xyz-data"; }
         @Override public AssetCategory category()      { return AssetCategory.MISC; }
         @Override public Class<?>      libGdxClass()   { return null; }

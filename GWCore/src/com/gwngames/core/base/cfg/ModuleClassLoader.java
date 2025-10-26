@@ -7,6 +7,7 @@ import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.base.cfg.IClassLoader;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.ex.ErrorPopupException;
+import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.cfg.i18n.CoreTranslation;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.*;

@@ -4,6 +4,7 @@ import com.badlogic.gdx.utils.TimeUtils;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.event.IEvent;
 import com.gwngames.core.api.event.IMacroEvent;
+import com.gwngames.core.api.event.trigger.ITimeTrigger;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.event.base.AbstractEventTrigger;
 
@@ -12,7 +13,7 @@ import com.gwngames.core.event.base.AbstractEventTrigger;
  * If {@code repeat} is {@code false} it behaves like a one-shot timer.
  */
 @Init(module = ModuleNames.CORE)
-public class TimeTrigger extends AbstractEventTrigger {
+public class TimeTrigger extends AbstractEventTrigger implements ITimeTrigger {
 
     private long intervalMs;
     private boolean repeat;

@@ -29,16 +29,14 @@ public final class ComponentUtils {
     /** Assign a new id for an object and register it. */
     public static int assign(IBaseComp obj) {
         int id = next();
-        byId.put(id, new WeakReference<>(obj));
-        return id;
+        return register(obj, id);
     }
 
     /** Assign & push to the enum through setMultId. */
     public static int assignEnum(IBaseComp enumConst) {
         int id = next();
         enumConst.setMultId(id);           // enum branch in IBaseComp will accept this
-        byId.put(id, new WeakReference<>(enumConst));
-        return id;
+        return register(enumConst, id);
     }
 
     /** Reverse lookup: id → live instance (if still reachable). */

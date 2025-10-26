@@ -1,11 +1,16 @@
 package com.gwngames.core.event.trigger;
 
-import com.gwngames.core.api.ex.EventException;
+import com.gwngames.core.api.build.Inject;
+import com.gwngames.core.api.event.IMasterEventQueue;
+import com.gwngames.core.api.event.trigger.IManualTrigger;
+import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.BaseTest;
-import com.gwngames.core.event.queue.MasterEventQueue;
 import com.gwngames.core.event.queue.ConcurrentSubQueue;
+import com.gwngames.core.util.Cdi;
 import org.junit.jupiter.api.Assertions;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -14,17 +19,19 @@ import java.util.concurrent.TimeUnit;
  * once when {@link ManualTrigger#fire()} is called.
  */
 public class ManualTriggerTest extends BaseTest {
+    @Inject
+    private IMasterEventQueue master;
 
     @Override
     protected void runTest() throws Exception {
         setupApplication();
 
-        MasterEventQueue master = new MasterEventQueue();
-        CountDownLatch   done   = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(1);
 
         /* lightweight sub-queue that just counts down the latch */
         ConcurrentSubQueue<SimpleEvent> subQ = new ConcurrentSubQueue<>() {
-            @Override protected void processEvent(SimpleEvent e) throws EventException {
+            @Override
+            protected void processEvent(SimpleEvent e) {
                 done.countDown();
             }
 
@@ -33,11 +40,19 @@ public class ManualTriggerTest extends BaseTest {
                 return SimpleEvent.class;
             }
         };
+        Cdi.inject(subQ);
+        Method m = ConcurrentSubQueue.class.getDeclaredMethod("init");
+        m.setAccessible(true);
+        Field f = ConcurrentSubQueue.class.getDeclaredField("maxParallel");
+        f.setAccessible(true);
+        f.set(subQ, 2);
+        m.invoke(subQ);
 
         /* ---- trigger + payload ---------------------------------------- */
-        ManualTrigger trigger = new ManualTrigger();
+        IManualTrigger trigger = BaseComponent.getInstance(IManualTrigger.class);
         trigger.setSinglePayload(new SimpleEvent());
         master.registerTrigger(trigger);
+        master.registerQueue(subQ);
 
         /* ---- act ------------------------------------------------------- */
         trigger.fire();                 // request firing on next poll

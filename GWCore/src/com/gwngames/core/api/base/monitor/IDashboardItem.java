@@ -5,28 +5,14 @@ import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
 
 /**
- * A concrete dashboard item (leaf). Placement + non-null synthesis blocks + content.
- *
- * NOTE: No defaults here; implementations must return non-null objects.
+ * A concrete dashboard item.
+ * Auto injected in the container that wants it via the framework
+ * @see com.gwngames.core.api.build.Inject
  */
 @Init(module = ModuleNames.INTERFACE, component = ComponentNames.DASHBOARD_ITEM, allowMultiple = true)
-public non-sealed interface IDashboardItem extends IDashboardNode {
-
-    /* ───────────── placement ───────────── */
-
-    Enum<?> tableKey();
-    Enum<?> categoryKey();
-    Enum<?> itemCategoryKey();
-
-    /* ───────────── synthesis (non-null) ───────────── */
-
-    IDashboardHeader  categoryHeader();
-    IDashboardContent categoryStatistics();
-    IDashboardHeader  itemCategoryHeader();
-    IDashboardContent itemCategoryStats();
-
-    /* ───────────── visualisation (non-null) ───────────── */
-
-    /** The actual content to render. Its own template decides how it looks. */
-    IDashboardContent itemContent();
+public non-sealed interface IDashboardItem<T> extends IDashboardNode {
+    /**
+     * Get the concrete item, to be used in the {@link IDashboardContent}
+     * */
+    T getItem();
 }

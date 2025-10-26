@@ -1,4 +1,4 @@
-package com.gwngames.core.api.event;
+package com.gwngames.core.api.event.trigger;
 
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
@@ -23,7 +23,6 @@ public interface IEventTrigger extends IBaseComp {
     /**
      * Called once per {@link MasterEventQueue#process(float)}.
      *
-     * @param queue the central queue so the trigger can enqueue payloads
      * @param delta time since the previous call (seconds)
      * @return {@code true} if the trigger fired this tick
      */

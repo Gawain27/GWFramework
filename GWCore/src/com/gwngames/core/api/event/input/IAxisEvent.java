@@ -3,9 +3,10 @@ package com.gwngames.core.api.event.input;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.data.ComponentNames;
+import com.gwngames.core.data.ModuleNames;
 
 @Init(component = ComponentNames.AXIS_EVENT)
-public interface IAxisEvent extends IInputEvent{
+public interface IAxisEvent extends IInputEvent {
     float getRawValue();
     float getNormalizedValue();
 

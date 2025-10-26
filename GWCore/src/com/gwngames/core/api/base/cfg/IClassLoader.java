@@ -9,8 +9,7 @@ import com.gwngames.core.data.SubComponentNames;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Proxy;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 /**
  * Base class loader exposing methods for accessing and creating objects<br>
@@ -40,81 +39,80 @@ public interface IClassLoader extends IBaseComp {
                 "Class " + clazz.getName() + " is missing required @Init annotation");
         }
 
-        boolean isEnum       = clazz.isEnum() || base.isEnum();
-        boolean hasSubComp   = base.subComp() != SubComponentNames.NONE;
-        boolean ext = base.external();
+        boolean isEnum     = clazz.isEnum() || base.isEnum();
+        boolean hasSubComp = base.subComp() != SubComponentNames.NONE;
 
-        ComponentNames comp  = base.component();
-        ModuleNames    module= base.module();
+        ComponentNames comp   = base.component();
+        ModuleNames    module = base.module();
 
-        // Policy: sub-component or enum implies allowMultiple = true
-        boolean allowMult    = base.allowMultiple() || isEnum || hasSubComp;
+        // IMPORTANT: per policy, external is evaluated **only on the concrete class**.
+        final boolean finalExternal = base.external();
 
-        // IMPORTANT: external is evaluated **only on the concrete class**.
-        final boolean externalFlag = base.external();
-
-        /* inherit only component/module (and enum “influence”) */
+        /* 1) Inherit from superclasses (full chain) for component/module and enum influence */
         Class<?> sup = clazz.getSuperclass();
-        while (sup != null && sup != Object.class &&
-            (comp == ComponentNames.NONE || module == ModuleNames.UNIMPLEMENTED)) {
-
+        while (sup != null && sup != Object.class
+            && (comp == ComponentNames.NONE || module == ModuleNames.UNIMPLEMENTED)) {
             Init ann = sup.getAnnotation(Init.class);
             if (ann != null) {
                 if (comp   == ComponentNames.NONE)       comp   = ann.component();
                 if (module == ModuleNames.UNIMPLEMENTED) module = ann.module();
                 if (!isEnum) isEnum = ann.isEnum();
-                if (!ext) ext = ann.external();
             }
             sup = sup.getSuperclass();
         }
 
+        /* Inherit from the entire interface graph (BFS) across the whole class chain */
         if (comp == ComponentNames.NONE || module == ModuleNames.UNIMPLEMENTED) {
-            Class<?> cur = clazz;
-            while (cur != null && cur != Object.class &&
-                (comp == ComponentNames.NONE || module == ModuleNames.UNIMPLEMENTED)) {
+            // Seed queue with all direct interfaces of clazz and all its superclasses
+            Deque<Class<?>> q = new ArrayDeque<>();
+            Set<Class<?>> visited = new HashSet<>();
 
+            for (Class<?> cur = clazz; cur != null && cur != Object.class; cur = cur.getSuperclass()) {
                 for (Class<?> ifc : cur.getInterfaces()) {
-                    Init ann = ifc.getAnnotation(Init.class);
-                    if (ann == null) continue;
+                    if (visited.add(ifc)) q.addLast(ifc);
+                }
+            }
 
+            while (!q.isEmpty() && (comp == ComponentNames.NONE || module == ModuleNames.UNIMPLEMENTED)) {
+                Class<?> ifc = q.removeFirst();
+
+                Init ann = ifc.getAnnotation(Init.class);
+                if (ann != null) {
                     if (comp   == ComponentNames.NONE)       comp   = ann.component();
                     if (module == ModuleNames.UNIMPLEMENTED) module = ann.module();
-
-                    if (comp != ComponentNames.NONE && module != ModuleNames.UNIMPLEMENTED)
-                        break;
-
-                    if (ann.isEnum()) {
-                        allowMult = true;
-                        isEnum    = true;
-                    }
-                    if (ann.external())
-                        ext = true;
+                    if (!isEnum && ann.isEnum()) isEnum = true; // enum influence only
+                    // NOTE: do not inherit `external` from interfaces
                 }
-                cur = cur.getSuperclass();
+
+                // Traverse super-interfaces too (this is the key difference)
+                for (Class<?> parent : ifc.getInterfaces()) {
+                    if (visited.add(parent)) q.addLast(parent);
+                }
             }
         }
 
-        ComponentNames finalComp      = comp;
-        ModuleNames    finalModule    = module;
-        boolean        finalAllowMult = allowMult;
-        boolean        finalIsEnum    = isEnum;
-        boolean        finalExternal = ext;
+        // Recompute allowMultiple with potentially updated isEnum
+        boolean finalAllowMult = base.allowMultiple() || isEnum || hasSubComp;
+
+        ComponentNames finalComp   = comp;
+        ModuleNames    finalModule = module;
+        boolean        finalIsEnum = isEnum;
 
         return (Init) Proxy.newProxyInstance(
             Init.class.getClassLoader(),
             new Class<?>[]{Init.class},
             (proxy, method, args) -> switch (method.getName()) {
-                case "annotationType" -> Init.class;
-                case "component"      -> finalComp;
-                case "module"         -> finalModule;
-                case "subComp"        -> base.subComp();
-                case "platform"       -> base.platform();
-                case "allowMultiple"  -> finalAllowMult;
-                case "isEnum"         -> finalIsEnum;
-                case "isPlatformDependent" -> base.isPlatformDependent();
-                case "forceDefinition"     -> base.forceDefinition();
-                case "external"       -> finalExternal;
-                default               -> method.invoke(base, args);
+                case "annotationType"        -> Init.class;
+                case "component"             -> finalComp;
+                case "module"                -> finalModule;
+                case "subComp"               -> base.subComp();
+                case "platform"              -> base.platform();
+                case "allowMultiple"         -> finalAllowMult;
+                case "isEnum"                -> finalIsEnum;
+                case "isPlatformDependent"   -> base.isPlatformDependent();
+                case "forceDefinition"       -> base.forceDefinition();
+                case "external"              -> finalExternal; // concrete class only
+                default                      -> method.invoke(base, args);
             });
     }
 

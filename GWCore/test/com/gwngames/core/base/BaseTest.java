@@ -15,6 +15,7 @@ import com.gwngames.core.data.LogFiles;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.event.base.AbstractEvent;
+import com.gwngames.core.util.Cdi;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
@@ -67,7 +68,8 @@ public abstract class BaseTest {
         if (Gdx.input == null) {           // install only if someone else hasn’t
             Gdx.input = new DummyInput();  //  put a custom stub in place
         }
-        log.debug("DummyApp + DummyFiles installed");
+        Cdi.inject(this);
+        log.debug("Components + DummyApp + DummyFiles installed");
     }
 
     /** Load a classpath resource as UTF‑8 text. */

@@ -4,12 +4,12 @@ import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.api.build.PostInject;
 import com.gwngames.core.api.event.*;
+import com.gwngames.core.api.event.trigger.IEventTrigger;
 import com.gwngames.core.api.ex.EventException;
 import com.gwngames.core.api.ex.UnknownEventException;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.LogFiles;
-import com.badlogic.gdx.utils.*;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.event.base.AbstractEvent;
@@ -17,38 +17,40 @@ import com.gwngames.core.event.base.MacroEvent;
 import com.gwngames.core.event.cond.base.ConditionPolicy;
 import com.gwngames.core.event.cond.base.ConditionResult;
 import com.gwngames.core.event.cond.base.GlobalRule;
-import com.gwngames.core.util.CollectionUtils;
 
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 
 @Init(module = ModuleNames.CORE)
 public class MasterEventQueue extends BaseComponent implements IMasterEventQueue {
-    private final FileLogger logger = FileLogger.get(LogFiles.EVENT);
+    private static final FileLogger log = FileLogger.get(LogFiles.EVENT);
 
     // auto starts the logging process
     @Inject(subComp = SubComponentNames.EVENT_STATUS_LOGGER)
     private IEventLogger eventStatusLogger;
     @Inject(loadAll = true)
     private List<IEventQueue> concreteSubQueues;
-    private final Queue<IMacroEvent> macroQueue = new Queue<>();
-    private final ObjectSet<IEvent> executedEvents = new ObjectSet<>();
-    private final ObjectSet<IMacroEvent> completedMacros = new ObjectSet<>();
-    private final ObjectMap<Class<? extends IEvent>, ConcurrentSubQueue<? extends IEvent>> subQueues = new ObjectMap<>();
+    private final Deque<IMacroEvent> macroQueue = new ArrayDeque<>();
+    private final Set<IEvent> executedEvents = new LinkedHashSet<>();
+    private final Set<IMacroEvent> completedMacros = new LinkedHashSet<>();
+    private final Map<Class<? extends IEvent>, ConcurrentSubQueue<? extends IEvent>> subQueues = new HashMap<>();
     private final Map<String, GlobalRule> globalRules = new ConcurrentHashMap<>();
     private BiConsumer<IEvent, EventException> postExceptionAction;
     private final Map<String, IEventTrigger> triggers = new ConcurrentHashMap<>();
 
     @PostInject
     public void registerSubQueues() {
-        for (IEventQueue q : concreteSubQueues){
-            if (q instanceof ConcurrentSubQueue<? extends IEvent>){
-                Class<? extends IEvent> qClass = ((ConcurrentSubQueue<? extends IEvent>) q).getType();
-                    subQueues.put(qClass, (ConcurrentSubQueue<? extends IEvent>) q);
-            }
+        for (IEventQueue q : concreteSubQueues) {
+            registerQueue(q);
+        }
+    }
+
+    @Override
+    public void registerQueue(IEventQueue q){
+        if (q instanceof ConcurrentSubQueue<? extends IEvent>) {
+            Class<? extends IEvent> qClass = ((ConcurrentSubQueue<? extends IEvent>) q).getType();
+            subQueues.put(qClass, (ConcurrentSubQueue<? extends IEvent>) q);
         }
     }
 
@@ -63,7 +65,7 @@ public class MasterEventQueue extends BaseComponent implements IMasterEventQueue
         /* wrap into a synthetic macro so the usual flow works */
         // TODO create from event manager
         MacroEvent wrap = new MacroEvent();
-        wrap.setId("single-" + ev.getClass().getSimpleName()+ "-" + UUID.randomUUID());
+        wrap.setId("single-" + ev.getClass().getSimpleName() + "-" + UUID.randomUUID());
         wrap.addEvent(ev);
         enqueueMacroEvent(wrap);
     }
@@ -92,7 +94,7 @@ public class MasterEventQueue extends BaseComponent implements IMasterEventQueue
     private boolean fails(IExecutionCondition c, IEvent ev) {
         //TODO: encapsulate this logic somewhere
         IConditionResult r = c.evaluate(ev, this);
-        return (c.policy() == ConditionPolicy.WAIT_UNTIL_TRUE    && r != ConditionResult.TRUE)
+        return (c.policy() == ConditionPolicy.WAIT_UNTIL_TRUE && r != ConditionResult.TRUE)
             || (c.policy() == ConditionPolicy.EXECUTE_UNLESS_FALSE && r == ConditionResult.FALSE);
     }
 
@@ -119,10 +121,11 @@ public class MasterEventQueue extends BaseComponent implements IMasterEventQueue
     }
 
     @Override
-    public Array<IMacroEvent> getMacroEvents() {
-        return CollectionUtils.queueToArray(macroQueue);
+    public List<IMacroEvent> getMacroEvents() {
+        return macroQueue.stream().toList();
     }
 
+    @Override
     public void process(float delta) {
 
         /*  let every trigger decide if it fires this frame */
@@ -131,8 +134,12 @@ public class MasterEventQueue extends BaseComponent implements IMasterEventQueue
         /*  move macro-events’ inner events to their sub-queues */
         synchronized (this) {
             for (IMacroEvent macro : macroQueue)
-                for (IEvent e : macro.getEvents())
-                    subQueues.get(e.getClass()).enqueue(e); // pass master
+                for (IEvent e : macro.getEvents()) {
+                    log.info("Queues: {}", subQueues.keySet().stream().map(Class::getSimpleName).toList());
+                    log.info("q class: {}", e.getClass().getSimpleName());
+                    IEventQueue q = subQueues.get(e.getClass());
+                    q.enqueue(e); // pass master
+                }
             macroQueue.clear();
         }
 
@@ -142,15 +149,15 @@ public class MasterEventQueue extends BaseComponent implements IMasterEventQueue
 
     @Override
     public FileLogger getLogger() {
-        return logger;
+        return log;
     }
 
     @Override
     public void handleEventException(IEvent event, EventException ex) {
-        if (ex instanceof UnknownEventException){
-            logger.error("Unknown event type: " + event.getClass().getName());
+        if (ex instanceof UnknownEventException) {
+            log.error("Unknown event type: " + event.getClass().getName());
         } else if (event.getMacroEvent() != null) {
-            logger.error("EventException in event [%s] from MacroEvent [%s]: %s",
+            log.error("EventException in event [%s] from MacroEvent [%s]: %s",
                 event.getClass().getSimpleName(),
                 event.getMacroEvent().getId(),
                 ex.getMessage());
@@ -167,9 +174,10 @@ public class MasterEventQueue extends BaseComponent implements IMasterEventQueue
 
     /**
      * Register a framework-wide rule.
-     * @param id       unique identifier (pass {@code null} to auto-generate)
-     * @param c        condition implementation
-     * @param enabled  initial state
+     *
+     * @param id      unique identifier (pass {@code null} to auto-generate)
+     * @param c       condition implementation
+     * @param enabled initial state
      * @return the id that was stored (never {@code null})
      */
     public String addGlobalCondition(String id, IExecutionCondition c, boolean enabled) {
@@ -178,19 +186,44 @@ public class MasterEventQueue extends BaseComponent implements IMasterEventQueue
         return key;
     }
 
-    public void enableGlobalCondition (String id) { globalRules.get(id).setEnabled(true); }
-    public void disableGlobalCondition(String id) { globalRules.get(id).setEnabled(false); }
-    public void removeGlobalCondition (String id) { globalRules.remove(id); }
+    public void enableGlobalCondition(String id) {
+        globalRules.get(id).setEnabled(true);
+    }
 
-    /** @return how many times this rule prevented execution. */
+    public void disableGlobalCondition(String id) {
+        globalRules.get(id).setEnabled(false);
+    }
+
+    public void removeGlobalCondition(String id) {
+        globalRules.remove(id);
+    }
+
+    /**
+     * @return how many times this rule prevented execution.
+     */
     public int getVetoCount(String id) {
         GlobalRule r = globalRules.get(id);
         return r == null ? 0 : r.getVetoCount().get();
     }
 
-    public void registerTrigger(IEventTrigger t) { triggers.put(t.getId(), t); }
-    public void removeTrigger  (String id)      { triggers.remove(id);        }
-    public void enableTrigger  (String id)      { triggers.get(id).setEnabled(true);  }
-    public void disableTrigger (String id)      { triggers.get(id).setEnabled(false); }
+    @Override
+    public void registerTrigger(IEventTrigger t) {
+        triggers.put(t.getId(), t);
+    }
+
+    @Override
+    public void removeTrigger(String id) {
+        triggers.remove(id);
+    }
+
+    @Override
+    public void enableTrigger(String id) {
+        triggers.get(id).setEnabled(true);
+    }
+
+    @Override
+    public void disableTrigger(String id) {
+        triggers.get(id).setEnabled(false);
+    }
 
 }

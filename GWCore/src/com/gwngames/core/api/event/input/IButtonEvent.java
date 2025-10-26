@@ -5,7 +5,7 @@ import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.data.ComponentNames;
 
 @Init(component = ComponentNames.BUTTON_EVENT)
-public interface IButtonEvent extends IInputEvent{
+public interface IButtonEvent extends IInputEvent {
     boolean isPressed();
     float getPressure();
 

@@ -20,7 +20,7 @@ import com.gwngames.core.data.input.InputType;
 /**
  * Default input-event factory/dispatcher using ONLY IClassLoader.
  */
-@Init(component = ComponentNames.INPUT_MANAGER, module = ModuleNames.CORE)
+@Init(module = ModuleNames.CORE)
 public final class InputManager extends BaseComponent implements IInputManager {
     @Inject
     private IMasterEventQueue masterEventQueue;

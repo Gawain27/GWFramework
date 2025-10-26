@@ -2,7 +2,7 @@ package com.gwngames.core.event.base;
 
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.api.build.PostInject;
-import com.gwngames.core.api.event.IEventTrigger;
+import com.gwngames.core.api.event.trigger.IEventTrigger;
 import com.gwngames.core.api.event.IMasterEventQueue;
 import com.gwngames.core.base.BaseComponent;
 

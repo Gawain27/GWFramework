@@ -2,37 +2,26 @@ package com.gwngames.core.base;
 
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.base.cfg.IClassLoader;
-import com.gwngames.core.api.base.monitor.IDashboardContent;
-import com.gwngames.core.api.base.monitor.IDashboardHeader;
-import com.gwngames.core.api.base.monitor.IDashboardItem;
-import com.gwngames.core.api.base.monitor.view.IComponentLogView;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.api.build.PostInject;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.base.log.LogBus;
-import com.gwngames.core.build.monitor.DashboardDefaults;
 import com.gwngames.core.data.LogFiles;
 import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.util.ClassUtils;
 import com.gwngames.core.util.ComponentUtils;
 
 import java.lang.reflect.*;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 /**
  * Root-class for every non-enum GW component.
- * Each concrete instance is also an IDashboardItem and renders:
- *   - a tile (name + error count + “Logs” button)
- *   - a hash-target popup with recent logs
- * No dashboard layers required.
  */
-public abstract class BaseComponent implements IBaseComp, IDashboardItem {
+public abstract class BaseComponent implements IBaseComp {
 
     /** Per-instance id (assigned once). */
     private final int multId = ComponentUtils.assign(this);
@@ -42,98 +31,6 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem {
 
     /** One cached instance for each Component + SubComp pair. */
     private static final Map<String, IBaseComp> INSTANCES = new ConcurrentHashMap<>();
-
-    /* ───────────────────── Dashboard placement ───────────────────── */
-
-    public enum DashTable { COMPONENTS }
-    public enum DashCategory { ALL }
-    public enum DashICat { DEFAULT }
-
-    protected IDashboardContent dashboardContent;
-
-    @Override
-    public Enum<?> tableKey() {
-        return DashTable.COMPONENTS;
-    }
-    @Override
-    public Enum<?> categoryKey() {
-        return DashCategory.ALL;
-    }
-    @Override
-    public Enum<?> itemCategoryKey() {
-        return DashICat.DEFAULT;
-    }
-
-    @Override
-    public IDashboardHeader categoryHeader() {
-        return DashboardDefaults.header("Components");
-    }
-    @Override
-    public IDashboardContent categoryStatistics() {
-        return DashboardDefaults.none();
-    }
-    @Override
-    public IDashboardHeader itemCategoryHeader() {
-        return DashboardDefaults.header("All");
-    }
-    @Override
-    public IDashboardContent itemCategoryStats()  {
-        return DashboardDefaults.none();
-    }
-
-    /**
-     * Single content that renders the tile AND the popup (no layers needed).
-     */
-    @Override
-    public IDashboardContent itemContent() {
-        if (IDashboardContent.class.isAssignableFrom(this.getClass())) return null;
-        if (dashboardContent != null) return dashboardContent;
-
-        // Create a fresh logs content
-        IDashboardContent content = BaseComponent.getInstance(
-            IDashboardContent.class, SubComponentNames.DASHBOARD_LOGS_COMPONENT, true);
-
-        // Old path still works
-        content.setComponent(this);
-
-        // New, proxy-proof path: pass precomputed values if the content supports it
-        String instKey = dashboardKey();
-        String clsKey  = getClass().getName();
-        String keys    = instKey + "," + clsKey;
-
-        if (content instanceof IComponentLogView v) {
-            v.init(dashboardTitle(), safeId(), keys, errorCount());
-        }
-
-        dashboardContent = content;
-        return content;
-    }
-
-    /* ───────────────────── Dashboard identity & counters ───────────────────── */
-
-    public final String dashboardKey() { return getClass().getName() + "#" + multId; }
-
-    public String dashboardTitle() { return getClass().getSimpleName() + " #" + multId; }
-
-    /** Instance + class-level error counts combined. */
-    public int errorCount() {
-        final String instKey = dashboardKey();
-        final String clsKey  = getClass().getName();
-        return LogBus.errorCount(instKey) + LogBus.errorCount(clsKey);
-    }
-
-    /** Stable, DOM-safe id (used as hash target for the popup). */
-    public String safeId() { return "cmp-" + sha1Hex(dashboardKey()); }
-    private static String sha1Hex(String s) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-1");
-            byte[] dig = md.digest(s.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder(dig.length * 2);
-            for (byte b : dig) sb.append(Character.forDigit((b >> 4) & 0xF, 16))
-                .append(Character.forDigit(b & 0xF, 16));
-            return sb.toString();
-        } catch (Exception e) { return Integer.toHexString(s.hashCode()); }
-    }
 
     /* ───────────────────── Log helpers (also feed LogBus) ───────────────────── */
 

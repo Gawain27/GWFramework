@@ -1,12 +1,10 @@
 package com.gwngames.core.input;
 
-import com.badlogic.gdx.Input;
-import com.badlogic.gdx.InputProcessor;
-import com.badlogic.gdx.input.NativeInputConfiguration;
 import com.gwngames.core.api.input.*;
 import com.gwngames.core.base.BaseTest;
 import com.gwngames.core.input.adapter.KeyboardInputAdapter;
 import com.gwngames.core.input.detector.PeripheralDeviceDetector;
+import com.gwngames.core.util.Cdi;
 import org.junit.jupiter.api.Assertions;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -27,10 +25,10 @@ public class KeyboardDeviceDetectorTest extends BaseTest {
     /* ───────────────────────── BaseTest entry-point ──────────────────── */
     @Override
     protected void runTest() {
-        /* 1) install dummy LibGDX singletons */
+        /* install dummy LibGDX singletons */
         setupApplication();
 
-        /* 2) create detector + listener hooks */
+        /*  create detector + listener hooks */
         PeripheralDeviceDetector detector = new PeripheralDeviceDetector();
 
         AtomicInteger connectCnt = new AtomicInteger();
@@ -51,10 +49,11 @@ public class KeyboardDeviceDetectorTest extends BaseTest {
             public void onAdapterDisconnected(IInputAdapter adapter) { /* not needed */ }
         });
 
-        /* 3) start detector (runs initial scan immediately) */
+        /*  start detector (runs initial scan immediately) */
+        Cdi.inject(detector);
         detector.start();
 
-        /* 4) assertions */
+        /*  assertions */
         Assertions.assertEquals(1, connectCnt.get(), "Exactly one keyboard should be detected");
         Assertions.assertNotNull(captured.get(), "Adapter instance expected");
         Assertions.assertInstanceOf(KeyboardInputAdapter.class, captured.get(), "Detected adapter must be a KeyboardInputAdapter");

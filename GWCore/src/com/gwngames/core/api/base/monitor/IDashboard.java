@@ -4,6 +4,7 @@ import com.gwngames.core.api.build.Init;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
 
+import java.io.InputStream;
 import java.util.List;
 
 /**
@@ -19,4 +20,6 @@ public non-sealed interface IDashboard extends IDashboardNode {
     void maybeStart(int port);
 
     void shutdown();
+
+    InputStream renderBoard();
 }

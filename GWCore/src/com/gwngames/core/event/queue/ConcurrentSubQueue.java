@@ -25,8 +25,8 @@ public abstract class ConcurrentSubQueue<T extends IEvent>
 
     /**
      * Concrete SubQueues should call this in their @PostInject.
-     * */
-    protected void init(){
+     */
+    protected void init() {
         this.executor = Executors.newFixedThreadPool(maxParallel);
     }
 
@@ -64,7 +64,9 @@ public abstract class ConcurrentSubQueue<T extends IEvent>
 
     protected abstract void processEvent(T ev) throws EventException;
 
-    public void shutdown() { executor.shutdown(); }
+    public void shutdown() {
+        executor.shutdown();
+    }
 
     public abstract Class<T> getType();
 }

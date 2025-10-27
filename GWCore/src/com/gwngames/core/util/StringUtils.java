@@ -2,7 +2,8 @@ package com.gwngames.core.util;
 
 /**
  * Basic String utilities, to avoid making 200 checks every time...
- * */
+ *
+ */
 public class StringUtils {
     /**
      * Checks whether a string is considered "empty".
@@ -47,14 +48,28 @@ public class StringUtils {
         int idx = path.lastIndexOf('.');
         return idx == -1 ? "" : path.substring(idx + 1);
     }
+
     public static boolean isNotEmpty(String str) {
         return !isEmpty(str);
     }
 
     /**
      * Escape entities
-     * */
-    public static String escape(Object o){
-        return org.jsoup.parser.Parser.unescapeEntities(String.valueOf(o),false);
+     *
+     */
+    public static String escape(Object o) {
+        return org.jsoup.parser.Parser.unescapeEntities(String.valueOf(o), false);
+    }
+
+    public static String escapeHtml(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;");
+    }
+
+    public static boolean startsWithAny(String s, String[] prefixes) {
+        for (String p : prefixes) if (s.startsWith(p)) return true;
+        return false;
     }
 }

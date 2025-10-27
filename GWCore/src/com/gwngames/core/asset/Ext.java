@@ -11,6 +11,13 @@ public enum Ext implements IFileExtension {
     ATLAS("atlas"),
     JSON("json"), TXT("txt"), CSS("css");
     private final String e;
-    Ext(String e){ this.e=e; }
-    @Override public String ext(){ return e; }
+
+    Ext(String e) {
+        this.e = e;
+    }
+
+    @Override
+    public String ext() {
+        return e;
+    }
 }

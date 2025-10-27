@@ -2,6 +2,7 @@ package com.gwngames.core.base;
 
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.base.cfg.IClassLoader;
+import com.gwngames.core.api.base.monitor.IDashboardItem;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.api.build.PostInject;
@@ -12,6 +13,7 @@ import com.gwngames.core.data.LogFiles;
 import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.util.ClassUtils;
 import com.gwngames.core.util.ComponentUtils;
+import org.jetbrains.annotations.NotNull;
 
 import java.lang.reflect.*;
 import java.util.*;
@@ -21,7 +23,7 @@ import java.util.function.Supplier;
 /**
  * Root-class for every non-enum GW component.
  */
-public abstract class BaseComponent implements IBaseComp {
+public abstract class BaseComponent implements IBaseComp, IDashboardItem<BaseComponent> {
 
     /** Per-instance id (assigned once). */
     private final int multId = ComponentUtils.assign(this);
@@ -116,7 +118,7 @@ public abstract class BaseComponent implements IBaseComp {
         if (!List.class.isAssignableFrom(f.getType()))
             throw new IllegalStateException("@Inject(loadAll=true) field must be a List : " + f);
 
-        final Class<?> elemType = extractGenericType(f);
+        final Class<?> elemType = ClassUtils.extractGenericType(f);
         if (!IBaseComp.class.isAssignableFrom(elemType))
             throw new IllegalStateException("@Inject(loadAll=true) element type must extend IBaseComp : " + elemType);
 
@@ -137,28 +139,9 @@ public abstract class BaseComponent implements IBaseComp {
         final List proxies = new ArrayList(discovered.size());
 
         for (Object impl : discovered) {
-            final Class<? extends IBaseComp> implClass = ((IBaseComp) impl).getClass();
+            final Supplier<IBaseComp> supplier = getIBaseCompSupplier((IBaseComp) impl, loader);
 
-            // Supplier that creates a fresh instance of the concrete class on first use.
-            final Supplier<IBaseComp> supplier = new Supplier<>() {
-                private volatile IBaseComp cached;
-                @Override public IBaseComp get() {
-                    IBaseComp t = cached;
-                    if (t == null) {
-                        synchronized (this) {
-                            t = cached;
-                            if (t == null) {
-                                t = (IBaseComp) loader.createInstance(implClass);
-                                cached = t;
-                            }
-                        }
-                    }
-                    return t;
-                }
-                @Override public String toString() { return "supplier(" + implClass.getSimpleName() + ")"; }
-            };
-
-            Object proxy = LazyProxy.of((Class) elemType, (Supplier) supplier, immortal);
+            Object proxy = LazyProxy.of((Class) elemType, supplier, immortal);
             proxies.add(proxy);
         }
 
@@ -171,6 +154,30 @@ public abstract class BaseComponent implements IBaseComp {
         LOG.debug("Injected {} LazyProxy implementations into {}", proxies.size(), f);
     }
 
+    @NotNull
+    private static Supplier<IBaseComp> getIBaseCompSupplier(IBaseComp impl, ModuleClassLoader loader) {
+        final Class<? extends IBaseComp> implClass = impl.getClass();
+
+        // Supplier that creates a fresh instance of the concrete class on first use.
+        return new Supplier<>() {
+            private volatile IBaseComp cached;
+            @Override public IBaseComp get() {
+                IBaseComp t = cached;
+                if (t == null) {
+                    synchronized (this) {
+                        t = cached;
+                        if (t == null) {
+                            t = (IBaseComp) loader.createInstance(implClass);
+                            cached = t;
+                        }
+                    }
+                }
+                return t;
+            }
+            @Override public String toString() { return "supplier(" + implClass.getSimpleName() + ")"; }
+        };
+    }
+
     @SuppressWarnings("unchecked")
     private static void injectSingle(Field f, Object host, Inject inj) {
         // Enforce: subTypeOf requires loadAll=true
@@ -179,8 +186,16 @@ public abstract class BaseComponent implements IBaseComp {
         }
 
         Class<IBaseComp> depType = (Class<IBaseComp>) f.getType();
+        Supplier<IBaseComp> create = getIBaseCompSupplier(inj, depType);
+        Object proxy = LazyProxy.of(depType, create, inj.immortal());
+        try { f.set(host, proxy); }
+        catch (IllegalAccessException e) { throw new RuntimeException(e); }
+    }
+
+    @NotNull
+    private static Supplier<IBaseComp> getIBaseCompSupplier(Inject inj, Class<IBaseComp> depType) {
         SubComponentNames sub = inj.subComp();
-        Supplier<IBaseComp> create = () -> {
+        return () -> {
             if (inj.createNew()) {
                 if (sub != SubComponentNames.NONE)
                     return ModuleClassLoader.getInstance().tryCreate(
@@ -192,19 +207,9 @@ public abstract class BaseComponent implements IBaseComp {
                 ? getInstance(depType)
                 : getInstance(depType, sub);
         };
-        Object proxy = LazyProxy.of(depType, create, inj.immortal());
-        try { f.set(host, proxy); }
-        catch (IllegalAccessException e) { throw new RuntimeException(e); }
     }
 
-    private static Class<?> extractGenericType(Field listField) {
-        Type g = listField.getGenericType();
-        if (g instanceof ParameterizedType pt) {
-            Type a = pt.getActualTypeArguments()[0];
-            if (a instanceof Class<?> c) return c;
-        }
-        throw new IllegalStateException("Cannot resolve List element type for " + listField);
-    }
+
 
     private static String cacheKey(Class<?> t, SubComponentNames sub) {
         return t.getName() + '#' + sub.name();
@@ -237,5 +242,10 @@ public abstract class BaseComponent implements IBaseComp {
                 throw new IllegalStateException("Error invoking @PostInject: " + m, e);
             }
         }
+    }
+
+    @Override
+    public BaseComponent getItem(){
+        return this;
     }
 }

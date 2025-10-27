@@ -1,10 +1,12 @@
 package com.gwngames.core.base.init;
 
+import com.gwngames.core.api.base.cfg.IClassLoader;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseTest;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.PlatformNames;
 import com.gwngames.core.util.ClassUtils;
+import com.gwngames.core.util.CollectionUtils;
 import org.junit.jupiter.api.Assertions;
 
 import java.util.*;
@@ -53,14 +55,14 @@ public class PlatformDifferentiationComplianceTest extends BaseTest {
         // Examine each <interface, module> bucket
         index.forEach((iface, byModule) -> byModule.forEach((module, impls) -> {
             if (impls.size() <= 1) return; // no ambiguity – nothing to check
-            Init ann = iface.getAnnotation(Init.class);
-            if (ann != null && ann.allowMultiple()) return; // multiple allowed
+            Init ann = IClassLoader.resolvedInit(iface);
+            if (ann.allowMultiple()) return; // multiple allowed
             log.debug("Interface {} – module {} – {} impls need unique platform or multi", iface.getSimpleName(), module, impls.size());
 
             for (Class<?> impl : impls) {
                 PlatformNames platform = impl.getAnnotation(Init.class).platform();
                 Assertions.assertNotEquals(PlatformNames.ALL, platform,
-                    () -> String.format("%s and others implement %s at %s without platform differentiation or multi", impl.getName(), iface.getSimpleName(), module));
+                    () -> String.format("%s and others [%s] implement %s at %s without platform differentiation or multi", impl.getName(), impls.stream().map(Class::getSimpleName).toList(), iface.getSimpleName(), module));
             }
         }));
     }

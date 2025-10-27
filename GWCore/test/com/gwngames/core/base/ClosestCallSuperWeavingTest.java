@@ -1,5 +1,6 @@
 package com.gwngames.core.base;
 
+import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
@@ -72,11 +73,13 @@ public class ClosestCallSuperWeavingTest extends BaseTest {
 
     /* ======================= Fixtures ======================= */
 
+    @Init(component = ComponentNames.POPPO, module = ModuleNames.INTERFACE)
+    public interface IPoppo extends IBaseComp {}
     /**
      * Lower implementation (the "real" super after weaving).
      */
-    @Init(component = ComponentNames.POPPO, subComp = SubComponentNames.NONE, module = ModuleNames.CORE)
-    public static class PippoLower extends BaseComponent {
+    @Init(subComp = SubComponentNames.NONE, module = ModuleNames.CORE)
+    public static class PippoLower extends BaseComponent implements IPoppo {
         protected String who() { return "LOWER"; }
         protected int    sum(int a, int b) { return a + b; }
         protected int    mul2(int x) { return x * 2; }
@@ -87,8 +90,8 @@ public class ClosestCallSuperWeavingTest extends BaseTest {
      * Higher implementation extending ClosestComponent at compile-time.
      * The loader rewrites its super to PippoLower and rewrites the marker calls.
      */
-    @Init(component = ComponentNames.POPPO, subComp = SubComponentNames.NONE, module = ModuleNames.TEST)
-    public static class PippoHigher extends ClosestComponent {
+    @Init(subComp = SubComponentNames.NONE, module = ModuleNames.TEST)
+    public static class PippoHigher extends ClosestComponent implements IPoppo{
         protected String who() {
             // Should be rewritten to invokespecial PippoLower.who()
             return callSuper();

@@ -1,14 +1,12 @@
 package com.gwngames.core.api.build;
 
 import com.gwngames.core.api.base.IBaseComp;
-import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.data.SubComponentNames;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
-import java.util.function.Predicate;
 
 /**
  * Annotation used in game components to inject an existing or new object into the class.<p>

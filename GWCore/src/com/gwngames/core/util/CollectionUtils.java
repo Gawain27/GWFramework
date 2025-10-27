@@ -3,6 +3,9 @@ package com.gwngames.core.util;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.Queue;
 
+import java.util.Collection;
+import java.util.Optional;
+
 public final class CollectionUtils {
 
     /**
@@ -24,4 +27,15 @@ public final class CollectionUtils {
 
         return result;
     }
+
+    public static boolean allEqual(Collection<?> list) {
+        if (list == null || list.isEmpty()) return true;
+        Optional<?> firstOpt = list.stream().findFirst();
+        Object first = firstOpt.get();
+        for (Object element : list) {
+            if (!first.equals(element)) return false;
+        }
+        return true;
+    }
+
 }

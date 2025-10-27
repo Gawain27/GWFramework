@@ -15,8 +15,9 @@ public non-sealed interface IDashboardContent<T extends IDashboardItem<T>> exten
 
     /**
      * render the content
+     * @return the html of the content
      * */
-    void render();
+    String render();
 
     /**
      * sort the items in the content

@@ -10,6 +10,7 @@ import com.gwngames.core.api.ex.ErrorPopupException;
 import com.gwngames.core.base.cfg.i18n.CoreTranslation;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.*;
+import com.gwngames.core.util.ClassUtils;
 import com.gwngames.core.util.ComponentUtils;
 import com.gwngames.core.util.TransformingURLClassLoader;
 
@@ -244,20 +245,25 @@ public final class ModuleClassLoader extends ClassLoader implements IClassLoader
     @Override
     protected Class<?> findClass(String name) throws ClassNotFoundException {
         Class<?> hit = resolved.get(name);
-        if (hit != null) {
-            log.debug("Class {} found in cache.", name);
-            return hit;
-        }
+        if (hit != null) return hit;
         if (misses.contains(name)) throw new ClassNotFoundException(name);
+
+        final String path = name.replace('.', '/') + ".class";
 
         for (URLClassLoader l : loaders) {
             try {
-                hit = Class.forName(name, false, l);
-                resolved.put(name, hit);
+                // key guard: only try this child if it physically has the class
+                if (l.findResource(path) == null) continue;
+
+                Class<?> c = Class.forName(name, false, l); // lets the child weave if needed
+                resolved.put(name, c);
                 log.debug("Class {} loaded by {}", name, l.getName());
-                return hit;
-            } catch (ClassNotFoundException ignored) { }
+                return c;
+            } catch (ClassNotFoundException ignore) {
+                // this child advertised the resource but failed to define it; try next
+            }
         }
+
         misses.add(name);
         log.error("Class {} not found.", name);
         throw new ClassNotFoundException(name);
@@ -344,7 +350,8 @@ public final class ModuleClassLoader extends ClassLoader implements IClassLoader
             String cn = e.getName().replace('/', '.').replace(".class", "");
             try {
                 Class<?> c = loader.loadClass(cn);
-                if (c.getAnnotation(ann) != null) out.add(c);
+                if (c.getDeclaredAnnotation(Init.class) != null) out.add(c);
+                else if (c.getAnnotation(Init.class) != null) out.add(c);
             } catch (Throwable ignored) {}
         }));
 

@@ -25,13 +25,19 @@ import java.util.function.Supplier;
  */
 public abstract class BaseComponent implements IBaseComp, IDashboardItem<BaseComponent> {
 
-    /** Per-instance id (assigned once). */
+    /**
+     * Per-instance id (assigned once).
+     */
     private final int multId = ComponentUtils.assign(this);
 
-    /** System logger (subclasses may also use their own FileLogger). */
+    /**
+     * System logger (subclasses may also use their own FileLogger).
+     */
     private static final FileLogger LOG = FileLogger.get(LogFiles.SYSTEM);
 
-    /** One cached instance for each Component + SubComp pair. */
+    /**
+     * One cached instance for each Component + SubComp pair.
+     */
     private static final Map<String, IBaseComp> INSTANCES = new ConcurrentHashMap<>();
 
     /* ───────────────────── Log helpers (also feed LogBus) ───────────────────── */
@@ -40,29 +46,35 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem<BaseCom
         LOG.info(msg, args);
         LogBus.record(dashboardKey(), LogBus.Level.INFO, String.format(msg, args), null);
     }
+
     protected void logDebug(String msg, Object... args) {
         LOG.debug(msg, args);
         LogBus.record(dashboardKey(), LogBus.Level.DEBUG, String.format(msg, args), null);
     }
+
     protected void logError(String msg, Object... args) {
         LOG.error(msg, args);
         LogBus.record(dashboardKey(), LogBus.Level.ERROR, String.format(msg, args), null);
     }
+
     protected void logError(String msg, Throwable ex, Object... args) {
         LOG.error(msg, ex, args);
         LogBus.record(dashboardKey(), LogBus.Level.ERROR, String.format(msg, args), ex);
     }
 
-    @Override public void setMultId(int newId) { /* regular comps ignore external set */ }
+    @Override
+    public void setMultId(int newId) { /* regular comps ignore external set */ }
 
     /* ===================== Public lookup helpers ===================== */
 
     public static <T extends IBaseComp> T getInstance(Class<T> type) {
         return getInstance(type, SubComponentNames.NONE, false);
     }
+
     public static <T extends IBaseComp> T getInstance(Class<T> type, SubComponentNames sub) {
         return getInstance(type, sub, false);
     }
+
     public static <T extends IBaseComp> T getInstance(Class<T> type, boolean fresh) {
         return getInstance(type, SubComponentNames.NONE, fresh);
     }
@@ -91,29 +103,48 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem<BaseCom
             throw new IllegalStateException("Cannot instantiate " + iface.getSimpleName());
 
         // wire @Inject fields
+        wireComponents(obj);
+        return obj;
+    }
+
+    /** weak-identity set to remember objects that have been wired already */
+    private static final Set<Object> WIRED =
+        java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
+
+    private static boolean markWired(Object o) {
+        synchronized (WIRED) {
+            if (WIRED.contains(o))
+                return false;
+            WIRED.add(o);
+            return true;
+        }
+    }
+
+    private static <T extends IBaseComp> void wireComponents(T obj) {
+        // idempotency guard: if already wired, bail out
+        if (!markWired(obj)) return;
+
         for (Field f : ClassUtils.getAnnotatedFields(obj.getClass(), Inject.class)) {
             f.setAccessible(true);
             Inject inj = f.getAnnotation(Inject.class);
             if (inj.loadAll()) {
-                injectAllImplementations(f, obj, inj);   // <-- now returns LazyProxy list
+                injectAllImplementations(f, obj, inj);
             } else {
-                injectSingle(f, obj, inj);               // unchanged
+                injectSingle(f, obj, inj);
             }
             f.setAccessible(false);
         }
-
         runPostInject(obj);
-        return obj;
     }
 
     /**
      * Creates a List of LazyProxy elements for all allowed implementations.
      * Honors {@code subTypeOf} filter like before, but does NOT eagerly expose real instances.
      * Notes:
-     *  - We still need to discover candidates via the loader. The current loader API returns instances;
-     *    we use those only to learn the concrete classes, then build suppliers that create on first use.
+     * - We still need to discover candidates via the loader. The current loader API returns instances;
+     * we use those only to learn the concrete classes, then build suppliers that create on first use.
      */
-    @SuppressWarnings({"unchecked","rawtypes"})
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private static void injectAllImplementations(Field f, Object host, Inject inj) {
         if (!List.class.isAssignableFrom(f.getType()))
             throw new IllegalStateException("@Inject(loadAll=true) field must be a List : " + f);
@@ -122,59 +153,67 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem<BaseCom
         if (!IBaseComp.class.isAssignableFrom(elemType))
             throw new IllegalStateException("@Inject(loadAll=true) element type must extend IBaseComp : " + elemType);
 
-        final Init elemMeta = elemType.getAnnotation(Init.class);
-        if (elemMeta == null || !elemMeta.allowMultiple())
+        final Init elemMeta = IClassLoader.resolvedInit(elemType);
+        if (!elemMeta.allowMultiple())
             throw new IllegalStateException("Component does not allow multiple: " + elemType);
 
         final Class<?> subIface = inj.subTypeOf();
         final ModuleClassLoader loader = ModuleClassLoader.getInstance();
 
         // Discover implementations (existing API yields instances).
-        final List<?> discovered = (subIface != null && subIface != IBaseComp.class)
-            ? loader.tryCreateAll(elemMeta.component(), subIface)
-            : loader.tryCreateAll(elemMeta.component());
+        // In BaseComponent.injectAllImplementations(...)
+        final List<Class<?>> classes =
+            (subIface != null && subIface != IBaseComp.class)
+                ? loader.listSubComponents(elemMeta.component(), subIface)
+                : loader.listSubComponents(elemMeta.component());
 
-        // Build a proxy per element that creates its concrete impl lazily on first call.
         final boolean immortal = inj.immortal();
-        final List proxies = new ArrayList(discovered.size());
+        final List proxies = new ArrayList(classes.size());
 
-        for (Object impl : discovered) {
-            final Supplier<IBaseComp> supplier = getIBaseCompSupplier((IBaseComp) impl, loader);
+        for (Class<?> implClass : classes) {
+            Supplier<IBaseComp> supplier = getIBaseCompSupplier((Class<? extends IBaseComp>) implClass, loader);
 
             Object proxy = LazyProxy.of((Class) elemType, supplier, immortal);
             proxies.add(proxy);
         }
 
         try {
-            f.set(host, Collections.unmodifiableList(proxies));
+            f.set(host, proxies);
         } catch (IllegalAccessException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Can't inject implementations:" + f.getName(), e);
         }
-
         LOG.debug("Injected {} LazyProxy implementations into {}", proxies.size(), f);
     }
 
     @NotNull
-    private static Supplier<IBaseComp> getIBaseCompSupplier(IBaseComp impl, ModuleClassLoader loader) {
-        final Class<? extends IBaseComp> implClass = impl.getClass();
-
-        // Supplier that creates a fresh instance of the concrete class on first use.
+    private static Supplier<IBaseComp> getIBaseCompSupplier(Class<? extends IBaseComp> implClass, ModuleClassLoader loader) {
         return new Supplier<>() {
             private volatile IBaseComp cached;
-            @Override public IBaseComp get() {
+
+            @Override
+            public IBaseComp get() {
                 IBaseComp t = cached;
                 if (t == null) {
                     synchronized (this) {
                         t = cached;
                         if (t == null) {
-                            t = (IBaseComp) loader.createInstance(implClass);
-                            cached = t;
+                            // create the concrete instance
+                            IBaseComp fresh = (IBaseComp) loader.createInstance(implClass);
+
+                            // wire @Inject fields on the fresh instance (same as createAndInject)
+                            wireComponents(fresh);
+
+                            t = cached = fresh;
                         }
                     }
                 }
                 return t;
             }
-            @Override public String toString() { return "supplier(" + implClass.getSimpleName() + ")"; }
+
+            @Override
+            public String toString() {
+                return "supplier(" + implClass.getSimpleName() + ")";
+            }
         };
     }
 
@@ -188,8 +227,11 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem<BaseCom
         Class<IBaseComp> depType = (Class<IBaseComp>) f.getType();
         Supplier<IBaseComp> create = getIBaseCompSupplier(inj, depType);
         Object proxy = LazyProxy.of(depType, create, inj.immortal());
-        try { f.set(host, proxy); }
-        catch (IllegalAccessException e) { throw new RuntimeException(e); }
+        try {
+            f.set(host, proxy);
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @NotNull
@@ -208,7 +250,6 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem<BaseCom
                 : getInstance(depType, sub);
         };
     }
-
 
 
     private static String cacheKey(Class<?> t, SubComponentNames sub) {
@@ -237,15 +278,25 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem<BaseCom
             c = c.getSuperclass();
         }
         for (Method m : chain) {
-            try { m.setAccessible(true); m.invoke(host); }
-            catch (ReflectiveOperationException e) {
+            try {
+                m.setAccessible(true);
+                m.invoke(host);
+            } catch (ReflectiveOperationException e) {
                 throw new IllegalStateException("Error invoking @PostInject: " + m, e);
             }
         }
     }
 
     @Override
-    public BaseComponent getItem(){
+    public BaseComponent getItem() {
         return this;
+    }
+
+    @Override
+    public String dashboardKey() {
+        Init meta = IClassLoader.resolvedInit(this.getClass());
+        if (meta.isEnum())
+            this.ensureEnum();
+        return this.toString();
     }
 }

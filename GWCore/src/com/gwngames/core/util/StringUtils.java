@@ -1,5 +1,12 @@
 package com.gwngames.core.util;
 
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.parser.ParseError;
+import org.jsoup.parser.Parser;
+
+import java.util.List;
+
 /**
  * Basic String utilities, to avoid making 200 checks every time...
  *
@@ -55,10 +62,9 @@ public class StringUtils {
 
     /**
      * Escape entities
-     *
      */
     public static String escape(Object o) {
-        return org.jsoup.parser.Parser.unescapeEntities(String.valueOf(o), false);
+        return Parser.unescapeEntities(String.valueOf(o), false);
     }
 
     public static String escapeHtml(String s) {
@@ -71,5 +77,31 @@ public class StringUtils {
     public static boolean startsWithAny(String s, String[] prefixes) {
         for (String p : prefixes) if (s.startsWith(p)) return true;
         return false;
+    }
+
+    /**
+     * Returns true if the given string is valid (well-formed) HTML according to jsoup's HTML5 parser.
+     * Notes:
+     * - Treats null/blank as invalid.
+     * - Accepts typical HTML5-ish markup; warnings are ignored, only errors fail.
+     */
+    public static boolean isValidHtml(String html) {
+        if (html == null || html.isBlank()) return false;
+
+        try {
+            // Configure HTML5 parser and enable error tracking
+            Parser parser = Parser.htmlParser();
+            parser.setTrackErrors(200); // cap collected errors (adjust if boom)
+
+            // Base URI not needed; pass empty string
+            Jsoup.parse(html, "", parser);
+
+            // If the parser recorded any errors, consider it invalid
+            List<ParseError> errors = parser.getErrors();
+            return errors.isEmpty();
+        } catch (Exception ex) {
+            // Any unexpected runtime parse problem -> invalid
+            return false;
+        }
     }
 }

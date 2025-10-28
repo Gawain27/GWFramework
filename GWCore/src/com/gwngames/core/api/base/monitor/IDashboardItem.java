@@ -15,4 +15,6 @@ public non-sealed interface IDashboardItem<T> extends IDashboardNode {
      * Get the concrete item, to be used in the {@link IDashboardContent}
      * */
     T getItem();
+
+    String dashboardKey();
 }

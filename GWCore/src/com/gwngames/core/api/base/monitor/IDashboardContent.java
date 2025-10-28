@@ -14,6 +14,12 @@ import java.util.List;
 public non-sealed interface IDashboardContent<T extends IDashboardItem<T>> extends IDashboardNode {
 
     /**
+     * render the header of the content
+     * @return the html of the content header
+     * */
+    String renderHeader();
+
+    /**
      * render the content
      * @return the html of the content
      * */

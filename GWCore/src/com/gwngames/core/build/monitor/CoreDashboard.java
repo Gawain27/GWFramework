@@ -13,7 +13,6 @@ import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.LogFiles;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.cfg.BuildParameters;
-import com.gwngames.core.util.StringUtils;
 import io.javalin.Javalin;
 
 import java.io.ByteArrayInputStream;
@@ -35,7 +34,7 @@ public class CoreDashboard extends BaseComponent implements IDashboard, AutoClos
      * All dashboard content blocks (boxes)
      */
     @Inject(loadAll = true)
-    private List<IDashboardContent<? extends IDashboardItem<?>>> contents;
+    private List<IDashboardContent<?>> contents;
 
     private final AtomicReference<Javalin> serverRef = new AtomicReference<>();
     private volatile Integer boundPort = null;
@@ -100,7 +99,7 @@ public class CoreDashboard extends BaseComponent implements IDashboard, AutoClos
             try {
                 c.render();
             } catch (Throwable t) {
-                log.error("Error rendering content {}", c.getClass().getSimpleName(), t);
+                log.error("Error rendering content " + c.getClass().getSimpleName(), t);
             }
         }
 
@@ -113,54 +112,78 @@ public class CoreDashboard extends BaseComponent implements IDashboard, AutoClos
         String CSS = CSSFile.readString();
         StringBuilder sb = new StringBuilder();
         sb.append("""
-                <!DOCTYPE html>
-                <html lang="en">
-                <head>
-                  <meta charset="utf-8"/>
-                  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-                  <title>GW Dashboard</title>
-                  <style>
-                """)
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+              <meta charset="utf-8"/>
+              <meta name="viewport" content="width=device-width, initial-scale=1"/>
+              <title>GW Dashboard</title>
+              <style>
+            """)
             .append(CSS)
             .append("""
-                  </style>
-                </head>
-                <body>
-                  <header>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 7v-7h7v7h-7z" stroke="currentColor" stroke-width="1.5" />
-                    </svg>
-                    <h1>GW Dashboard</h1>
-                    <span class="muted">lightweight · live</span>
-                  </header>
-                  <main class="board">
-                """);
-
-        // First, the initial empty box placeholder for future "self" dashboard
-        sb.append("""
-            <section class="box empty">
-              <div>Dashboard Overview — coming soon</div>
-            </section>
+              </style>
+            </head>
+            <body>
+              <header>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 7v-7h7v7h-7z" stroke="currentColor" stroke-width="1.5" />
+                </svg>
+                <h1>GW Dashboard</h1>
+                <span class="muted">lightweight · live</span>
+              </header>
+              <main class="board">
             """);
 
-        // Render each injected content block as a box
-        for (IDashboardContent<? extends IDashboardItem<?>> c : contents) {
-            String title = c.getClass().getSimpleName();
+        // ── Row 1: Overview (single full row) ─────────────────────────────
+        sb.append("""
+        <div class="board-row" style="display:flex; gap:16px; width:100%; margin-bottom:16px;">
+          <section class="box" style="flex:1 1 0%;">
+            <div class="empty">
+              <div>Dashboard Overview — coming soon</div>
+            </div>
+          </section>
+        </div>
+        """);
 
-            sb.append("<section class=\"box\">");
-            sb.append("<h2>").append(StringUtils.escapeHtml(title)).append("</h2>");
+        log.debug("contents found: " + contents.size());
 
-            sb.append("<div>").append(c.render()).append("</div>");
+        // ── Next rows: contents laid out as rows (N per row) ───────────────
+        final int perRow = 3; // ← change this to 2/3/4 as you like
+        for (int i = 0; i < contents.size(); i += perRow) {
+            sb.append("<div class=\"board-row\" style=\"display:flex; gap:16px; width:100%; margin-bottom:16px;\">");
 
-            sb.append("</section>");
+            for (int j = i; j < Math.min(i + perRow, contents.size()); j++) {
+                IDashboardContent<?> c = contents.get(j);
+
+                sb.append("<section class=\"box\" style=\"flex:1 1 0%;\">");
+
+                // header block (use whatever your content exposes)
+                try {
+                    sb.append("<div>").append(c.renderHeader()).append("</div>");
+                } catch (Throwable t) {
+                    // If some content doesn't implement header yet, ignore
+                }
+
+                // body
+                try {
+                    sb.append("<div>").append(c.render()).append("</div>");
+                } catch (Throwable t) {
+                    log.error("Error rendering content body " + c.getClass().getSimpleName(), t);
+                }
+
+                sb.append("</section>");
+            }
+
+            sb.append("</div>"); // end row
         }
 
         sb.append("""
-              </main>
-              <footer>© GW Framework · Monitor</footer>
-            </body>
-            </html>
-            """);
+          </main>
+          <footer>© GW Framework · Monitor</footer>
+        </body>
+        </html>
+        """);
         return sb.toString();
     }
 

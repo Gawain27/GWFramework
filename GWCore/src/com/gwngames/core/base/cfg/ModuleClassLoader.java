@@ -10,7 +10,6 @@ import com.gwngames.core.api.ex.ErrorPopupException;
 import com.gwngames.core.base.cfg.i18n.CoreTranslation;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.*;
-import com.gwngames.core.util.ClassUtils;
 import com.gwngames.core.util.ComponentUtils;
 import com.gwngames.core.util.TransformingURLClassLoader;
 
@@ -83,7 +82,7 @@ public final class ModuleClassLoader extends ClassLoader implements IClassLoader
         log.debug("ModuleClassLoader created with parent ClassLoader: {}", getParent());
         initLoaders();
         initJars();
-        addAppClasspathRootsToScan();
+        //addAppClasspathRootsToScan();
         log.info("ModuleClassLoader setup completed with {} class loaders and {} JARs.",
             loaders.size(), jars.size());
     }
@@ -180,6 +179,7 @@ public final class ModuleClassLoader extends ClassLoader implements IClassLoader
     }
 
     /** Add application classpath roots (dirs and jars) to our scan sets, so tests/dev work. */
+    @Deprecated
     private void addAppClasspathRootsToScan() {
         try {
             String cp = System.getProperty("java.class.path");
@@ -296,8 +296,7 @@ public final class ModuleClassLoader extends ClassLoader implements IClassLoader
             }
 
             // Only consider concrete classes that implement some IBaseComp interface
-            boolean implementsIBaseComp = Arrays.stream(c.getInterfaces())
-                .anyMatch(IBaseComp.class::isAssignableFrom);
+            boolean implementsIBaseComp = IBaseComp.class.isAssignableFrom(c);
             if (!implementsIBaseComp) continue;
 
             // Index ALL concrete classes by (component, subComp) – including NONE
@@ -676,6 +675,21 @@ public final class ModuleClassLoader extends ClassLoader implements IClassLoader
     public Class<?> findNextLowerFor(Class<?> currentClass) throws ClassNotFoundException {
         final Init cur = IClassLoader.resolvedInit(currentClass);
         return findNextLowerFor(cur.component(), cur.subComp(), cur.module().modulePriority);
+    }
+
+    @Override
+    public List<Class<?>> listSubComponents(ComponentNames comp) {
+        try { return findSubComponents(comp); }
+        catch (ClassNotFoundException e) { return java.util.Collections.emptyList(); }
+    }
+    @Override
+    public List<Class<?>> listSubComponents(ComponentNames comp, Class<?> mustImplement) {
+        try {
+            List<Class<?>> all = findSubComponents(comp);
+            List<Class<?>> out = new ArrayList<>();
+            for (Class<?> c : all) if (mustImplement.isAssignableFrom(c)) out.add(c);
+            return out;
+        } catch (ClassNotFoundException e) { return java.util.Collections.emptyList(); }
     }
 
     /* ==================================================================== */

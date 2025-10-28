@@ -31,6 +31,23 @@ public abstract class BaseDashboardContent<T extends IDashboardItem<T>> extends 
     }
 
     @Override
+    public String renderHeader(){
+        String header = this.renderContentHeader();
+
+        if (StringUtils.isEmpty(header))
+            return "<h2>" + this + "</h2>";
+
+        if (!StringUtils.isValidHtml(header))
+            throw new RuntimeException("Malformed dashboard header: " + this.getClass().getSimpleName());
+        return header;
+    }
+
+    /**
+     * Render the actual html of the content header
+     * */
+    public abstract String renderContentHeader();
+
+    @Override
     public String render(){
         StringBuilder sb = new StringBuilder();
         if (items.isEmpty()) {
@@ -41,15 +58,19 @@ public abstract class BaseDashboardContent<T extends IDashboardItem<T>> extends 
                 String payload = null;
                 try {
                     payload = renderItem(it.getItem());
+                    if (!StringUtils.isValidHtml(payload))
+                        throw new RuntimeException("Malformed dashboard item: " + it.dashboardKey());
                 } catch (Throwable t) {
                     log.error("Error getting item payload from {}", it.getClass().getSimpleName(), t);
                 }
                 sb.append("<div class=\"item\">")
-                    .append(StringUtils.escapeHtml(payload))
+                    .append(payload)
                     .append("</div>");
             }
             sb.append("</div>");
         }
+        if (!StringUtils.isValidHtml(sb.toString()))
+            throw new RuntimeException("Invalid dashboard content: " + this.getClass().getSimpleName());
         return sb.toString();
     }
 
@@ -68,5 +89,10 @@ public abstract class BaseDashboardContent<T extends IDashboardItem<T>> extends 
                 return (v != null) ? v.toString() : "";
             }));
         return items;
+    }
+
+    @Override
+    public String toString(){
+        return this.getClass().getSimpleName();
     }
 }

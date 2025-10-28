@@ -10,25 +10,34 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** Minimal per-component log index used by the dashboard. */
+/**
+ * Minimal per-component log index used by the dashboard.
+ */
 public final class LogBus {
-    public enum Level { DEBUG, INFO, ERROR }
+    public enum Level {DEBUG, INFO, ERROR}
 
     public static final int MAX_BUFFER_PER_COMP = 500;
 
     private static final class Buf {
         final ArrayDeque<String> ring = new ArrayDeque<>(MAX_BUFFER_PER_COMP);
         final AtomicInteger errors = new AtomicInteger();
+
         synchronized void add(String line, boolean isError) {
             if (ring.size() == MAX_BUFFER_PER_COMP) ring.removeFirst();
             ring.addLast(line);
             if (isError) errors.incrementAndGet();
         }
-        synchronized List<String> snapshot() { return new ArrayList<>(ring); }
+
+        synchronized List<String> snapshot() {
+            return new ArrayList<>(ring);
+        }
     }
 
     private static final ConcurrentHashMap<String, Buf> BY_COMP = new ConcurrentHashMap<>();
-    private static Buf buf(String key) { return BY_COMP.computeIfAbsent(key, k -> new Buf()); }
+
+    private static Buf buf(String key) {
+        return BY_COMP.computeIfAbsent(key, k -> new Buf());
+    }
 
     public static void record(String compKey, Level lvl, String msg, Throwable ex) {
         String ts = Instant.now().toString();

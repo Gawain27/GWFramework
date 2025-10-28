@@ -194,4 +194,8 @@ public interface IClassLoader extends IBaseComp {
      * @throws IllegalStateException if currentClass is not a concrete @Init component
      */
     Class<?> findNextLowerFor(Class<?> currentClass) throws ClassNotFoundException;
+
+    List<Class<?>> listSubComponents(ComponentNames comp);
+
+    List<Class<?>> listSubComponents(ComponentNames comp, Class<?> mustImplement);
 }

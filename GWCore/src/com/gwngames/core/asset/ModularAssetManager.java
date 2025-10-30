@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.file.*;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -165,6 +166,48 @@ public final class ModularAssetManager extends BaseComponent implements IAssetMa
         });
     }
 
+    /**
+     * Return a snapshot list of all discovered logical paths that belong to the given sub-type.
+     * <p>
+     * Notes:
+     * <ul>
+     *   <li>Results come from the {@code discovered} map (populated from assets.txt scans and
+     *       any lazy discovery you do). If you need full filesystem coverage, call a scan that
+     *       fills {@code discovered} first.</li>
+     *   <li>Paths are logical (assets-root relative, forward slashes).</li>
+     * </ul>
+     */
+    @Override
+    public List<String> listAssets(IAssetSubType wanted) {
+        if (wanted == null) return List.of();
+        final String wantedId = wanted.id();
+        return discovered.entrySet().stream()
+            .filter(e -> {
+                IAssetSubType st = e.getValue();
+                // Be robust across enum/impl instances by comparing id()
+                return st == wanted || (st != null && wantedId.equals(st.id()));
+            })
+            .map(Map.Entry::getKey)
+            .sorted()
+            .toList();
+    }
+
+    /**
+     * Return all discovered logical paths in a given category (e.g., TEXTURE, AUDIO).
+     * Handy when you don’t care about the specific sub-type (e.g., Texture vs Atlas).
+     */
+    @Override
+    public List<String> listAssetsByCategory(com.gwngames.core.data.AssetCategory category) {
+        if (category == null) return List.of();
+        return discovered.entrySet().stream()
+            .filter(e -> {
+                IAssetSubType st = e.getValue();
+                return st != null && category.equals(st.category());
+            })
+            .map(Map.Entry::getKey)
+            .sorted()
+            .toList();
+    }
     private void scanAllAssetsTxt() {
         discovered.clear();
         scanFromClasspathAssetsTxt();
@@ -234,7 +277,8 @@ public final class ModularAssetManager extends BaseComponent implements IAssetMa
     }
 
     /** Convert logical or absolute to absolute path string (OS format). */
-    private String toAbsolute(String logicalOrAbsolute) {
+    @Override
+    public String toAbsolute(String logicalOrAbsolute) {
         Path p = Paths.get(logicalOrAbsolute);
         if (p.isAbsolute()) return p.normalize().toString();
 

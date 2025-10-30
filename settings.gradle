@@ -7,7 +7,7 @@ import groovy.json.JsonSlurper
 rootProject.name = "GWFramework"
 
 // ----- locate configSet (CLI -PconfigSet=..., or fallback to config.ini) -----
-def CONFIG_INI    = 'config.ini'
+def CONFIG_INI = 'config.ini'
 def CONFIG_FOLDER = 'configs'
 
 def configSet = gradle.startParameter.projectProperties.get('configSet')
@@ -46,3 +46,5 @@ println "📦 settings: including -> ${includes} (gameType='${gameType}')"
 
 // ----- actually include them -----
 include(*includes as String[])
+
+include 'tools:2d-map-editor'

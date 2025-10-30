@@ -8,7 +8,7 @@ repositories { mavenCentral() }
 dependencies { implementation 'com.squareup.okhttp3:okhttp:4.12.0' }
 
 javafx {
-  version = '22'                                   // use same JDK major
+  version = '21'                                   // use same JDK major
   modules = ['javafx.controls']                    // we only need TableView
 }
 

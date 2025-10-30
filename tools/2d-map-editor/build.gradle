@@ -1,0 +1,96 @@
+plugins {
+  id 'application'
+  id 'org.openjfx.javafxplugin' version '0.0.14'
+}
+
+repositories {
+  mavenCentral()
+}
+
+javafx {
+  version = '21'
+  modules = [ 'javafx.controls' ]   // controls pulls in base/graphics transitively
+}
+
+application {
+  mainClass = 'com.gw.editor.FxEditorApp'
+}
+
+dependencies {
+  // --- GW core (for Cdi, IAssetManager, etc.) ---
+  implementation project(':gwcore')
+
+  // --- Editor libs ---
+  implementation 'com.google.code.gson:gson:2.11.0'
+  implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+}
+
+/**
+ * Add all jars from:
+ *   <root>/build/generatedConfig/<configSet>-<projectVersion>/lib
+ * to the JavaFX run classpath, and also add :gwcore compiled outputs
+ * (classes/resources) so we stay resilient if its jar gets cleaned.
+ */
+def cfgSetProvider = providers.gradleProperty('configSet')
+  .orElse( provider { rootProject.hasProperty('configSet') ? rootProject.property('configSet').toString() : 'development' } )
+
+def projVerProvider = providers.gradleProperty('projectVersion')
+  .orElse( provider { rootProject.findProperty('projectVersion')?.toString() ?: rootProject.version.toString() } )
+
+def genLibDirProvider = rootProject.layout.buildDirectory.dir(
+  providers.provider { "generatedConfig/${cfgSetProvider.get()}-${projVerProvider.get()}/lib" }
+)
+
+tasks.named('run').configure {
+  // Ensure :gwcore is compiled (so we can add its classes dir).
+  dependsOn ':gwcore:classes'
+
+  doFirst {
+    // Add jars from generatedConfig/.../lib
+    def libDir = genLibDirProvider.get().asFile
+    if (libDir.exists()) {
+      def extra = fileTree(dir: libDir, include: ['*.jar'])
+      if (!extra.isEmpty()) {
+        classpath += extra
+        println '\n=== Extra jars from generatedConfig added to classpath ==='
+        extra.files.each { println "  - ${it.absolutePath}" }
+        println '==========================================================\n'
+      } else {
+        logger.warn("[2d-map-editor] No jars found in: ${libDir}")
+      }
+    } else {
+      logger.warn("[2d-map-editor] No generatedConfig lib dir found at: ${libDir}")
+    }
+
+    // Add :gwcore compiled classes/resources (resilient if its jar is cleaned)
+    def out = project(':gwcore').sourceSets.main.output
+    classpath += files(out.classesDirs, out.resourcesDir)
+  }
+}
+
+/**
+ * Convenience wrapper so you can run:  ./gradlew 2dMapEditor
+ * (Delegates to the JavaFX plugin’s run task; no duplicate JavaExec.)
+ */
+tasks.register('2dMapEditor') {
+  group = 'gdx'
+  description = 'Run the desktop 2D Map Editor (JavaFX)'
+  dependsOn ':tools:2d-map-editor:run'
+}
+
+/**
+ * Fat-jar for the editor code and non-JavaFX deps.
+ * (JavaFX/native modules remain modular and are supplied by the runtime.)
+ */
+tasks.named('jar') {
+  manifest {
+    attributes 'Main-Class': application.mainClass.get()
+  }
+  from({
+    configurations.runtimeClasspath
+      .filter { it.name.endsWith('jar') }
+      .collect { zipTree(it) }
+  })
+  archiveBaseName = '2d-map-editor'
+  duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}

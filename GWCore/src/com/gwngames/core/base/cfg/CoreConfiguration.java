@@ -25,9 +25,9 @@ public class CoreConfiguration extends BaseComponent implements IConfig {
         setDefault(InputParameters.INPUT_DEVICE_POLLING, 15f);
 
         setDefault(EventParameters.COMM_EVENT_MAX_THREAD, 1);
-        setDefault(EventParameters.RENDER_EVENT_MAX_THREAD, 8);
+        setDefault(EventParameters.RENDER_EVENT_MAX_THREAD, 16);
         setDefault(EventParameters.SYSTEM_EVENT_MAX_THREAD, 4);
-        setDefault(EventParameters.LOGIC_EVENT_MAX_THREAD, 16);
-        setDefault(EventParameters.INPUT_EVENT_MAX_THREAD, 64);
+        setDefault(EventParameters.LOGIC_EVENT_MAX_THREAD, 8);
+        setDefault(EventParameters.INPUT_EVENT_MAX_THREAD, 4);
     }
 }

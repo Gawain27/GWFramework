@@ -5,6 +5,8 @@ import com.gwngames.core.api.build.Init;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
 
+import java.util.List;
+
 /**
  * Asset lookup facade for the engine.
  *
@@ -62,4 +64,10 @@ public interface IAssetManager extends IBaseComp {
      * @return {@code true} if there is no pending async work
      */
     boolean update(float delta);
+
+    List<String> listAssets(IAssetSubType wanted);
+
+    List<String> listAssetsByCategory(com.gwngames.core.data.AssetCategory category);
+
+    String toAbsolute(String logicalOrAbsolute);
 }

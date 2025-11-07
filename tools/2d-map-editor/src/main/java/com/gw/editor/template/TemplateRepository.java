@@ -55,4 +55,12 @@ public final class TemplateRepository {
         Path file = templatesDir.resolve(templateId + ".json");
         try { Files.deleteIfExists(file); } catch (IOException e) { throw new RuntimeException(e); }
     }
+
+    public TemplateDef findById(String id) {
+        for (Path p : listJsonFiles()) {
+            TemplateDef t = load(p);
+            if (t != null && id != null && id.equals(t.id)) return t;
+        }
+        return null;
+    }
 }

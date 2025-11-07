@@ -22,6 +22,7 @@ import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
 
+import java.awt.Point;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Predicate;
@@ -55,10 +56,21 @@ public class FxEditorApp extends Application {
 
         viewer = new GridOverlayPane();
         viewer.setCollisionProvider((gx, gy) -> tilePropsPane == null ? null : tilePropsPane.getEffectiveTile(gx, gy));
+        viewer.setRegionsProvider(() -> tilePropsPane == null ? List.of() : tilePropsPane.getEffectiveRegions());
         viewer.setSelectionListener(sel -> {
             if (current == null) return;
             tilePropsPane.showSelection(sel);
             viewer.refresh();
+        });
+
+        // Keyboard Copy/Paste still works
+        viewer.setOnKeyPressed(e -> {
+            boolean ctrl = e.isControlDown() || e.isMetaDown();
+            if (!ctrl) return;
+            switch (e.getCode()) {
+                case C -> { Point p = viewer.getPrimarySelection(); if (p != null) tilePropsPane.copyFrom(p); e.consume(); }
+                case V -> { var sel = viewer.getSelection(); if (!sel.isEmpty()) tilePropsPane.pasteTo(sel); viewer.refresh(); e.consume(); }
+            }
         });
 
         BorderPane center = new BorderPane();
@@ -66,14 +78,15 @@ public class FxEditorApp extends Application {
         center.setCenter(viewer);
 
         tilePropsPane = new TilePropertiesPane();
-        tilePropsPane.setMinWidth(260);
-        tilePropsPane.setEditsChangedCallback(() -> viewer.refresh());
+        tilePropsPane.setMinWidth(300);
+        tilePropsPane.setEditsChangedCallback(viewer::refresh);
+        tilePropsPane.setSelectionSupplier(viewer::getSelection);
 
         SplitPane root = new SplitPane(sidebar, center, tilePropsPane);
         root.setOrientation(Orientation.HORIZONTAL);
         root.setDividerPositions(0.25, 0.80);
 
-        Scene scene = new Scene(root, 1200, 800);
+        Scene scene = new Scene(root, 1080, 640);
         stage.setTitle("GW Template Editor (JavaFX)");
         stage.setScene(scene);
         stage.show();
@@ -185,6 +198,12 @@ public class FxEditorApp extends Application {
         box.setPadding(new Insets(8));
 
         templatesList = new ListView<>();
+        templatesList.setCellFactory(lv -> new ListCell<>() {
+            @Override protected void updateItem(Path item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : item.getFileName().toString());
+            }
+        });
         templatesList.setOnMouseClicked(e -> {
             if (e.getClickCount() == 2) {
                 Path p = templatesList.getSelectionModel().getSelectedItem();
@@ -218,7 +237,7 @@ public class FxEditorApp extends Application {
         current = new TemplateDef();
         current.id = "";
         templateIdField.setText("");
-        tilePropsPane.bindTo(current); // reset staged edits (only on NEW)
+        tilePropsPane.bindTo(current);
         viewer.getImageView().setImage(null);
         viewer.clearSelection();
         viewer.refresh();
@@ -227,13 +246,12 @@ public class FxEditorApp extends Application {
     private void onAssetSelected(AssetScanner.AssetEntry e) {
         if (current == null) {
             current = new TemplateDef();
-            tilePropsPane.bindTo(current); // bind only once when template is created
+            tilePropsPane.bindTo(current);
         }
         current.logicalPath = e.logicalPath();
         templateIdField.setText(suggestIdFromPath(e.logicalPath()));
 
         viewer.getImageView().setImage(e.thumbnail());
-
         current.imageWidthPx  = (int)Math.round(e.thumbnail().getWidth());
         current.imageHeightPx = (int)Math.round(e.thumbnail().getHeight());
         viewer.clearSelection();
@@ -247,7 +265,7 @@ public class FxEditorApp extends Application {
         current.tileHeightPx = tileH.getValue();
         if (current.id.isBlank()) return;
 
-        tilePropsPane.applyEditsTo(current); // merge staged edits
+        tilePropsPane.applyEditsTo(current); // merge staged tiles + regions
         repo.save(current);
         refreshTemplates();
     }
@@ -261,7 +279,7 @@ public class FxEditorApp extends Application {
 
     private void loadTemplate(Path file) {
         current = repo.load(file);
-        tilePropsPane.bindTo(current); // bind (and clear staged) only when loading
+        tilePropsPane.bindTo(current);
         templateIdField.setText(current.id);
         tileW.getValueFactory().setValue(current.tileWidthPx);
         tileH.getValueFactory().setValue(current.tileHeightPx);

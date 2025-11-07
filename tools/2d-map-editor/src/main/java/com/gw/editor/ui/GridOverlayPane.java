@@ -14,25 +14,24 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 
 import java.awt.Point;
-import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.*;
 
 public final class GridOverlayPane extends StackPane {
 
     public enum CropMode { UP, DOWN }
 
     @FunctionalInterface
-    public interface CollisionProvider {
-        TemplateDef.TileDef tileAt(int gx, int gy);
-    }
+    public interface CollisionProvider { TemplateDef.TileDef tileAt(int gx, int gy); }
+
     @FunctionalInterface
-    public interface SelectionListener {
-        void onSelectionChanged(Set<Point> selection);
-    }
+    public interface SelectionListener { void onSelectionChanged(Set<Point> selection); }
+
+    @FunctionalInterface
+    public interface RegionsProvider { List<TemplateDef.RegionDef> regions(); }
 
     private CollisionProvider collisionProvider;
     private SelectionListener selectionListener;
+    private RegionsProvider regionsProvider;
 
     private final ImageView imageView = new ImageView();
     private final Canvas grid = new Canvas();
@@ -45,7 +44,7 @@ public final class GridOverlayPane extends StackPane {
     private double drawOffX = 0, drawOffY = 0, drawW = 0, drawH = 0, scale = 1.0;
 
     // Multi-select
-    private final Set<Point> selection = new LinkedHashSet<>();
+    private final LinkedHashSet<Point> selection = new LinkedHashSet<>();
     private Point anchor = null;
 
     public GridOverlayPane() {
@@ -66,7 +65,7 @@ public final class GridOverlayPane extends StackPane {
         addEventHandler(MouseEvent.MOUSE_CLICKED, this::handleClick);
 
         setMinSize(320, 240);
-        setFocusTraversable(true); // to read modifiers reliably
+        setFocusTraversable(true); // keyboard events
     }
 
     public ImageView getImageView() { return imageView; }
@@ -76,12 +75,14 @@ public final class GridOverlayPane extends StackPane {
 
     public void setCollisionProvider(CollisionProvider provider) { this.collisionProvider = provider; redraw(); }
     public void setSelectionListener(SelectionListener l) { this.selectionListener = l; }
+    public void setRegionsProvider(RegionsProvider p) { this.regionsProvider = p; }
 
     /** Public refresh hook for external UI to repaint overlays immediately. */
     public void refresh() { redraw(); }
 
     public Set<Point> getSelection() { return Collections.unmodifiableSet(selection); }
     public void clearSelection() { selection.clear(); anchor = null; fireSel(); redraw(); }
+    public Point getPrimarySelection() { return selection.isEmpty() ? null : (anchor != null ? new Point(anchor) : selection.iterator().next()); }
 
     private void handleClick(MouseEvent ev) {
         if (ev.getButton() != MouseButton.PRIMARY) return;
@@ -90,7 +91,7 @@ public final class GridOverlayPane extends StackPane {
         if (p == null) return;
 
         boolean shift = ev.isShiftDown();
-        boolean ctrl  = ev.isControlDown() || ev.isMetaDown(); // mac support
+        boolean ctrl  = ev.isControlDown() || ev.isMetaDown();
 
         if (!shift && !ctrl) {
             selection.clear();
@@ -101,10 +102,8 @@ public final class GridOverlayPane extends StackPane {
             selection.clear();
             int minX = Math.min(anchor.x, p.x), maxX = Math.max(anchor.x, p.x);
             int minY = Math.min(anchor.y, p.y), maxY = Math.max(anchor.y, p.y);
-            for (int y = minY; y <= maxY; y++) {
-                for (int x = minX; x <= maxX; x++) selection.add(new Point(x, y));
-            }
-        } else { // ctrl toggle single tile
+            for (int y = minY; y <= maxY; y++) for (int x = minX; x <= maxX; x++) selection.add(new Point(x, y));
+        } else {
             if (selection.contains(p)) selection.remove(p); else selection.add(p);
             if (anchor == null) anchor = new Point(p);
         }
@@ -180,7 +179,23 @@ public final class GridOverlayPane extends StackPane {
         for (int c = 1; c < cols; c++) g.strokeLine(drawOffX + c*stepX, drawOffY, drawOffX + c*stepX, drawOffY + drawH);
         for (int r = 1; r < rows; r++) g.strokeLine(drawOffX, drawOffY + r*stepY, drawOffX + drawW, drawOffY + r*stepY);
 
-        // collision overlays (yellow) – strategy-based
+        // GATE overlay (green, drawn first so collision shows above if needed)
+        if (collisionProvider != null) {
+            g.setFill(Color.color(0, 1, 0, 0.22));
+            g.setStroke(Color.color(0, 0.7, 0, 0.9));
+            g.setLineWidth(2);
+            for (int gy = 0; gy < rows; gy++) {
+                for (int gx = 0; gx < cols; gx++) {
+                    TemplateDef.TileDef t = collisionProvider.tileAt(gx, gy);
+                    if (t == null || !t.gate) continue;
+                    double x = drawOffX + gx*stepX, y = drawOffY + gy*stepY;
+                    g.fillRect(x, y, stepX, stepY);
+                    g.strokeRect(x, y, stepX, stepY);
+                }
+            }
+        }
+
+        // Collision overlays (yellow)
         if (collisionProvider != null) {
             for (int gy = 0; gy < rows; gy++) {
                 for (int gx = 0; gx < cols; gx++) {
@@ -196,12 +211,27 @@ public final class GridOverlayPane extends StackPane {
             }
         }
 
-        // selection (blue overlay for ALL selected tiles)
+        // Regions overlay (red border)
+        if (regionsProvider != null) {
+            var regions = regionsProvider.regions();
+            if (regions != null) {
+                g.setStroke(Color.color(1, 0, 0, 0.95));
+                g.setLineWidth(3);
+                for (var r : regions) {
+                    double x = drawOffX + r.x0 * stepX;
+                    double y = drawOffY + r.y0 * stepY;
+                    double w = (r.x1 - r.x0 + 1) * stepX;
+                    double h = (r.y1 - r.y0 + 1) * stepY;
+                    g.strokeRect(x, y, w, h);
+                }
+            }
+        }
+
+        // selection overlay (blue)
         g.setStroke(Color.color(0, 0.5, 1, 0.9));
         g.setLineWidth(2);
         g.setFill(Color.color(0, 0.5, 1, 0.22));
         for (Point sel : selection) {
-            if (sel.x < 0 || sel.x >= cols || sel.y < 0 || sel.y >= rows) continue;
             double x = drawOffX + sel.x * stepX, y = drawOffY + sel.y * stepY;
             g.fillRect(x, y, stepX, stepY);
             g.strokeRect(x, y, stepX, stepY);

@@ -88,7 +88,6 @@ public class DevelopmentLauncher extends BaseComponent implements IGameLauncher 
         jump = new Animation<TextureRegion>(0, regions[1]);
         walk = new Animation<TextureRegion>(0.15f, regions[2], regions[3], regions[4]);
         walk.setPlayMode(Animation.PlayMode.LOOP_PINGPONG);
-
         // figure out the width and height of the koala for collision
         // detection and rendering by converting a koala frames pixel
         // size into world units (1 unit == 16 pixels)

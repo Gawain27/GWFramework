@@ -13,11 +13,21 @@ public final class TemplateDef {
 
     public List<TileDef> tiles = new ArrayList<>();
 
+    public enum ShapeType {RECT_FULL, HALF_RECT, TRIANGLE}
+
+    public enum Orientation {UP, RIGHT, DOWN, LEFT}
+
     public static final class TileDef {
         public int gx;
         public int gy;
-        public String tag = "";
+
+        // collision
         public boolean solid = false;
+        public ShapeType shape = ShapeType.RECT_FULL;
+        public Orientation orientation = Orientation.UP;
+
+        // misc editable props from before
+        public String tag = "";
         public float customFloat = 0f;
 
         public TileDef() {
@@ -43,3 +53,4 @@ public final class TemplateDef {
         return t;
     }
 }
+

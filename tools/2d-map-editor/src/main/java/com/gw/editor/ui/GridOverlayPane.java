@@ -1,5 +1,9 @@
 package com.gw.editor.ui;
 
+import com.gw.editor.template.CollisionShapes;
+import com.gw.editor.template.TemplateDef;
+import com.gw.editor.template.TemplateDef.Orientation;
+import com.gw.editor.template.TemplateDef.ShapeType;
 import javafx.beans.property.*;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
@@ -8,20 +12,19 @@ import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.StackPane;
-import javafx.scene.paint.Color;
 
 import java.awt.Point;
-import java.util.function.BiConsumer;
 
-/**
- * GridOverlayPane
- * - Enforces integer tile grid (cols, rows) by rounding up or down.
- * - Optionally crops drawing area so the grid is perfectly divisible.
- * - Emits selected tile via selectedTileProperty().
- */
 public final class GridOverlayPane extends StackPane {
 
-    public enum CropMode {UP, DOWN} // round to ceil/floor tile counts
+    public enum CropMode {UP, DOWN}
+
+    @FunctionalInterface
+    public interface CollisionProvider {
+        TemplateDef.TileDef tileAt(int gx, int gy);
+    }
+
+    private CollisionProvider collisionProvider;
 
     private final ImageView imageView = new ImageView();
     private final Canvas grid = new Canvas();
@@ -34,7 +37,7 @@ public final class GridOverlayPane extends StackPane {
     private double drawOffX = 0, drawOffY = 0, drawW = 0, drawH = 0, scale = 1.0;
 
     private final ObjectProperty<Point> selectedTile = new SimpleObjectProperty<>(null);
-    private BiConsumer<Integer, Integer> tileClickHandler;
+    private java.util.function.BiConsumer<Integer, Integer> tileClickHandler;
 
     public GridOverlayPane() {
         getChildren().addAll(imageView, grid);
@@ -50,7 +53,7 @@ public final class GridOverlayPane extends StackPane {
         tileH.addListener((o, a, b) -> redraw());
         imageView.imageProperty().addListener((o, a, b) -> redraw());
         cropMode.addListener((o, a, b) -> redraw());
-        selectedTile.addListener((o, a, b) -> redraw()); // repaint on selection
+        selectedTile.addListener((o, a, b) -> redraw());
 
         addEventHandler(MouseEvent.MOUSE_CLICKED, ev -> {
             if (ev.getButton() != MouseButton.PRIMARY) return;
@@ -82,8 +85,20 @@ public final class GridOverlayPane extends StackPane {
         return selectedTile;
     }
 
-    public void setTileClickHandler(BiConsumer<Integer, Integer> h) {
+    public void setTileClickHandler(java.util.function.BiConsumer<Integer, Integer> h) {
         this.tileClickHandler = h;
+    }
+
+    public void setCollisionProvider(CollisionProvider provider) {
+        this.collisionProvider = provider;
+        redraw();
+    }
+
+    /**
+     * Public refresh hook for external UI to repaint overlays immediately.
+     */
+    public void refresh() {
+        redraw();
     }
 
     private void computeGrid() {
@@ -137,65 +152,62 @@ public final class GridOverlayPane extends StackPane {
 
         double stepX = tileW.get() * scale, stepY = tileH.get() * scale;
 
-        // border + grid (shadow then light)
-        g.setStroke(Color.color(0, 0, 0, 0.45));
+        // grid
+        g.setStroke(javafx.scene.paint.Color.color(0, 0, 0, 0.45));
         g.setLineWidth(2);
         g.strokeRect(drawOffX, drawOffY, drawW, drawH);
 
-        g.setStroke(Color.color(0, 0, 0, 0.25));
+        g.setStroke(javafx.scene.paint.Color.color(0, 0, 0, 0.25));
         g.setLineWidth(2);
         for (int c = 1; c < cols; c++)
             g.strokeLine(drawOffX + c * stepX, drawOffY, drawOffX + c * stepX, drawOffY + drawH);
         for (int r = 1; r < rows; r++)
             g.strokeLine(drawOffX, drawOffY + r * stepY, drawOffX + drawW, drawOffY + r * stepY);
 
-        g.setStroke(Color.color(1, 1, 1, 0.9));
+        g.setStroke(javafx.scene.paint.Color.color(1, 1, 1, 0.9));
         g.setLineWidth(1);
         for (int c = 1; c < cols; c++)
             g.strokeLine(drawOffX + c * stepX, drawOffY, drawOffX + c * stepX, drawOffY + drawH);
         for (int r = 1; r < rows; r++)
             g.strokeLine(drawOffX, drawOffY + r * stepY, drawOffX + drawW, drawOffY + r * stepY);
 
+        // collision overlays (yellow)
+        if (collisionProvider != null) {
+            for (int gy = 0; gy < rows; gy++) {
+                for (int gx = 0; gx < cols; gx++) {
+                    TemplateDef.TileDef t = collisionProvider.tileAt(gx, gy);
+                    if (t == null || !t.solid) continue;
+
+                    double x = drawOffX + gx * stepX;
+                    double y = drawOffY + gy * stepY;
+                    var shape = t.shape == null ? ShapeType.RECT_FULL : t.shape;
+                    var o = t.orientation == null ? Orientation.UP : t.orientation;
+
+                    var strat = CollisionShapes.get(shape);
+                    strat.draw(g, x, y, stepX, stepY, o);
+                }
+            }
+        }
+
+        // selection (blue)
         var sel = selectedTile.get();
         if (sel != null && sel.x >= 0 && sel.x < cols && sel.y >= 0 && sel.y < rows) {
             double x = drawOffX + sel.x * stepX, y = drawOffY + sel.y * stepY;
-            g.setFill(Color.color(0, 0.5, 1, 0.25));
+            g.setFill(javafx.scene.paint.Color.color(0, 0.5, 1, 0.25));
             g.fillRect(x, y, stepX, stepY);
-            g.setStroke(Color.color(0, 0.5, 1, 0.9));
+            g.setStroke(javafx.scene.paint.Color.color(0, 0.5, 1, 0.9));
             g.setLineWidth(2);
             g.strokeRect(x, y, stepX, stepY);
         }
     }
 
-    private Point pixelToTile(int mx, int my) {
+    private java.awt.Point pixelToTile(int mx, int my) {
         if (cols == 0 || rows == 0) return null;
         if (mx < drawOffX || mx > drawOffX + drawW || my < drawOffY || my > drawOffY + drawH) return null;
         double relX = mx - drawOffX, relY = my - drawOffY;
         int gx = (int) Math.floor(relX / (tileW.get() * scale));
         int gy = (int) Math.floor(relY / (tileH.get() * scale));
         if (gx < 0 || gx >= cols || gy < 0 || gy >= rows) return null;
-        return new Point(gx, gy);
-    }
-
-    // Optional getters for external logic
-    public int getCols() {
-        return cols;
-    }
-
-    public int getRows() {
-        return rows;
-    }
-
-    public double getScale() {
-        return scale;
-    }
-
-    public double getDrawOffsetX() {
-        return drawOffX;
-    }
-
-    public double getDrawOffsetY() {
-        return drawOffY;
+        return new java.awt.Point(gx, gy);
     }
 }
-

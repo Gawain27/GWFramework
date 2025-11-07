@@ -50,29 +50,31 @@ public class FxEditorApp extends Application {
         Cdi.inject(this);
         repo = new TemplateRepository();
 
-        // Left: tabs (Assets / Templates)
         TabPane sidebar = new TabPane();
         sidebar.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         sidebar.getTabs().add(new Tab("Assets", buildAssetsPane()));
         sidebar.getTabs().add(new Tab("Templates", buildTemplatesPane()));
 
-        // Center: image + grid + controls
         viewer = new GridOverlayPane();
+        // ✅ Do NOT bind the properties pane on each click (keeps staged edits)
         viewer.setTileClickHandler((gx, gy) -> {
             if (current == null) return;
-            tilePropsPane.bindTo(current);
             tilePropsPane.showTile(gx, gy);
+        });
+        viewer.setCollisionProvider((gx, gy) -> {
+            if (tilePropsPane == null) return null;
+            return tilePropsPane.getEffectiveTile(gx, gy);
         });
 
         BorderPane center = new BorderPane();
-        center.setTop(buildTopControls());      // toolbar + labeled controls
+        center.setTop(buildTopControls());
         center.setCenter(viewer);
 
-        // Right: staged properties
         tilePropsPane = new TilePropertiesPane();
         tilePropsPane.setMinWidth(260);
+        // ✅ When any staged edit changes, refresh the overlay
+        tilePropsPane.setEditsChangedCallback(() -> viewer.refresh());
 
-        // Layout: sidebar | center | right
         SplitPane root = new SplitPane(sidebar, center, tilePropsPane);
         root.setOrientation(Orientation.HORIZONTAL);
         root.setDividerPositions(0.25, 0.80);
@@ -95,7 +97,6 @@ public class FxEditorApp extends Application {
     }
 
     private VBox buildTopControls() {
-        // Controls with labels UNDER each control
         templateIdField = new TextField();
         templateIdField.setPromptText("crate_small");
         VBox idBox = new VBox(4, templateIdField, new Label("Template Id"));
@@ -108,12 +109,10 @@ public class FxEditorApp extends Application {
         VBox wBox = new VBox(4, tileW, new Label("Tile W (px)"));
         VBox hBox = new VBox(4, tileH, new Label("Tile H (px)"));
 
-        // Toolbar: New | Save | Delete (bind AFTER templateIdField exists)
         Button newBtn = new Button("New");
         newBtn.setOnAction(e -> newTemplate());
 
         Button saveBtn = new Button("Save");
-        // ✅ No null observable passed here
         saveBtn.disableProperty().bind(Bindings.createBooleanBinding(
             () -> current == null || templateIdField.getText().isBlank(),
             templateIdField.textProperty()
@@ -123,7 +122,7 @@ public class FxEditorApp extends Application {
         Button deleteBtn = new Button("Delete");
         deleteBtn.disableProperty().bind(Bindings.createBooleanBinding(
             () -> current == null || current.id == null || current.id.isBlank(),
-            templateIdField.textProperty() // just re-evaluate when ID field changes
+            templateIdField.textProperty()
         ));
         deleteBtn.setOnAction(e -> doDelete());
 
@@ -230,14 +229,15 @@ public class FxEditorApp extends Application {
         current = new TemplateDef();
         current.id = "";
         templateIdField.setText("");
-        tilePropsPane.bindTo(current); // reset staged edits
+        tilePropsPane.bindTo(current); // reset staged edits (only on NEW)
         viewer.getImageView().setImage(null);
+        viewer.refresh();
     }
 
     private void onAssetSelected(AssetScanner.AssetEntry e) {
         if (current == null) {
             current = new TemplateDef();
-            tilePropsPane.bindTo(current);
+            tilePropsPane.bindTo(current); // bind only once when template is created
         }
         current.logicalPath = e.logicalPath();
         templateIdField.setText(suggestIdFromPath(e.logicalPath()));
@@ -246,6 +246,7 @@ public class FxEditorApp extends Application {
 
         current.imageWidthPx = (int) Math.round(e.thumbnail().getWidth());
         current.imageHeightPx = (int) Math.round(e.thumbnail().getHeight());
+        viewer.refresh();
     }
 
     private void doSave() {
@@ -271,7 +272,7 @@ public class FxEditorApp extends Application {
 
     private void loadTemplate(Path file) {
         current = repo.load(file);
-        tilePropsPane.bindTo(current);
+        tilePropsPane.bindTo(current); // bind (and clear staged) only when loading a template
         templateIdField.setText(current.id);
         tileW.getValueFactory().setValue(current.tileWidthPx);
         tileH.getValueFactory().setValue(current.tileHeightPx);
@@ -280,6 +281,7 @@ public class FxEditorApp extends Application {
         String url = Path.of(abs).toUri().toString();
         Image img = new Image(url);
         viewer.getImageView().setImage(img);
+        viewer.refresh();
     }
 
     @SuppressWarnings("unchecked")

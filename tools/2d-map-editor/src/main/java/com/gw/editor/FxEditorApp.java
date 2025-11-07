@@ -19,7 +19,6 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
-import javafx.scene.input.MouseButton;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
 
@@ -42,8 +41,7 @@ public class FxEditorApp extends Application {
     private TemplateDef current;
     private TilePropertiesPane tilePropsPane;
 
-    @Inject
-    private IAssetManager manager;
+    @Inject private IAssetManager manager;
 
     @Override
     public void start(Stage stage) {
@@ -56,14 +54,11 @@ public class FxEditorApp extends Application {
         sidebar.getTabs().add(new Tab("Templates", buildTemplatesPane()));
 
         viewer = new GridOverlayPane();
-        // ✅ Do NOT bind the properties pane on each click (keeps staged edits)
-        viewer.setTileClickHandler((gx, gy) -> {
+        viewer.setCollisionProvider((gx, gy) -> tilePropsPane == null ? null : tilePropsPane.getEffectiveTile(gx, gy));
+        viewer.setSelectionListener(sel -> {
             if (current == null) return;
-            tilePropsPane.showTile(gx, gy);
-        });
-        viewer.setCollisionProvider((gx, gy) -> {
-            if (tilePropsPane == null) return null;
-            return tilePropsPane.getEffectiveTile(gx, gy);
+            tilePropsPane.showSelection(sel);
+            viewer.refresh();
         });
 
         BorderPane center = new BorderPane();
@@ -72,15 +67,11 @@ public class FxEditorApp extends Application {
 
         tilePropsPane = new TilePropertiesPane();
         tilePropsPane.setMinWidth(260);
-        // ✅ When any staged edit changes, refresh the overlay
         tilePropsPane.setEditsChangedCallback(() -> viewer.refresh());
 
         SplitPane root = new SplitPane(sidebar, center, tilePropsPane);
         root.setOrientation(Orientation.HORIZONTAL);
         root.setDividerPositions(0.25, 0.80);
-        SplitPane.setResizableWithParent(sidebar, true);
-        SplitPane.setResizableWithParent(center, true);
-        SplitPane.setResizableWithParent(tilePropsPane, true);
 
         Scene scene = new Scene(root, 1200, 800);
         stage.setTitle("GW Template Editor (JavaFX)");
@@ -178,9 +169,7 @@ public class FxEditorApp extends Application {
             ImageView iv = new ImageView(e.thumbnail());
             iv.setPreserveRatio(true);
             iv.setFitWidth(240);
-            iv.setOnMouseClicked(me -> {
-                if (me.getButton() == MouseButton.PRIMARY) onAssetSelected(e);
-            });
+            iv.setOnMouseClicked(me -> onAssetSelected(e));
 
             Label name = new Label(e.logicalPath());
             name.setWrapText(true);
@@ -231,6 +220,7 @@ public class FxEditorApp extends Application {
         templateIdField.setText("");
         tilePropsPane.bindTo(current); // reset staged edits (only on NEW)
         viewer.getImageView().setImage(null);
+        viewer.clearSelection();
         viewer.refresh();
     }
 
@@ -244,8 +234,9 @@ public class FxEditorApp extends Application {
 
         viewer.getImageView().setImage(e.thumbnail());
 
-        current.imageWidthPx = (int) Math.round(e.thumbnail().getWidth());
-        current.imageHeightPx = (int) Math.round(e.thumbnail().getHeight());
+        current.imageWidthPx  = (int)Math.round(e.thumbnail().getWidth());
+        current.imageHeightPx = (int)Math.round(e.thumbnail().getHeight());
+        viewer.clearSelection();
         viewer.refresh();
     }
 
@@ -256,9 +247,7 @@ public class FxEditorApp extends Application {
         current.tileHeightPx = tileH.getValue();
         if (current.id.isBlank()) return;
 
-        // merge staged edits into the template at save-time
-        tilePropsPane.applyEditsTo(current);
-
+        tilePropsPane.applyEditsTo(current); // merge staged edits
         repo.save(current);
         refreshTemplates();
     }
@@ -272,7 +261,7 @@ public class FxEditorApp extends Application {
 
     private void loadTemplate(Path file) {
         current = repo.load(file);
-        tilePropsPane.bindTo(current); // bind (and clear staged) only when loading a template
+        tilePropsPane.bindTo(current); // bind (and clear staged) only when loading
         templateIdField.setText(current.id);
         tileW.getValueFactory().setValue(current.tileWidthPx);
         tileH.getValueFactory().setValue(current.tileHeightPx);
@@ -281,6 +270,7 @@ public class FxEditorApp extends Application {
         String url = Path.of(abs).toUri().toString();
         Image img = new Image(url);
         viewer.getImageView().setImage(img);
+        viewer.clearSelection();
         viewer.refresh();
     }
 
@@ -302,15 +292,12 @@ public class FxEditorApp extends Application {
     }
 
     private static String suggestIdFromPath(String logical) {
-        String base = logical.replace('\\', '/');
-        int slash = base.lastIndexOf('/');
-        if (slash >= 0) base = base.substring(slash + 1);
+        String base = logical.replace('\\','/'); int slash = base.lastIndexOf('/');
+        if (slash >= 0) base = base.substring(slash+1);
         int dot = base.lastIndexOf('.');
         if (dot > 0) base = base.substring(0, dot);
         return base.toLowerCase().replaceAll("[^a-z0-9_\\-]+", "_");
     }
 
-    public static void main(String[] args) {
-        launch(args);
-    }
+    public static void main(String[] args) { launch(args); }
 }

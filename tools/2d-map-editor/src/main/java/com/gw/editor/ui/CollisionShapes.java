@@ -1,4 +1,4 @@
-package com.gw.editor.template;
+package com.gw.editor.ui;
 
 import com.gw.editor.template.TemplateDef.Orientation;
 import com.gw.editor.template.TemplateDef.ShapeType;
@@ -56,27 +56,29 @@ public final class CollisionShapes {
             g.strokeRect(hx, hy, hw, hh);
         });
 
-
-        // Triangle (right-angled, oriented)
+        // Triangle: RIGHT-angled; LEFT/RIGHT are 90° rotations of UP/DOWN
         STRATS.put(ShapeType.TRIANGLE, (g, x, y, w, h, o) -> {
             double[] xs, ys;
-            // triangles vertices per orientation
             switch (o) {
+                // UP: right angle at top-left; hypotenuse to bottom-right
                 case UP -> {
                     xs = new double[]{x, x + w, x};
+                    ys = new double[]{y, y, y + h};
+                }
+                // DOWN: 180° rotate UP
+                case DOWN -> {
+                    xs = new double[]{x + w, x, x + w};
                     ys = new double[]{y + h, y + h, y};
                 }
-                case DOWN -> {
+                // LEFT: 90° CCW rotate UP
+                case LEFT -> {
                     xs = new double[]{x, x + w, x + w};
                     ys = new double[]{y, y, y + h};
                 }
-                case LEFT -> {
-                    xs = new double[]{x + w, x + w, x};
-                    ys = new double[]{y, y + h, y + h / 2.0};
-                }
+                // RIGHT: 90° CW rotate UP
                 default /* RIGHT */ -> {
                     xs = new double[]{x, x, x + w};
-                    ys = new double[]{y, y + h, y + h / 2.0};
+                    ys = new double[]{y + h, y, y + h};
                 }
             }
             g.setFill(Color.color(1, 1, 0, 0.25));

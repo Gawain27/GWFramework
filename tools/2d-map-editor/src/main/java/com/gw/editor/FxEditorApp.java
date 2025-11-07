@@ -3,6 +3,7 @@ package com.gw.editor;
 import com.gw.editor.template.TemplateDef;
 import com.gw.editor.template.TemplateRepository;
 import com.gw.editor.ui.GridOverlayPane;
+import com.gw.editor.ui.TilePropertiesPane;
 import com.gwngames.core.api.asset.IAssetManager;
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.util.Cdi;
@@ -30,6 +31,7 @@ public class FxEditorApp extends Application {
     private TemplateRepository repo;
     private GridOverlayPane viewer;
     private TextField filterField;
+
     private Spinner<Integer> tileW;
     private Spinner<Integer> tileH;
     private TextField templateIdField;
@@ -38,6 +40,7 @@ public class FxEditorApp extends Application {
     private ListView<Path> templatesList;
 
     private TemplateDef current;
+    private TilePropertiesPane tilePropsPane;
 
     @Inject
     private IAssetManager manager;
@@ -55,28 +58,33 @@ public class FxEditorApp extends Application {
 
         // Center: image + grid + controls
         viewer = new GridOverlayPane();
+        viewer.setTileClickHandler((gx, gy) -> {
+            if (current == null) return;
+            tilePropsPane.bindTo(current);
+            tilePropsPane.showTile(gx, gy);
+        });
 
-        BorderPane center = new BorderPane(viewer);
-        center.setBottom(buildBottomBar());
+        BorderPane center = new BorderPane();
+        center.setTop(buildTopControls());      // toolbar + labeled controls
+        center.setCenter(viewer);
 
-        SplitPane root = new SplitPane();
-        root.getItems().addAll(sidebar, center);
+        // Right: staged properties
+        tilePropsPane = new TilePropertiesPane();
+        tilePropsPane.setMinWidth(260);
+
+        // Layout: sidebar | center | right
+        SplitPane root = new SplitPane(sidebar, center, tilePropsPane);
         root.setOrientation(Orientation.HORIZONTAL);
-
-        root.setDividerPositions(0.28);
-
-        // allow grab/resize, set mins so neither collapses
+        root.setDividerPositions(0.25, 0.80);
         SplitPane.setResizableWithParent(sidebar, true);
-        SplitPane.setResizableWithParent(center,  true);
-        sidebar.setMinWidth(220);
-        center.setMinWidth(420);
+        SplitPane.setResizableWithParent(center, true);
+        SplitPane.setResizableWithParent(tilePropsPane, true);
 
         Scene scene = new Scene(root, 1200, 800);
         stage.setTitle("GW Template Editor (JavaFX)");
         stage.setScene(scene);
         stage.show();
 
-        // Initial load of assets list
         refreshAssets();
         refreshTemplates();
 
@@ -86,6 +94,50 @@ public class FxEditorApp extends Application {
         });
     }
 
+    private VBox buildTopControls() {
+        // Controls with labels UNDER each control
+        templateIdField = new TextField();
+        templateIdField.setPromptText("crate_small");
+        VBox idBox = new VBox(4, templateIdField, new Label("Template Id"));
+        idBox.setAlignment(Pos.CENTER_LEFT);
+
+        tileW = new Spinner<>(1, 1024, 16, 1);
+        tileH = new Spinner<>(1, 1024, 16, 1);
+        viewer.tileWidthProperty().bind(tileW.valueProperty());
+        viewer.tileHeightProperty().bind(tileH.valueProperty());
+        VBox wBox = new VBox(4, tileW, new Label("Tile W (px)"));
+        VBox hBox = new VBox(4, tileH, new Label("Tile H (px)"));
+
+        // Toolbar: New | Save | Delete (bind AFTER templateIdField exists)
+        Button newBtn = new Button("New");
+        newBtn.setOnAction(e -> newTemplate());
+
+        Button saveBtn = new Button("Save");
+        // ✅ No null observable passed here
+        saveBtn.disableProperty().bind(Bindings.createBooleanBinding(
+            () -> current == null || templateIdField.getText().isBlank(),
+            templateIdField.textProperty()
+        ));
+        saveBtn.setOnAction(e -> doSave());
+
+        Button deleteBtn = new Button("Delete");
+        deleteBtn.disableProperty().bind(Bindings.createBooleanBinding(
+            () -> current == null || current.id == null || current.id.isBlank(),
+            templateIdField.textProperty() // just re-evaluate when ID field changes
+        ));
+        deleteBtn.setOnAction(e -> doDelete());
+
+        ToolBar toolbar = new ToolBar(newBtn, saveBtn, deleteBtn);
+
+        HBox underBar = new HBox(16, idBox, wBox, hBox);
+        underBar.setPadding(new Insets(8));
+        underBar.setAlignment(Pos.CENTER_LEFT);
+
+        VBox top = new VBox(toolbar, underBar);
+        top.setFillWidth(true);
+        return top;
+    }
+
     private VBox buildAssetsPane() {
         VBox box = new VBox(8);
         box.setPadding(new Insets(8));
@@ -93,17 +145,15 @@ public class FxEditorApp extends Application {
         filterField = new TextField();
         filterField.setPromptText("Filter assets by name…");
 
-        // Grid of thumbnails
         TilePane grid = new TilePane(10, 10);
-        grid.setPrefColumns(3);                 // a nice default
+        grid.setPrefColumns(3);
         grid.setPadding(new Insets(4));
-        grid.setPrefTileWidth(260);             // matches your card width
+        grid.setPrefTileWidth(260);
         grid.setTileAlignment(Pos.TOP_LEFT);
 
         ScrollPane scroller = new ScrollPane(grid);
         scroller.setFitToWidth(true);
 
-        // Backing data
         filteredAssets = new FilteredList<>(FXCollections.observableArrayList());
         filterField.textProperty().addListener((obs, o, n) -> {
             Predicate<AssetScanner.AssetEntry> p = e -> n == null || n.isBlank() || e.logicalPath().toLowerCase().contains(n.toLowerCase());
@@ -111,7 +161,6 @@ public class FxEditorApp extends Application {
             renderAssetTiles(grid);
         });
 
-        // Render initial empty grid
         renderAssetTiles(grid);
 
         box.getChildren().addAll(filterField, scroller);
@@ -124,7 +173,6 @@ public class FxEditorApp extends Application {
         for (AssetScanner.AssetEntry e : filteredAssets) {
             VBox card = new VBox(4);
             card.setPadding(new Insets(6));
-            card.getStyleClass().add("asset-card");
             card.setAlignment(Pos.TOP_CENTER);
             card.setPrefWidth(260);
 
@@ -142,50 +190,6 @@ public class FxEditorApp extends Application {
             card.getChildren().addAll(iv, name);
             grid.getChildren().add(card);
         }
-    }
-
-    private HBox buildBottomBar() {
-        HBox bar = new HBox(12);
-        bar.setPadding(new Insets(8));
-        bar.setAlignment(Pos.CENTER_LEFT);
-
-        // Make sure the bar never collapses out of view.
-        bar.setMinHeight(48);                 //keep it visible
-        bar.setMaxHeight(Region.USE_PREF_SIZE);
-
-        templateIdField = new TextField();
-        templateIdField.setPromptText("template id (e.g., crate_small)");
-
-        tileW = new Spinner<>(1, 1024, 16, 1);
-        tileH = new Spinner<>(1, 1024, 16, 1);
-        viewer.tileWidthProperty().bind(tileW.valueProperty());
-        viewer.tileHeightProperty().bind(tileH.valueProperty());
-
-        Button newBtn = new Button("New");
-        newBtn.setOnAction(e -> newTemplate());
-
-        Button saveBtn = new Button("Save");
-        saveBtn.disableProperty().bind(Bindings.createBooleanBinding(
-            () -> current == null || templateIdField.getText().isBlank(),
-            templateIdField.textProperty()
-        ));
-        saveBtn.setOnAction(e -> doSave());
-
-        Button deleteBtn = new Button("Delete");
-        deleteBtn.disableProperty().bind(Bindings.createBooleanBinding(
-            () -> current == null || current.id == null || current.id.isBlank(), templateIdField.textProperty()
-        ));
-        deleteBtn.setOnAction(e -> doDelete());
-
-        bar.getChildren().addAll(
-            new Label("Template Id:"), templateIdField,
-            new Separator(Orientation.VERTICAL),
-            new Label("Tile W(px):"), tileW,
-            new Label("Tile H(px):"), tileH,
-            new Separator(Orientation.VERTICAL),
-            newBtn, saveBtn, deleteBtn
-        );
-        return bar;
     }
 
     private VBox buildTemplatesPane() {
@@ -226,24 +230,22 @@ public class FxEditorApp extends Application {
         current = new TemplateDef();
         current.id = "";
         templateIdField.setText("");
+        tilePropsPane.bindTo(current); // reset staged edits
         viewer.getImageView().setImage(null);
     }
 
     private void onAssetSelected(AssetScanner.AssetEntry e) {
-        // Create or update current
-        if (current == null) current = new TemplateDef();
+        if (current == null) {
+            current = new TemplateDef();
+            tilePropsPane.bindTo(current);
+        }
         current.logicalPath = e.logicalPath();
         templateIdField.setText(suggestIdFromPath(e.logicalPath()));
 
-        // Show image + set default tile grid
         viewer.getImageView().setImage(e.thumbnail());
 
-        // Cache image px sizes
-        current.imageWidthPx = (int)Math.round(e.thumbnail().getWidth());
-        current.imageHeightPx = (int)Math.round(e.thumbnail().getHeight());
-
-        // Recompute implicit tiles placeholder if needed (optional for now)
-        // We keep tiles empty until we define properties; grid is visual only.
+        current.imageWidthPx = (int) Math.round(e.thumbnail().getWidth());
+        current.imageHeightPx = (int) Math.round(e.thumbnail().getHeight());
     }
 
     private void doSave() {
@@ -252,6 +254,10 @@ public class FxEditorApp extends Application {
         current.tileWidthPx = tileW.getValue();
         current.tileHeightPx = tileH.getValue();
         if (current.id.isBlank()) return;
+
+        // merge staged edits into the template at save-time
+        tilePropsPane.applyEditsTo(current);
+
         repo.save(current);
         refreshTemplates();
     }
@@ -265,15 +271,14 @@ public class FxEditorApp extends Application {
 
     private void loadTemplate(Path file) {
         current = repo.load(file);
+        tilePropsPane.bindTo(current);
         templateIdField.setText(current.id);
         tileW.getValueFactory().setValue(current.tileWidthPx);
         tileH.getValueFactory().setValue(current.tileHeightPx);
 
-        // Resolve to absolute and convert to file: URL
         String abs = manager.toAbsolute(current.logicalPath);
         String url = Path.of(abs).toUri().toString();
         Image img = new Image(url);
-
         viewer.getImageView().setImage(img);
     }
 
@@ -282,30 +287,28 @@ public class FxEditorApp extends Application {
         AssetScanner scanner = new AssetScanner();
         List<AssetScanner.AssetEntry> entries = scanner.scanAll();
 
-        // Update the backing observable list instead of the FilteredList view
         ObservableList<AssetScanner.AssetEntry> source =
             (ObservableList<AssetScanner.AssetEntry>) filteredAssets.getSource();
-
         source.setAll(entries);
 
         filteredAssets.setPredicate(e -> true);
-        // Trigger UI re-render by re-applying the filter text
         if (filterField != null) filterField.setText(filterField.getText());
     }
-
-
 
     private void refreshTemplates() {
         templatesList.getItems().setAll(repo.listJsonFiles());
     }
 
     private static String suggestIdFromPath(String logical) {
-        String base = logical.replace('\\','/'); int slash = base.lastIndexOf('/');
-        if (slash >= 0) base = base.substring(slash+1);
+        String base = logical.replace('\\', '/');
+        int slash = base.lastIndexOf('/');
+        if (slash >= 0) base = base.substring(slash + 1);
         int dot = base.lastIndexOf('.');
         if (dot > 0) base = base.substring(0, dot);
         return base.toLowerCase().replaceAll("[^a-z0-9_\\-]+", "_");
     }
 
-    public static void main(String[] args) { launch(args); }
+    public static void main(String[] args) {
+        launch(args);
+    }
 }

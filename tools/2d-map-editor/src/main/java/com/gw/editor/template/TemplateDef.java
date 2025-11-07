@@ -3,33 +3,43 @@ package com.gw.editor.template;
 import java.util.ArrayList;
 import java.util.List;
 
-/** JSON DTO for a single texture template. */
-public class TemplateDef {
-    /** Human-readable id for your template. */
+public final class TemplateDef {
     public String id;
-
-    /** Asset enum info (so you can re-resolve via IAssetPath in runtime). */
-    public String assetEnumClass;  // e.g. "com.gwngames.game.assets.Textures"
-    public String assetEnumName;   // e.g. "CRATE_WOOD"
-
-    /** Raw path fallback (useful in editor). Optional but handy. */
-    public String logicalPath;     // e.g. "textures/crate_wood.png"
-
-    /** Tile size IN PIXELS (editor-time units). */
+    public String logicalPath;
     public int tileWidthPx = 16;
     public int tileHeightPx = 16;
-
-    /** Image pixel size cached by editor for convenience (not strictly required). */
     public int imageWidthPx;
     public int imageHeightPx;
 
-    /** Tiles placeholder—we’ll define properties later. */
     public List<TileDef> tiles = new ArrayList<>();
 
-    /** Represents one grid cell; properties TBD. */
-    public static class TileDef {
-        public int gx; // grid x
-        public int gy; // grid y
-        // Future properties go here (shape, metadata, flags, etc.)
+    public static final class TileDef {
+        public int gx;
+        public int gy;
+        public String tag = "";
+        public boolean solid = false;
+        public float customFloat = 0f;
+
+        public TileDef() {
+        }
+
+        public TileDef(int gx, int gy) {
+            this.gx = gx;
+            this.gy = gy;
+        }
+    }
+
+    public TileDef tileAt(int gx, int gy) {
+        for (TileDef t : tiles) if (t.gx == gx && t.gy == gy) return t;
+        return null;
+    }
+
+    public TileDef ensureTile(int gx, int gy) {
+        TileDef t = tileAt(gx, gy);
+        if (t == null) {
+            t = new TileDef(gx, gy);
+            tiles.add(t);
+        }
+        return t;
     }
 }

@@ -41,7 +41,7 @@ public class TemplateDef {
 
     public enum ShapeType {RECT_FULL, HALF_RECT, TRIANGLE}
 
-    public enum Orientation {UP, RIGHT, DOWN, LEFT}
+    public enum Orientation {UP, RIGHT, DOWN, LEFT, UP_LEFT, UP_RIGHT, DOWN_LEFT, DOWN_RIGHT}
 
     public static class TileDef {
         public int gx, gy;

@@ -425,35 +425,8 @@ public class MapCanvasPane extends Region {
 
     private void drawTriangle(double x, double y, double tw, double th, TemplateDef.Orientation o) {
         double x2 = x + tw, y2 = y + th, mx = x + tw / 2, my = y + th / 2;
-        switch (o) {
-            case UP -> g.strokePolygon(new double[]{x, y2, x2, y2, mx, y}, new double[]{}, 0); // will be ignored
-            case DOWN -> g.strokePolygon(new double[]{x, y, x2, y, mx, y2}, new double[]{}, 0);
-            case LEFT -> g.strokePolygon(new double[]{x2, y, x2, y2, x, y + th / 2}, new double[]{}, 0);
-            case RIGHT -> g.strokePolygon(new double[]{x, y, x, y2, x2, y + th / 2}, new double[]{}, 0);
-        }
-        // Canvas strokePolygon with empty Y-array is awkward in some JFX; use strokeLine:
-        switch (o) {
-            case UP -> {
-                g.strokeLine(x, y2, x2, y2);
-                g.strokeLine(x, y2, x + tw / 2, y);
-                g.strokeLine(x2, y2, x + tw / 2, y);
-            }
-            case DOWN -> {
-                g.strokeLine(x, y, x2, y);
-                g.strokeLine(x, y, x + tw / 2, y2);
-                g.strokeLine(x2, y, x + tw / 2, y2);
-            }
-            case LEFT -> {
-                g.strokeLine(x2, y, x2, y2);
-                g.strokeLine(x2, y, x, y + th / 2);
-                g.strokeLine(x2, y2, x, y + th / 2);
-            }
-            case RIGHT -> {
-                g.strokeLine(x, y, x, y2);
-                g.strokeLine(x, y, x2, y + th / 2);
-                g.strokeLine(x, y2, x2, y + th / 2);
-            }
-        }
+        CollisionShapes.CollisionShapeStrategy trg = CollisionShapes.get(TemplateDef.ShapeType.TRIANGLE);
+        trg.draw(g, x, y, tw, th, o);
     }
 
     private void drawPreview(DropPreview pv) {

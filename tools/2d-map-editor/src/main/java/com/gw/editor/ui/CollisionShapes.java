@@ -58,25 +58,44 @@ public final class CollisionShapes {
 
         // Triangle: RIGHT-angled; LEFT/RIGHT are 90° rotations of UP/DOWN
         STRATS.put(ShapeType.TRIANGLE, (g, x, y, w, h, o) -> {
-            double[] xs, ys;
+            double[] xs = {}, ys = {};
             switch (o) {
                 // UP: right angle at top-left; hypotenuse to bottom-right
+                case UP_LEFT -> {
+                    xs = new double[]{x, x + w, x};
+                    ys = new double[]{y, y, y + h};
+                }
+                // DOWN: 180° rotate UP
+                case UP_RIGHT -> {
+                    xs = new double[]{x + w, x, x + w};
+                    ys = new double[]{y + h, y + h, y};
+                }
+                // LEFT: 90° CCW rotate UP
+                case DOWN_RIGHT -> {
+                    xs = new double[]{x, x + w, x + w};
+                    ys = new double[]{y, y, y + h};
+                }
                 case UP -> {
                     xs = new double[]{x, x + w, x};
                     ys = new double[]{y, y, y + h};
                 }
                 // DOWN: 180° rotate UP
                 case DOWN -> {
-                    xs = new double[]{x + w, x, x + w};
+                    xs = new double[]{x, x, x + w};
                     ys = new double[]{y + h, y + h, y};
                 }
                 // LEFT: 90° CCW rotate UP
                 case LEFT -> {
-                    xs = new double[]{x, x + w, x + w};
+                    xs = new double[]{x, x, x + w};
                     ys = new double[]{y, y, y + h};
                 }
                 // RIGHT: 90° CW rotate UP
-                default /* RIGHT */ -> {
+                case RIGHT -> {
+                    xs = new double[]{x, x, x + w};
+                    ys = new double[]{y, y + h, y + h};
+                }
+                // RIGHT: 90° CW rotate UP
+                case DOWN_LEFT -> {
                     xs = new double[]{x, x, x + w};
                     ys = new double[]{y + h, y, y + h};
                 }

@@ -69,6 +69,8 @@ public class FxEditorApp extends Application {
     private TabPane centerTabs;
     private SplitPane rootSplit;
     private StackPane rightStack;
+    private CheckBox showCollisionsChk;
+    private CheckBox showGatesChk;
 
     @Inject
     private IAssetManager manager;
@@ -267,20 +269,15 @@ public class FxEditorApp extends Application {
             int w = mapWSpinner.getValue();
             int h = mapHSpinner.getValue();
             mapView.setMapSize(w, h);
-            if (currentMap != null) {
-                currentMap.widthTiles = w;
-                currentMap.heightTiles = h;
-            }
+            if (currentMap != null) { currentMap.widthTiles = w; currentMap.heightTiles = h; }
         });
 
         Button expand = new Button("Expand +10");
         expand.setOnAction(e -> {
             if (currentMap == null) return;
-            int w = currentMap.widthTiles + 10;
-            int h = currentMap.heightTiles + 10;
+            int w = currentMap.widthTiles + 10, h = currentMap.heightTiles + 10;
             if (mapView.setMapSize(w, h)) {
-                currentMap.widthTiles = w;
-                currentMap.heightTiles = h;
+                currentMap.widthTiles = w; currentMap.heightTiles = h;
                 mapWSpinner.getValueFactory().setValue(w);
                 mapHSpinner.getValueFactory().setValue(h);
             }
@@ -292,8 +289,7 @@ public class FxEditorApp extends Application {
             int w = Math.max(1, currentMap.widthTiles - 10);
             int h = Math.max(1, currentMap.heightTiles - 10);
             if (mapView.setMapSize(w, h)) {
-                currentMap.widthTiles = w;
-                currentMap.heightTiles = h;
+                currentMap.widthTiles = w; currentMap.heightTiles = h;
                 mapWSpinner.getValueFactory().setValue(w);
                 mapHSpinner.getValueFactory().setValue(h);
             }
@@ -306,12 +302,29 @@ public class FxEditorApp extends Application {
         zoomOut.setOnAction(e -> mapView.zoomOut());
         zoomRst.setOnAction(e -> mapView.zoomReset());
 
+        // NEW: map overlays visibility
+        showCollisionsChk = new CheckBox("Show Collisions");
+        showCollisionsChk.setSelected(true);
+        showCollisionsChk.selectedProperty().addListener((o,oldVal,newVal) -> {
+            mapView.showCollisionsProperty().set(newVal);
+            mapView.requestLayout();
+        });
+
+        showGatesChk = new CheckBox("Show Gates");
+        showGatesChk.setSelected(true);
+        showGatesChk.selectedProperty().addListener((o,oldVal,newVal) -> {
+            mapView.showGatesProperty().set(newVal);
+            mapView.requestLayout();
+        });
+
         ToolBar tb = new ToolBar(
             newBtn, saveBtn, delBtn,
             new Separator(),
             applySize, expand, shrink,
             new Separator(),
-            zoomIn, zoomOut, zoomRst
+            zoomIn, zoomOut, zoomRst,
+            new Separator(),
+            showCollisionsChk, showGatesChk
         );
 
         HBox under = new HBox(16, idBox, mwBox, mhBox);

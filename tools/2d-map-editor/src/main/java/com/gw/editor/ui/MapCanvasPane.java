@@ -3,6 +3,7 @@ package com.gw.editor.ui;
 import com.gw.editor.map.MapDef;
 import com.gw.editor.template.TemplateDef;
 import com.gw.editor.template.TemplateRepository;
+import com.gw.editor.util.TemplateSlice;
 import com.gwngames.core.api.asset.IAssetManager;
 import javafx.beans.property.*;
 import javafx.geometry.VPos;
@@ -15,10 +16,9 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.TextAlignment;
 
 import java.nio.file.Path;
-import java.util.function.Consumer;
 
 /**
- * Map canvas with grid, placements, live drop preview, zoom + selection & move.
+ * Map canvas with grid, placements, live drop preview, zoom + selection & move + overlays.
  */
 public class MapCanvasPane extends Region {
     public static final DataFormat DND_FORMAT = new DataFormat("application/x-gw-template-drop");
@@ -30,6 +30,12 @@ public class MapCanvasPane extends Region {
     private final IntegerProperty tileH = new SimpleIntegerProperty(16);
     private final DoubleProperty zoom = new SimpleDoubleProperty(1.0);
 
+    /**
+     * Visibility toggles.
+     */
+    private final BooleanProperty showCollisions = new SimpleBooleanProperty(true);
+    private final BooleanProperty showGates = new SimpleBooleanProperty(true);
+
     private final TemplateRepository templateRepo;
     private final IAssetManager manager;
 
@@ -39,8 +45,8 @@ public class MapCanvasPane extends Region {
     // selection & move
     private final StringProperty selectedPid = new SimpleStringProperty(null);
     private boolean draggingInstance = false;
-    private int dragOffsetGX = 0, dragOffsetGY = 0; // cursor-tile minus instance origin
-    private Consumer<MapDef.Placement> onSelectionChanged; // callback to editor to refresh right pane
+    private int dragOffsetGX = 0, dragOffsetGY = 0;
+    private java.util.function.Consumer<MapDef.Placement> onSelectionChanged;
 
     public MapCanvasPane(TemplateRepository repo, IAssetManager manager) {
         this.templateRepo = repo;
@@ -60,7 +66,6 @@ public class MapCanvasPane extends Region {
         });
         setOnDragDropped(this::onDragDropped);
 
-        // zoom with ctrl+wheel
         setOnScroll(e -> {
             if (!e.isControlDown() && !e.isShortcutDown()) return;
             if (e.getDeltaY() > 0) zoomIn();
@@ -68,7 +73,6 @@ public class MapCanvasPane extends Region {
             e.consume();
         });
 
-        // selection & move
         setOnMousePressed(this::onMousePressed);
         setOnMouseDragged(this::onMouseDragged);
         setOnMouseReleased(this::onMouseReleased);
@@ -93,7 +97,15 @@ public class MapCanvasPane extends Region {
         return selectedPid;
     }
 
-    public void setOnSelectionChanged(Consumer<MapDef.Placement> cb) {
+    public BooleanProperty showCollisionsProperty() {
+        return showCollisions;
+    }
+
+    public BooleanProperty showGatesProperty() {
+        return showGates;
+    }
+
+    public void setOnSelectionChanged(java.util.function.Consumer<MapDef.Placement> cb) {
         this.onSelectionChanged = cb;
     }
 
@@ -102,17 +114,15 @@ public class MapCanvasPane extends Region {
         layoutForMap();
     }
 
-    public boolean setMapSize(int widthTiles, int heightTiles) {
+    public boolean setMapSize(int w, int h) {
         if (map == null) return false;
-        if (widthTiles < 1 || heightTiles < 1) return false;
+        if (w < 1 || h < 1) return false;
         boolean anyOut = map.placements.stream().anyMatch(p ->
-            p.gx < 0 || p.gy < 0 ||
-                p.gx + p.wTiles > widthTiles ||
-                p.gy + p.hTiles > heightTiles
+            p.gx < 0 || p.gy < 0 || p.gx + p.wTiles > w || p.gy + p.hTiles > h
         );
         if (anyOut) return false;
-        map.widthTiles = widthTiles;
-        map.heightTiles = heightTiles;
+        map.widthTiles = w;
+        map.heightTiles = h;
         layoutForMap();
         return true;
     }
@@ -129,19 +139,6 @@ public class MapCanvasPane extends Region {
         zoom.set(1.0);
     }
 
-    public void addPlacement(MapDef.Placement p) {
-        if (map == null) return;
-        map.placements.add(p);
-        selectPid(p.pid);
-        redraw();
-    }
-
-    public void clearAll() {
-        if (map != null) map.placements.clear();
-        selectPid(null);
-        redraw();
-    }
-
     public MapDef.Placement getSelected() {
         if (map == null || selectedPid.get() == null) return null;
         return map.placements.stream().filter(p -> p.pid.equals(selectedPid.get())).findFirst().orElse(null);
@@ -153,7 +150,7 @@ public class MapCanvasPane extends Region {
         redraw();
     }
 
-    /* ---------- DnD from gallery ---------- */
+    /* ---------- DnD ---------- */
     private void onDragOver(DragEvent e) {
         Dragboard db = e.getDragboard();
         if (!db.hasContent(DND_FORMAT)) return;
@@ -203,11 +200,37 @@ public class MapCanvasPane extends Region {
             e.setDropCompleted(false);
             return;
         }
-        int gx = Math.max(0, Math.min(preview.gx, map.widthTiles - preview.wTiles));
-        int gy = Math.max(0, Math.min(preview.gy, map.heightTiles - preview.hTiles));
-        MapDef.Placement p = new MapDef.Placement(preview.templateId, preview.regionIndex, gx, gy, preview.wTiles, preview.hTiles);
-        addPlacement(p);
+
+        // Build the per-instance data snapshot now (so collisions & gates are stored on the map).
+        TemplateDef src = templateRepo.findById(preview.templateId);
+        TemplateDef snap;
+        if (preview.regionIndex >= 0 && src != null && src.regions != null && preview.rpw > 0 && preview.rph > 0) {
+            int x0 = preview.rpx / Math.max(1, preview.tW);
+            int y0 = preview.rpy / Math.max(1, preview.tH);
+            int wT = Math.max(1, (int) Math.round((double) preview.rpw / preview.tW));
+            int hT = Math.max(1, (int) Math.round((double) preview.rph / preview.tH));
+            snap = TemplateSlice.copyRegion(src, x0, y0, x0 + wT - 1, y0 + hT - 1);
+        } else {
+            snap = TemplateSlice.copyWhole(src);
+        }
+
+        // Footprint from snapshot
+        int wTiles = Math.max(1, snap.imageWidthPx / Math.max(1, snap.tileWidthPx));
+        int hTiles = Math.max(1, snap.imageHeightPx / Math.max(1, snap.tileHeightPx));
+
+        int gx = Math.max(0, Math.min(preview.gx, map.widthTiles - wTiles));
+        int gy = Math.max(0, Math.min(preview.gy, map.heightTiles - hTiles));
+
+        MapDef.Placement p = new MapDef.Placement(
+            preview.templateId, preview.regionIndex, gx, gy,
+            wTiles, hTiles,
+            preview.rpx, preview.rpy, preview.rpw, preview.rph,
+            snap
+        );
+
+        map.placements.add(p);
         preview = null;
+        selectPid(p.pid);
         e.setDropCompleted(true);
         e.consume();
     }
@@ -219,7 +242,6 @@ public class MapCanvasPane extends Region {
         double ly = e.getY() / zoom.get();
         int gx = (int) Math.floor(lx / tileW.get());
         int gy = (int) Math.floor(ly / tileH.get());
-
         MapDef.Placement hit = hitTestTopMost(gx, gy);
         if (hit != null) {
             selectPid(hit.pid);
@@ -258,7 +280,6 @@ public class MapCanvasPane extends Region {
 
     private MapDef.Placement hitTestTopMost(int gx, int gy) {
         MapDef.Placement best = null;
-        // iterate from end to start to get topmost (last drawn is last added)
         for (int i = map.placements.size() - 1; i >= 0; i--) {
             MapDef.Placement p = map.placements.get(i);
             if (gx >= p.gx && gx < p.gx + p.wTiles && gy >= p.gy && gy < p.gy + p.hTiles) {
@@ -307,10 +328,8 @@ public class MapCanvasPane extends Region {
         g.setLineWidth(2);
         g.strokeRect(0, 0, mapPxW, mapPxH);
 
-        // placements
         if (map != null) for (MapDef.Placement p : map.placements) drawPlacement(p);
 
-        // preview
         if (preview != null) drawPreview(preview);
 
         g.restore();
@@ -324,34 +343,25 @@ public class MapCanvasPane extends Region {
     }
 
     private void drawPlacement(MapDef.Placement p) {
-        TemplateDef td = templateRepo.findById(p.templateId);
-        if (td == null) return;
+        TemplateDef snap = p.dataSnap;
+        if (snap == null) return;
 
         Image tex;
         try {
-            String abs = manager.toAbsolute(td.logicalPath);
+            String abs = manager.toAbsolute(snap.logicalPath);
             tex = new Image(Path.of(abs).toUri().toString());
         } catch (Exception e) {
             return;
         }
 
-        int sx = 0, sy = 0, sw = td.imageWidthPx, sh = td.imageHeightPx;
-        if (td.complex && p.regionIndex >= 0 && p.regionIndex < td.pixelRegions().size()) {
-            int[] r = td.pixelRegions().get(p.regionIndex);
-            sx = r[0];
-            sy = r[1];
-            sw = r[2];
-            sh = r[3];
-        }
-
+        // draw sprite
         double dx = p.gx * tileW.get();
         double dy = p.gy * tileH.get();
         double dw = p.wTiles * tileW.get();
         double dh = p.hTiles * tileH.get();
+        g.drawImage(tex, p.srcXpx, p.srcYpx, p.srcWpx, p.srcHpx, dx, dy, dw, dh);
 
-        g.drawImage(tex, sx, sy, sw, sh, dx, dy, dw, dh);
-
-        // highlight selection
+        // selection highlight
         if (p.pid.equals(selectedPid.get())) {
             g.setStroke(Color.color(0.95, 0.8, 0.2, 1));
             g.setLineWidth(3);
@@ -360,6 +370,89 @@ public class MapCanvasPane extends Region {
             g.setStroke(Color.color(0, 0, 0, 0.6));
             g.setLineWidth(1);
             g.strokeRect(dx, dy, dw, dh);
+        }
+
+        // overlays
+        int cols = Math.max(1, snap.imageWidthPx / Math.max(1, snap.tileWidthPx));
+        int rows = Math.max(1, snap.imageHeightPx / Math.max(1, snap.tileHeightPx));
+        double tw = tileW.get(), th = tileH.get();
+
+        if (showGates.get()) {
+            g.setFill(Color.color(0, 1, 0, 0.25));
+            g.setStroke(Color.color(0, 1, 0, 0.9));
+            g.setLineWidth(1.5);
+            for (int gy = 0; gy < rows; gy++) {
+                for (int gx = 0; gx < cols; gx++) {
+                    TemplateDef.TileDef t = snap.tileAt(gx, gy);
+                    if (t != null && t.gate) {
+                        double x = dx + gx * tw, y = dy + gy * th;
+                        g.fillRect(x, y, tw, th);
+                        g.strokeRect(x + 0.5, y + 0.5, tw - 1, th - 1);
+                    }
+                }
+            }
+        }
+
+        if (showCollisions.get()) {
+            g.setStroke(Color.color(1, 1, 0, 0.9));
+            g.setLineWidth(2.0);
+            for (int gy = 0; gy < rows; gy++) {
+                for (int gx = 0; gx < cols; gx++) {
+                    TemplateDef.TileDef t = snap.tileAt(gx, gy);
+                    if (t == null || !t.solid) continue;
+                    double x = dx + gx * tw, y = dy + gy * th;
+                    // draw shape outline
+                    switch (t.shape) {
+                        case RECT_FULL -> g.strokeRect(x, y, tw, th);
+                        case HALF_RECT -> drawHalfRect(x, y, tw, th, t.orientation);
+                        case TRIANGLE -> drawTriangle(x, y, tw, th, t.orientation);
+                        default -> {
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private void drawHalfRect(double x, double y, double tw, double th, TemplateDef.Orientation o) {
+        switch (o) {
+            case UP -> g.strokeRect(x, y, tw, th / 2);
+            case DOWN -> g.strokeRect(x, y + th / 2, tw, th / 2);
+            case LEFT -> g.strokeRect(x, y, tw / 2, th);
+            case RIGHT -> g.strokeRect(x + tw / 2, y, tw / 2, th);
+        }
+    }
+
+    private void drawTriangle(double x, double y, double tw, double th, TemplateDef.Orientation o) {
+        double x2 = x + tw, y2 = y + th, mx = x + tw / 2, my = y + th / 2;
+        switch (o) {
+            case UP -> g.strokePolygon(new double[]{x, y2, x2, y2, mx, y}, new double[]{}, 0); // will be ignored
+            case DOWN -> g.strokePolygon(new double[]{x, y, x2, y, mx, y2}, new double[]{}, 0);
+            case LEFT -> g.strokePolygon(new double[]{x2, y, x2, y2, x, y + th / 2}, new double[]{}, 0);
+            case RIGHT -> g.strokePolygon(new double[]{x, y, x, y2, x2, y + th / 2}, new double[]{}, 0);
+        }
+        // Canvas strokePolygon with empty Y-array is awkward in some JFX; use strokeLine:
+        switch (o) {
+            case UP -> {
+                g.strokeLine(x, y2, x2, y2);
+                g.strokeLine(x, y2, x + tw / 2, y);
+                g.strokeLine(x2, y2, x + tw / 2, y);
+            }
+            case DOWN -> {
+                g.strokeLine(x, y, x2, y);
+                g.strokeLine(x, y, x + tw / 2, y2);
+                g.strokeLine(x2, y, x + tw / 2, y2);
+            }
+            case LEFT -> {
+                g.strokeLine(x2, y, x2, y2);
+                g.strokeLine(x2, y, x, y + th / 2);
+                g.strokeLine(x2, y2, x, y + th / 2);
+            }
+            case RIGHT -> {
+                g.strokeLine(x, y, x, y2);
+                g.strokeLine(x, y, x2, y + th / 2);
+                g.strokeLine(x, y2, x2, y + th / 2);
+            }
         }
     }
 

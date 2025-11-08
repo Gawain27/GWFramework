@@ -5,41 +5,32 @@ import com.gw.editor.template.TemplateDef;
 import java.util.*;
 
 /**
- * Utility to compute gate "islands" (connected green tiles) within a template/region.
+ * Compute gate "islands" from a TemplateDef snapshot (tiles start at 0,0).
  */
 public final class TemplateGateUtils {
     private TemplateGateUtils() {
     }
 
     /**
-     * Returns list of islands; each island is a list of (x,y) tile coords relative to the region origin.
+     * Each island = list of (x,y) tile coords.
      */
-    public static List<List<int[]>> computeGateIslands(TemplateDef t, int regionXpx, int regionYpx,
-                                                       int regionWpx, int regionHpx,
-                                                       int tileWpx, int tileHpx) {
+    public static List<List<int[]>> computeGateIslands(TemplateDef snap) {
+        if (snap == null || snap.tiles == null || snap.tiles.isEmpty()) return List.of();
 
-        if (t == null || t.tiles == null || t.tiles.isEmpty()) return List.of();
-
-        int cols = Math.max(1, regionWpx / Math.max(1, tileWpx));
-        int rows = Math.max(1, regionHpx / Math.max(1, tileHpx));
+        // Infer width/height in tiles from image size & tile size.
+        int cols = Math.max(1, snap.imageWidthPx / Math.max(1, snap.tileWidthPx));
+        int rows = Math.max(1, snap.imageHeightPx / Math.max(1, snap.tileHeightPx));
 
         boolean[][] gate = new boolean[rows][cols];
         for (int gy = 0; gy < rows; gy++) {
             for (int gx = 0; gx < cols; gx++) {
-                int imgX = regionXpx + gx * tileWpx;
-                int imgY = regionYpx + gy * tileHpx;
-                // tile index in template tile grid
-                int ti = (imgY / Math.max(1, t.tileHeightPx)) * Math.max(1, (t.imageWidthPx / Math.max(1, t.tileWidthPx))) + (imgX / Math.max(1, t.tileWidthPx));
-                if (ti >= 0 && ti < t.tiles.size()) {
-                    TemplateDef.TileDef props = t.tiles.get(gx + "," + gy);
-                    gate[gy][gx] = props != null && props.gate; // "green" = gate
-                }
+                TemplateDef.TileDef td = snap.tileAt(gx, gy);
+                gate[gy][gx] = td != null && td.gate;
             }
         }
 
-        // flood-fill 4-neighbour
-        boolean[][] vis = new boolean[rows][cols];
         List<List<int[]>> islands = new ArrayList<>();
+        boolean[][] vis = new boolean[rows][cols];
         int[] dx = {1, -1, 0, 0}, dy = {0, 0, 1, -1};
 
         for (int y = 0; y < rows; y++)

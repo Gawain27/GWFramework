@@ -11,7 +11,8 @@ import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -19,35 +20,33 @@ import java.util.stream.Collectors;
  */
 public class TemplateInstancePropertiesPane extends VBox {
 
-    private final TemplateRepository repo;
+    private final TemplateRepository repo; // still handy for thumbnails if you add them later
     private MapDef map;
-
-    // current selection
     private MapDef.Placement sel;
 
-    // UI
     private final Label lblTid = new Label("-");
     private final Label lblRegion = new Label("-");
     private final Label lblPos = new Label("-");
+
     private final ListView<String> gateList = new ListView<>();
     private final ListView<String> linkList = new ListView<>();
     private final ComboBox<String> gateSearch = new ComboBox<>();
     private final Button addLinkBtn = new Button("Add Link");
     private final Button removeLinkBtn = new Button("Remove Selected Link");
 
-    // models
-    private List<List<int[]>> cachedIslands = List.of(); // for current sel (indices align with gateList)
+    private List<List<int[]>> cachedIslands = List.of();
 
     public TemplateInstancePropertiesPane(TemplateRepository repo) {
         this.repo = repo;
+
         setSpacing(8);
         setPadding(new Insets(10));
         setFillWidth(true);
+
         getChildren().add(buildHeader());
         getChildren().add(buildGates());
         getChildren().add(buildLinks());
 
-        // configure search
         gateSearch.setEditable(true);
         addLinkBtn.setOnAction(e -> addLinkFromSearch());
         removeLinkBtn.setOnAction(e -> removeSelectedLink());
@@ -77,19 +76,18 @@ public class TemplateInstancePropertiesPane extends VBox {
         lblRegion.setText(sel.regionIndex < 0 ? "(whole)" : ("region " + sel.regionIndex));
         lblPos.setText("(" + sel.gx + "," + sel.gy + ") • " + sel.wTiles + "×" + sel.hTiles + " tiles");
 
-        // compute gate islands for this placement
-        TemplateDef t = repo.findById(sel.templateId);
-        cachedIslands = computeIslandsForPlacement(t, sel);
+        TemplateDef snap = sel.dataSnap;
+        cachedIslands = TemplateGateUtils.computeGateIslands(snap);
+
         var items = new ArrayList<String>();
         for (int i = 0; i < cachedIslands.size(); i++) {
             items.add("gate #" + i + "  (" + cachedIslands.get(i).size() + " tiles)");
         }
         gateList.getItems().setAll(items);
 
-        // update links for this placement
         refreshLinkList();
 
-        // choices for search = all other gates on the map
+        // choices = all other gates across map
         var others = enumerateAllGateRefsExcept(sel.pid).stream()
             .map(r -> r.pid + "#gate" + r.gateIndex)
             .sorted()
@@ -141,19 +139,6 @@ public class TemplateInstancePropertiesPane extends VBox {
         return tp;
     }
 
-    private List<List<int[]>> computeIslandsForPlacement(TemplateDef t, MapDef.Placement p) {
-        if (t == null) return List.of();
-        int[] region = regionPx(t, p);
-        return TemplateGateUtils.computeGateIslands(t, region[0], region[1], region[2], region[3],
-            Math.max(1, t.tileWidthPx), Math.max(1, t.tileHeightPx));
-    }
-
-    private int[] regionPx(TemplateDef t, MapDef.Placement p) {
-        if (!t.complex || p.regionIndex < 0 || p.regionIndex >= t.pixelRegions().size())
-            return new int[]{0, 0, t.imageWidthPx, t.imageHeightPx};
-        return t.pixelRegions().get(p.regionIndex);
-    }
-
     private void refreshLinkList() {
         if (map == null || sel == null) {
             linkList.getItems().setAll();
@@ -181,11 +166,7 @@ public class TemplateInstancePropertiesPane extends VBox {
         List<MapDef.GateRef> out = new ArrayList<>();
         for (MapDef.Placement p : map.placements) {
             if (p.pid.equals(excludePid)) continue;
-            TemplateDef t = repo.findById(p.templateId);
-            if (t == null) continue;
-            int[] region = regionPx(t, p);
-            var islands = TemplateGateUtils.computeGateIslands(t, region[0], region[1], region[2], region[3],
-                Math.max(1, t.tileWidthPx), Math.max(1, t.tileHeightPx));
+            var islands = TemplateGateUtils.computeGateIslands(p.dataSnap);
             for (int gi = 0; gi < islands.size(); gi++) out.add(new MapDef.GateRef(p.pid, gi));
         }
         return out;
@@ -195,7 +176,7 @@ public class TemplateInstancePropertiesPane extends VBox {
         if (map == null || sel == null) return;
         int myGate = gateList.getSelectionModel().getSelectedIndex();
         if (myGate < 0) {
-            showInfo("Select one of this instance's gates (left list) first.");
+            info("Select one of this instance's gates (left list) first.");
             return;
         }
         String target = gateSearch.getEditor().getText();
@@ -214,7 +195,6 @@ public class TemplateInstancePropertiesPane extends VBox {
         MapDef.GateRef a = new MapDef.GateRef(sel.pid, myGate);
         MapDef.GateRef b = new MapDef.GateRef(pid, gateIdx);
 
-        // avoid dup (undirected)
         boolean exists = map.gateLinks.stream().anyMatch(gl ->
             (gl.a.equals(a) && gl.b.equals(b)) || (gl.a.equals(b) && gl.b.equals(a))
         );
@@ -227,17 +207,15 @@ public class TemplateInstancePropertiesPane extends VBox {
         if (map == null || sel == null) return;
         int myGate = gateList.getSelectionModel().getSelectedIndex();
         if (myGate < 0) {
-            showInfo("Select your gate in the left list first.");
+            info("Select your gate in the left list first.");
             return;
         }
-
-        // remove all links from this gate to any other selected in the link row? Simpler: remove all links of this gate.
         MapDef.GateRef me = new MapDef.GateRef(sel.pid, myGate);
         map.gateLinks.removeIf(gl -> gl.involves(me));
         refreshLinkList();
     }
 
-    private void showInfo(String msg) {
+    private void info(String msg) {
         Alert a = new Alert(Alert.AlertType.INFORMATION, msg);
         a.setHeaderText(null);
         a.showAndWait();

@@ -1,6 +1,7 @@
 package com.gw.editor.map;
 
 import com.google.gson.annotations.SerializedName;
+import com.gw.editor.template.TemplateDef;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +31,7 @@ public class MapDef {
     public List<GateLink> gateLinks = new ArrayList<>();
 
     /**
-     * Placed template (whole template or a region thereof).
+     * Placed template (whole texture or a region); holds a SNAPSHOT of TemplateDef data.
      */
     public static class Placement {
         /**
@@ -38,21 +39,53 @@ public class MapDef {
          */
         public String pid = UUID.randomUUID().toString();
 
+        /**
+         * Authoring source identity (for provenance/debug only).
+         */
         public String templateId;
-        public int regionIndex = -1;   // -1: whole image; >=0: region
-        public int gx, gy;             // map grid coords
-        public int wTiles, hTiles;     // footprint
+        /**
+         * -1: whole image; >=0: region index from the source template (if any).
+         */
+        public int regionIndex = -1;
+
+        /**
+         * Top-left grid position on the map.
+         */
+        public int gx, gy;
+
+        /**
+         * Footprint in tiles (matches dataSnap’s extents).
+         */
+        public int wTiles, hTiles;
+
+        /**
+         * Sprite source rect (pixels) inside the original texture; used for drawing.
+         */
+        public int srcXpx, srcYpx, srcWpx, srcHpx;
+
+        /**
+         * Per-instance immutable snapshot of the template data used here (cropped to region if any).
+         */
+        public TemplateDef dataSnap = new TemplateDef();
 
         public Placement() {
         }
 
-        public Placement(String templateId, int regionIndex, int gx, int gy, int wTiles, int hTiles) {
+        public Placement(String templateId, int regionIndex, int gx, int gy,
+                         int wTiles, int hTiles,
+                         int srcXpx, int srcYpx, int srcWpx, int srcHpx,
+                         TemplateDef dataSnap) {
             this.templateId = templateId;
             this.regionIndex = regionIndex;
             this.gx = gx;
             this.gy = gy;
             this.wTiles = wTiles;
             this.hTiles = hTiles;
+            this.srcXpx = srcXpx;
+            this.srcYpx = srcYpx;
+            this.srcWpx = srcWpx;
+            this.srcHpx = srcHpx;
+            this.dataSnap = dataSnap;
         }
     }
 

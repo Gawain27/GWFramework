@@ -16,9 +16,11 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.TextAlignment;
 
 import java.nio.file.Path;
+import java.util.Comparator;
+import java.util.List;
 
 /**
- * Map canvas with grid, placements, live drop preview, zoom + selection & move + overlays.
+ * Map canvas with layers, grid, placements, live drop preview, zoom + selection & move + overlays.
  */
 public class MapCanvasPane extends Region {
     public static final DataFormat DND_FORMAT = new DataFormat("application/x-gw-template-drop");
@@ -35,6 +37,11 @@ public class MapCanvasPane extends Region {
      */
     private final BooleanProperty showCollisions = new SimpleBooleanProperty(true);
     private final BooleanProperty showGates = new SimpleBooleanProperty(true);
+
+    /**
+     * Currently selected layer index for new drops.
+     */
+    private final IntegerProperty currentLayer = new SimpleIntegerProperty(0);
 
     private final TemplateRepository templateRepo;
     private final IAssetManager manager;
@@ -58,6 +65,7 @@ public class MapCanvasPane extends Region {
         tileW.addListener((o, a, b) -> layoutForMap());
         tileH.addListener((o, a, b) -> layoutForMap());
         zoom.addListener((o, a, b) -> layoutForMap());
+        currentLayer.addListener((o, a, b) -> requestLayout());
 
         setOnDragOver(this::onDragOver);
         setOnDragExited(e -> {
@@ -105,12 +113,17 @@ public class MapCanvasPane extends Region {
         return showGates;
     }
 
+    public IntegerProperty currentLayerProperty() {
+        return currentLayer;
+    }
+
     public void setOnSelectionChanged(java.util.function.Consumer<MapDef.Placement> cb) {
         this.onSelectionChanged = cb;
     }
 
     public void bindMap(MapDef map) {
         this.map = map;
+        if (map != null) map.normalizeLayers();
         layoutForMap();
     }
 
@@ -181,7 +194,7 @@ public class MapCanvasPane extends Region {
 
         Image texture = null;
         try {
-            TemplateDef td = templateRepo.findById(templateId);
+            var td = templateRepo.findById(templateId);
             if (td != null) {
                 String abs = manager.toAbsolute(td.logicalPath);
                 texture = new Image(Path.of(abs).toUri().toString());
@@ -201,8 +214,7 @@ public class MapCanvasPane extends Region {
             return;
         }
 
-        // Build the per-instance data snapshot now (so collisions & gates are stored on the map).
-        TemplateDef src = templateRepo.findById(preview.templateId);
+        var src = templateRepo.findById(preview.templateId);
         TemplateDef snap;
         if (preview.regionIndex >= 0 && src != null && src.regions != null && preview.rpw > 0 && preview.rph > 0) {
             int x0 = preview.rpx / Math.max(1, preview.tW);
@@ -214,18 +226,18 @@ public class MapCanvasPane extends Region {
             snap = TemplateSlice.copyWhole(src);
         }
 
-        // Footprint from snapshot
         int wTiles = Math.max(1, snap.imageWidthPx / Math.max(1, snap.tileWidthPx));
         int hTiles = Math.max(1, snap.imageHeightPx / Math.max(1, snap.tileHeightPx));
-
         int gx = Math.max(0, Math.min(preview.gx, map.widthTiles - wTiles));
         int gy = Math.max(0, Math.min(preview.gy, map.heightTiles - hTiles));
+
+        int layerIdx = Math.max(0, Math.min(currentLayer.get(), Math.max(0, map.layers.size() - 1)));
 
         MapDef.Placement p = new MapDef.Placement(
             preview.templateId, preview.regionIndex, gx, gy,
             wTiles, hTiles,
             preview.rpx, preview.rpy, preview.rpw, preview.rph,
-            snap
+            snap, layerIdx
         );
 
         map.placements.add(p);
@@ -279,15 +291,17 @@ public class MapCanvasPane extends Region {
     }
 
     private MapDef.Placement hitTestTopMost(int gx, int gy) {
-        MapDef.Placement best = null;
-        for (int i = map.placements.size() - 1; i >= 0; i--) {
-            MapDef.Placement p = map.placements.get(i);
-            if (gx >= p.gx && gx < p.gx + p.wTiles && gy >= p.gy && gy < p.gy + p.hTiles) {
-                best = p;
-                break;
-            }
+        if (map == null) return null;
+        // Top-most = highest layer, last in draw order
+        List<MapDef.Placement> ordered = map.placements.stream()
+            .sorted(Comparator.comparingInt((MapDef.Placement p) -> p.layer)
+                .thenComparingInt(map.placements::indexOf))
+            .toList();
+        for (int i = ordered.size() - 1; i >= 0; i--) {
+            MapDef.Placement p = ordered.get(i);
+            if (gx >= p.gx && gx < p.gx + p.wTiles && gy >= p.gy && gy < p.gy + p.hTiles) return p;
         }
-        return best;
+        return null;
     }
 
     /* ---------- Layout & draw ---------- */
@@ -328,7 +342,14 @@ public class MapCanvasPane extends Region {
         g.setLineWidth(2);
         g.strokeRect(0, 0, mapPxW, mapPxH);
 
-        if (map != null) for (MapDef.Placement p : map.placements) drawPlacement(p);
+        if (map != null) {
+            // draw by layer order (ascending)
+            List<MapDef.Placement> ordered = map.placements.stream()
+                .sorted(Comparator.comparingInt((MapDef.Placement p) -> p.layer)
+                    .thenComparingInt(map.placements::indexOf))
+                .toList();
+            for (MapDef.Placement p : ordered) drawPlacement(p);
+        }
 
         if (preview != null) drawPreview(preview);
 
@@ -339,7 +360,8 @@ public class MapCanvasPane extends Region {
         g.setTextAlign(TextAlignment.LEFT);
         g.setTextBaseline(VPos.TOP);
         int count = map == null ? 0 : map.placements.size();
-        g.fillText("placements: " + count + "   |   zoom: " + String.format("%.2f", zoom.get()), 6, 6);
+        g.fillText("placements: " + count + "   |   zoom: " + String.format("%.2f", zoom.get())
+            + "   |   layer: " + currentLayer.get(), 6, 6);
     }
 
     private void drawPlacement(MapDef.Placement p) {
@@ -354,14 +376,12 @@ public class MapCanvasPane extends Region {
             return;
         }
 
-        // draw sprite
         double dx = p.gx * tileW.get();
         double dy = p.gy * tileH.get();
         double dw = p.wTiles * tileW.get();
         double dh = p.hTiles * tileH.get();
         g.drawImage(tex, p.srcXpx, p.srcYpx, p.srcWpx, p.srcHpx, dx, dy, dw, dh);
 
-        // selection highlight
         if (p.pid.equals(selectedPid.get())) {
             g.setStroke(Color.color(0.95, 0.8, 0.2, 1));
             g.setLineWidth(3);
@@ -401,7 +421,6 @@ public class MapCanvasPane extends Region {
                     TemplateDef.TileDef t = snap.tileAt(gx, gy);
                     if (t == null || !t.solid) continue;
                     double x = dx + gx * tw, y = dy + gy * th;
-                    // draw shape outline
                     switch (t.shape) {
                         case RECT_FULL -> g.strokeRect(x, y, tw, th);
                         case HALF_RECT -> drawHalfRect(x, y, tw, th, t.orientation);
@@ -415,16 +434,11 @@ public class MapCanvasPane extends Region {
     }
 
     private void drawHalfRect(double x, double y, double tw, double th, TemplateDef.Orientation o) {
-        switch (o) {
-            case UP -> g.strokeRect(x, y, tw, th / 2);
-            case DOWN -> g.strokeRect(x, y + th / 2, tw, th / 2);
-            case LEFT -> g.strokeRect(x, y, tw / 2, th);
-            case RIGHT -> g.strokeRect(x + tw / 2, y, tw / 2, th);
-        }
+        CollisionShapes.CollisionShapeStrategy rect = CollisionShapes.get(TemplateDef.ShapeType.HALF_RECT);
+        rect.draw(g, x, y, tw, th, o);
     }
 
     private void drawTriangle(double x, double y, double tw, double th, TemplateDef.Orientation o) {
-        double x2 = x + tw, y2 = y + th, mx = x + tw / 2, my = y + th / 2;
         CollisionShapes.CollisionShapeStrategy trg = CollisionShapes.get(TemplateDef.ShapeType.TRIANGLE);
         trg.draw(g, x, y, tw, th, o);
     }
@@ -440,7 +454,6 @@ public class MapCanvasPane extends Region {
             g.drawImage(pv.texture, pv.rpx, pv.rpy, pv.rpw, pv.rph, dx, dy, dw, dh);
             g.setGlobalAlpha(1.0);
         }
-
         g.setFill(Color.color(0, 0.8, 1, 0.20));
         g.fillRect(dx, dy, dw, dh);
         g.setStroke(Color.color(0, 0.8, 1, 0.9));

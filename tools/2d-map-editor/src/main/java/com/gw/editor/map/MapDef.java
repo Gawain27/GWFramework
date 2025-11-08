@@ -3,10 +3,8 @@ package com.gw.editor.map;
 import com.google.gson.annotations.SerializedName;
 import com.gw.editor.template.TemplateDef;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * A tile-based map in tile units; origin is (0,0).
@@ -20,6 +18,12 @@ public class MapDef {
     public int heightTiles = 36;
 
     public String notes;
+
+    /**
+     * Ordered list of layers (0..N-1). Index in this list is draw order.
+     */
+    @SerializedName("layers")
+    public List<Integer> layers = new ArrayList<>(List.of(0));  // default: one layer (0)
 
     @SerializedName("placements")
     public List<Placement> placements = new ArrayList<>();
@@ -49,6 +53,11 @@ public class MapDef {
         public int regionIndex = -1;
 
         /**
+         * Assigned drawing layer (0..layers.size()-1).
+         */
+        public int layer = 0;
+
+        /**
          * Top-left grid position on the map.
          */
         public int gx, gy;
@@ -64,7 +73,7 @@ public class MapDef {
         public int srcXpx, srcYpx, srcWpx, srcHpx;
 
         /**
-         * Per-instance immutable snapshot of the template data used here (cropped to region if any).
+         * Per-instance immutable snapshot of the template data used here (cropped if region).
          */
         public TemplateDef dataSnap = new TemplateDef();
 
@@ -74,7 +83,7 @@ public class MapDef {
         public Placement(String templateId, int regionIndex, int gx, int gy,
                          int wTiles, int hTiles,
                          int srcXpx, int srcYpx, int srcWpx, int srcHpx,
-                         TemplateDef dataSnap) {
+                         TemplateDef dataSnap, int layer) {
             this.templateId = templateId;
             this.regionIndex = regionIndex;
             this.gx = gx;
@@ -86,6 +95,7 @@ public class MapDef {
             this.srcWpx = srcWpx;
             this.srcHpx = srcHpx;
             this.dataSnap = dataSnap;
+            this.layer = layer;
         }
     }
 
@@ -140,5 +150,61 @@ public class MapDef {
         public boolean involves(GateRef r) {
             return (a != null && a.equals(r)) || (b != null && b.equals(r));
         }
+    }
+
+    /* ─────────────── Helpers for layer management ─────────────── */
+
+    /**
+     * Ensure at least one layer exists and all placement layers are in range.
+     */
+    public void normalizeLayers() {
+        if (layers == null || layers.isEmpty()) layers = new ArrayList<>(List.of(0));
+        int max = layers.size() - 1;
+        for (Placement p : placements) {
+            if (p.layer < 0) p.layer = 0;
+            if (p.layer > max) p.layer = max;
+        }
+    }
+
+    /**
+     * Append a new layer at the bottom; returns its index.
+     */
+    public int addLayer() {
+        int idx = layers.size();
+        layers.add(idx);
+        return idx;
+    }
+
+    /**
+     * Remove the layer at given index – deletes all placements on that layer,
+     * removes gate links referencing those placements, and shifts higher layers down.
+     */
+    public void removeLayer(int removeIdx) {
+        if (layers.size() <= 1) return;  // keep at least one layer
+        if (removeIdx < 0 || removeIdx >= layers.size()) return;
+
+        // Collect PIDs to be removed
+        Set<String> removedPids = placements.stream()
+            .filter(p -> p.layer == removeIdx)
+            .map(p -> p.pid)
+            .collect(Collectors.toSet());
+
+        // Remove placements on that layer
+        placements.removeIf(p -> p.layer == removeIdx);
+
+        // Shift layers of remaining placements above removed layer
+        for (Placement p : placements) if (p.layer > removeIdx) p.layer--;
+
+        // Purge gate links involving removed placements
+        gateLinks.removeIf(gl ->
+            (gl.a != null && removedPids.contains(gl.a.pid)) ||
+                (gl.b != null && removedPids.contains(gl.b.pid))
+        );
+
+        // Remove layer entry and reindex remaining layer ids to 0..N-1
+        layers.remove(removeIdx);
+        for (int i = 0; i < layers.size(); i++) layers.set(i, i);
+
+        normalizeLayers();
     }
 }

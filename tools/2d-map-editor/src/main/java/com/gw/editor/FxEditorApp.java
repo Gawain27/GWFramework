@@ -71,6 +71,11 @@ public class FxEditorApp extends Application {
     private StackPane rightStack;
     private CheckBox showCollisionsChk;
     private CheckBox showGatesChk;
+    // layers UI
+    private ListView<Integer> layerList;
+    private Button btnAddLayer;
+    private Button btnRemoveLayer;
+
 
     @Inject
     private IAssetManager manager;
@@ -268,8 +273,10 @@ public class FxEditorApp extends Application {
             if (currentMap == null) return;
             int w = mapWSpinner.getValue();
             int h = mapHSpinner.getValue();
-            mapView.setMapSize(w, h);
-            if (currentMap != null) { currentMap.widthTiles = w; currentMap.heightTiles = h; }
+            if (mapView.setMapSize(w, h)) {
+                currentMap.widthTiles = w;
+                currentMap.heightTiles = h;
+            }
         });
 
         Button expand = new Button("Expand +10");
@@ -302,20 +309,51 @@ public class FxEditorApp extends Application {
         zoomOut.setOnAction(e -> mapView.zoomOut());
         zoomRst.setOnAction(e -> mapView.zoomReset());
 
-        // NEW: map overlays visibility
-        showCollisionsChk = new CheckBox("Show Collisions");
-        showCollisionsChk.setSelected(true);
-        showCollisionsChk.selectedProperty().addListener((o,oldVal,newVal) -> {
-            mapView.showCollisionsProperty().set(newVal);
-            mapView.requestLayout();
+        // overlays
+        var showCollisionsChk = new CheckBox("Show Collisions"); showCollisionsChk.setSelected(true);
+        var showGatesChk      = new CheckBox("Show Gates");      showGatesChk.setSelected(true);
+        showCollisionsChk.selectedProperty().addListener((o,ov,nv)-> { mapView.showCollisionsProperty().set(nv); mapView.requestLayout(); });
+        showGatesChk.selectedProperty().addListener((o,ov,nv)-> { mapView.showGatesProperty().set(nv); mapView.requestLayout(); });
+
+        // LAYERS UI
+        layerList = new ListView<>();
+        layerList.setPrefHeight(120);
+        layerList.setCellFactory(lv -> new ListCell<>() {
+            @Override protected void updateItem(Integer item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : ("Layer " + item));
+            }
+        });
+        layerList.getSelectionModel().selectedItemProperty().addListener((o,ov,nv) -> {
+            if (nv == null || currentMap == null) return;
+            int idx = currentMap.layers.indexOf(nv);
+            if (idx >= 0) mapView.currentLayerProperty().set(idx);
         });
 
-        showGatesChk = new CheckBox("Show Gates");
-        showGatesChk.setSelected(true);
-        showGatesChk.selectedProperty().addListener((o,oldVal,newVal) -> {
-            mapView.showGatesProperty().set(newVal);
-            mapView.requestLayout();
+        btnAddLayer = new Button("+");
+        btnRemoveLayer = new Button("−");
+        btnAddLayer.setOnAction(e -> {
+            if (currentMap == null) return;
+            int idx = currentMap.addLayer();
+            refreshLayerList();
+            layerList.getSelectionModel().select(idx);
         });
+        btnRemoveLayer.setOnAction(e -> {
+            if (currentMap == null) return;
+            Integer sel = layerList.getSelectionModel().getSelectedItem();
+            if (sel == null) return;
+            int removeIdx = currentMap.layers.indexOf(sel);
+            if (removeIdx < 0) return;
+            currentMap.removeLayer(removeIdx);
+            refreshLayerList();
+            int newSel = Math.min(removeIdx, currentMap.layers.size()-1);
+            layerList.getSelectionModel().select(newSel);
+            mapView.requestLayout();
+            instancePropsPane.refresh(mapView.getSelected()); // keep right pane consistent
+        });
+
+        var layerBox = new VBox(6, new Label("Layers"), layerList, new HBox(6, btnAddLayer, btnRemoveLayer));
+        layerBox.setPadding(new Insets(4));
 
         ToolBar tb = new ToolBar(
             newBtn, saveBtn, delBtn,
@@ -327,7 +365,12 @@ public class FxEditorApp extends Application {
             showCollisionsChk, showGatesChk
         );
 
-        HBox under = new HBox(16, idBox, mwBox, mhBox);
+        HBox under = new HBox(24,
+            new VBox(4, idBox),
+            new VBox(4, mwBox),
+            new VBox(4, mhBox),
+            layerBox
+        );
         under.setPadding(new Insets(8));
         under.setAlignment(Pos.CENTER_LEFT);
 
@@ -658,8 +701,12 @@ public class FxEditorApp extends Application {
         currentMap.tileHeightPx = tileH.getValue();
         currentMap.widthTiles   = mapWSpinner.getValue();
         currentMap.heightTiles  = mapHSpinner.getValue();
+        currentMap.normalizeLayers();
         mapView.bindMap(currentMap);
         instancePropsPane.bindMap(currentMap);
+        refreshLayerList();
+        if (!currentMap.layers.isEmpty())
+            layerList.getSelectionModel().select(0);
     }
 
     private void doSaveMap() {
@@ -681,6 +728,7 @@ public class FxEditorApp extends Application {
 
     private void loadMap(Path file) {
         currentMap = mapRepo.load(file);
+        currentMap.normalizeLayers();
         mapIdField.setText(currentMap.id);
         tileW.getValueFactory().setValue(currentMap.tileWidthPx);
         tileH.getValueFactory().setValue(currentMap.tileHeightPx);
@@ -688,6 +736,9 @@ public class FxEditorApp extends Application {
         mapHSpinner.getValueFactory().setValue(currentMap.heightTiles);
         mapView.bindMap(currentMap);
         instancePropsPane.bindMap(currentMap);
+        refreshLayerList();
+        if (!currentMap.layers.isEmpty())
+            layerList.getSelectionModel().select(Math.min(0, currentMap.layers.size()-1));
     }
 
     /* ==================== Refresh helpers & thumbnails ==================== */
@@ -696,7 +747,13 @@ public class FxEditorApp extends Application {
         refreshAssets();
         refreshTemplates();
         refreshMaps();
+        refreshLayerList();
         renderTemplateCards(galleryGrid);
+    }
+
+    private void refreshLayerList() {
+        if (layerList == null) return;
+        layerList.getItems().setAll(currentMap == null ? List.of() : currentMap.layers);
     }
 
     @SuppressWarnings("unchecked")

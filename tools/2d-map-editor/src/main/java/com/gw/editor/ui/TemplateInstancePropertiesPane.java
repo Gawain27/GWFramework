@@ -20,13 +20,18 @@ import java.util.stream.Collectors;
  */
 public class TemplateInstancePropertiesPane extends VBox {
 
-    private final TemplateRepository repo; // still handy for thumbnails if you add them later
+    private final TemplateRepository repo;
     private MapDef map;
     private MapDef.Placement sel;
 
     private final Label lblTid = new Label("-");
     private final Label lblRegion = new Label("-");
     private final Label lblPos = new Label("-");
+
+    /**
+     * NEW: layer changer
+     */
+    private final ComboBox<Integer> layerCombo = new ComboBox<>();
 
     private final ListView<String> gateList = new ListView<>();
     private final ListView<String> linkList = new ListView<>();
@@ -36,6 +41,12 @@ public class TemplateInstancePropertiesPane extends VBox {
 
     private List<List<int[]>> cachedIslands = List.of();
 
+    /**
+     * callback to request a redraw of the canvas
+     */
+    private Runnable onRequestRedraw = () -> {
+    };
+
     public TemplateInstancePropertiesPane(TemplateRepository repo) {
         this.repo = repo;
 
@@ -44,12 +55,27 @@ public class TemplateInstancePropertiesPane extends VBox {
         setFillWidth(true);
 
         getChildren().add(buildHeader());
+        getChildren().add(buildLayerBox());     // NEW
         getChildren().add(buildGates());
         getChildren().add(buildLinks());
 
         gateSearch.setEditable(true);
         addLinkBtn.setOnAction(e -> addLinkFromSearch());
         removeLinkBtn.setOnAction(e -> removeSelectedLink());
+
+        layerCombo.setOnAction(e -> {
+            if (map == null || sel == null) return;
+            Integer newLayer = layerCombo.getValue();
+            if (newLayer == null) return;
+            if (newLayer < 0 || newLayer >= map.layers.size()) return;
+            sel.layer = newLayer;
+            onRequestRedraw.run();
+        });
+    }
+
+    public void setOnRequestRedraw(Runnable r) {
+        this.onRequestRedraw = (r != null ? r : () -> {
+        });
     }
 
     public void bindMap(MapDef map) {
@@ -67,6 +93,7 @@ public class TemplateInstancePropertiesPane extends VBox {
             gateList.getItems().setAll();
             linkList.getItems().setAll();
             gateSearch.getItems().setAll();
+            layerCombo.getItems().setAll();
             addLinkBtn.setDisable(true);
             removeLinkBtn.setDisable(true);
             return;
@@ -75,6 +102,10 @@ public class TemplateInstancePropertiesPane extends VBox {
         lblTid.setText(sel.templateId);
         lblRegion.setText(sel.regionIndex < 0 ? "(whole)" : ("region " + sel.regionIndex));
         lblPos.setText("(" + sel.gx + "," + sel.gy + ") • " + sel.wTiles + "×" + sel.hTiles + " tiles");
+
+        // layers
+        layerCombo.getItems().setAll(map.layers);
+        layerCombo.getSelectionModel().select(Math.max(0, Math.min(sel.layer, map.layers.size() - 1)));
 
         TemplateDef snap = sel.dataSnap;
         cachedIslands = TemplateGateUtils.computeGateIslands(snap);
@@ -110,6 +141,13 @@ public class TemplateInstancePropertiesPane extends VBox {
         gp.add(new Label("Placement:"), 0, r);
         gp.add(lblPos, 1, r++);
         TitledPane tp = new TitledPane("Instance", gp);
+        tp.setCollapsible(false);
+        return tp;
+    }
+
+    private Node buildLayerBox() {
+        HBox row = new HBox(8, new Label("Layer:"), layerCombo);
+        TitledPane tp = new TitledPane("Rendering", row);
         tp.setCollapsible(false);
         return tp;
     }

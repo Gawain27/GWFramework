@@ -4,14 +4,10 @@ import com.gw.editor.map.MapDef;
 import com.gw.editor.template.TemplateDef;
 import com.gw.editor.template.TemplateRepository;
 import com.gwngames.core.api.asset.IAssetManager;
-import javafx.beans.property.DoubleProperty;
-import javafx.beans.property.IntegerProperty;
-import javafx.beans.property.SimpleDoubleProperty;
-import javafx.beans.property.SimpleIntegerProperty;
+import javafx.beans.property.*;
 import javafx.geometry.VPos;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
-import javafx.scene.control.Alert;
 import javafx.scene.image.Image;
 import javafx.scene.input.*;
 import javafx.scene.layout.Region;
@@ -19,14 +15,13 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.TextAlignment;
 
 import java.nio.file.Path;
+import java.util.function.Consumer;
 
 /**
- * Map canvas with grid, placements, live drop preview and zoom.
- * Accepts drags from the Template Gallery (custom DataFormat payload).
+ * Map canvas with grid, placements, live drop preview, zoom + selection & move.
  */
 public class MapCanvasPane extends Region {
     public static final DataFormat DND_FORMAT = new DataFormat("application/x-gw-template-drop");
-    // Drag payload: templateId|regionIndex|tileW|tileH|regionPxX|regionPxY|regionPxW|regionPxH
 
     private final Canvas canvas = new Canvas();
     private final GraphicsContext g = canvas.getGraphicsContext2D();
@@ -38,14 +33,20 @@ public class MapCanvasPane extends Region {
     private final TemplateRepository templateRepo;
     private final IAssetManager manager;
 
-    private MapDef map; // current map (mutable model)
+    private MapDef map;
     private DropPreview preview = null;
+
+    // selection & move
+    private final StringProperty selectedPid = new SimpleStringProperty(null);
+    private boolean draggingInstance = false;
+    private int dragOffsetGX = 0, dragOffsetGY = 0; // cursor-tile minus instance origin
+    private Consumer<MapDef.Placement> onSelectionChanged; // callback to editor to refresh right pane
 
     public MapCanvasPane(TemplateRepository repo, IAssetManager manager) {
         this.templateRepo = repo;
         this.manager = manager;
-
         getChildren().add(canvas);
+
         widthProperty().addListener((o, a, b) -> redraw());
         heightProperty().addListener((o, a, b) -> redraw());
         tileW.addListener((o, a, b) -> layoutForMap());
@@ -59,7 +60,7 @@ public class MapCanvasPane extends Region {
         });
         setOnDragDropped(this::onDragDropped);
 
-        // Zoom with CTRL + mouse wheel
+        // zoom with ctrl+wheel
         setOnScroll(e -> {
             if (!e.isControlDown() && !e.isShortcutDown()) return;
             if (e.getDeltaY() > 0) zoomIn();
@@ -67,9 +68,15 @@ public class MapCanvasPane extends Region {
             e.consume();
         });
 
+        // selection & move
+        setOnMousePressed(this::onMousePressed);
+        setOnMouseDragged(this::onMouseDragged);
+        setOnMouseReleased(this::onMouseReleased);
+
         setFocusTraversable(true);
     }
 
+    /* ---------- API ------------ */
     public IntegerProperty tileWidthProperty() {
         return tileW;
     }
@@ -82,34 +89,28 @@ public class MapCanvasPane extends Region {
         return zoom;
     }
 
+    public StringProperty selectedPidProperty() {
+        return selectedPid;
+    }
+
+    public void setOnSelectionChanged(Consumer<MapDef.Placement> cb) {
+        this.onSelectionChanged = cb;
+    }
+
     public void bindMap(MapDef map) {
         this.map = map;
         layoutForMap();
     }
 
-    /**
-     * Resize map (tiles). Returns false if shrink would cut off placements.
-     */
     public boolean setMapSize(int widthTiles, int heightTiles) {
         if (map == null) return false;
         if (widthTiles < 1 || heightTiles < 1) return false;
-
-        // prevent destructive shrink: any placement out of new bounds?
-        if (widthTiles < map.widthTiles || heightTiles < map.heightTiles) {
-            boolean anyOut = map.placements.stream().anyMatch(p ->
-                p.gx < 0 || p.gy < 0 ||
-                    p.gx + p.wTiles > widthTiles ||
-                    p.gy + p.hTiles > heightTiles
-            );
-            if (anyOut) {
-                Alert a = new Alert(Alert.AlertType.WARNING,
-                    "Cannot shrink map: one or more placements would be outside the bounds.");
-                a.setHeaderText("Shrink refused");
-                a.showAndWait();
-                return false;
-            }
-        }
-
+        boolean anyOut = map.placements.stream().anyMatch(p ->
+            p.gx < 0 || p.gy < 0 ||
+                p.gx + p.wTiles > widthTiles ||
+                p.gy + p.hTiles > heightTiles
+        );
+        if (anyOut) return false;
         map.widthTiles = widthTiles;
         map.heightTiles = heightTiles;
         layoutForMap();
@@ -131,20 +132,33 @@ public class MapCanvasPane extends Region {
     public void addPlacement(MapDef.Placement p) {
         if (map == null) return;
         map.placements.add(p);
+        selectPid(p.pid);
         redraw();
     }
 
     public void clearAll() {
         if (map != null) map.placements.clear();
+        selectPid(null);
         redraw();
     }
 
+    public MapDef.Placement getSelected() {
+        if (map == null || selectedPid.get() == null) return null;
+        return map.placements.stream().filter(p -> p.pid.equals(selectedPid.get())).findFirst().orElse(null);
+    }
+
+    public void selectPid(String pid) {
+        selectedPid.set(pid);
+        if (onSelectionChanged != null) onSelectionChanged.accept(getSelected());
+        redraw();
+    }
+
+    /* ---------- DnD from gallery ---------- */
     private void onDragOver(DragEvent e) {
         Dragboard db = e.getDragboard();
         if (!db.hasContent(DND_FORMAT)) return;
 
-        String payload = (String) db.getContent(DND_FORMAT);
-        String[] tok = payload.split("\\|");
+        String[] tok = ((String) db.getContent(DND_FORMAT)).split("\\|");
         if (tok.length < 8) return;
 
         String templateId = tok[0];
@@ -156,25 +170,18 @@ public class MapCanvasPane extends Region {
         int rpW = Integer.parseInt(tok[6]);
         int rpH = Integer.parseInt(tok[7]);
 
-        // convert event position from screen pixels to "map pixels" (pre-zoom)
         double localX = e.getX() / zoom.get();
         double localY = e.getY() / zoom.get();
-
-        // snap to tile
         int gx = (int) Math.floor(localX / tileW.get());
         int gy = (int) Math.floor(localY / tileH.get());
-
-        // region size in tiles (for simple templates regionPx == whole image)
         int wTiles = Math.max(1, (int) Math.round((double) rpW / tW));
         int hTiles = Math.max(1, (int) Math.round((double) rpH / tH));
 
-        // clamp footprint to map bounds if possible
         if (map != null) {
             gx = Math.max(0, Math.min(gx, Math.max(0, map.widthTiles - wTiles)));
             gy = Math.max(0, Math.min(gy, Math.max(0, map.heightTiles - hTiles)));
         }
 
-        // fetch texture for preview
         Image texture = null;
         try {
             TemplateDef td = templateRepo.findById(templateId);
@@ -192,28 +199,77 @@ public class MapCanvasPane extends Region {
     }
 
     private void onDragDropped(DragEvent e) {
-        if (preview == null) {
+        if (preview == null || map == null) {
             e.setDropCompleted(false);
             return;
         }
-        if (map == null) {
-            e.setDropCompleted(false);
-            return;
-        }
-
-        // final clamp
         int gx = Math.max(0, Math.min(preview.gx, map.widthTiles - preview.wTiles));
         int gy = Math.max(0, Math.min(preview.gy, map.heightTiles - preview.hTiles));
-
-        MapDef.Placement p = new MapDef.Placement(
-            preview.templateId, preview.regionIndex, gx, gy, preview.wTiles, preview.hTiles
-        );
+        MapDef.Placement p = new MapDef.Placement(preview.templateId, preview.regionIndex, gx, gy, preview.wTiles, preview.hTiles);
         addPlacement(p);
         preview = null;
         e.setDropCompleted(true);
         e.consume();
     }
 
+    /* ---------- Selection & moving ---------- */
+    private void onMousePressed(MouseEvent e) {
+        if (map == null) return;
+        double lx = e.getX() / zoom.get();
+        double ly = e.getY() / zoom.get();
+        int gx = (int) Math.floor(lx / tileW.get());
+        int gy = (int) Math.floor(ly / tileH.get());
+
+        MapDef.Placement hit = hitTestTopMost(gx, gy);
+        if (hit != null) {
+            selectPid(hit.pid);
+            draggingInstance = true;
+            dragOffsetGX = gx - hit.gx;
+            dragOffsetGY = gy - hit.gy;
+        } else {
+            selectPid(null);
+        }
+        e.consume();
+    }
+
+    private void onMouseDragged(MouseEvent e) {
+        if (!draggingInstance || map == null) return;
+        MapDef.Placement sel = getSelected();
+        if (sel == null) return;
+
+        double lx = e.getX() / zoom.get();
+        double ly = e.getY() / zoom.get();
+        int gx = (int) Math.floor(lx / tileW.get()) - dragOffsetGX;
+        int gy = (int) Math.floor(ly / tileH.get()) - dragOffsetGY;
+
+        gx = Math.max(0, Math.min(gx, map.widthTiles - sel.wTiles));
+        gy = Math.max(0, Math.min(gy, map.heightTiles - sel.hTiles));
+
+        sel.gx = gx;
+        sel.gy = gy;
+        redraw();
+        e.consume();
+    }
+
+    private void onMouseReleased(MouseEvent e) {
+        draggingInstance = false;
+        e.consume();
+    }
+
+    private MapDef.Placement hitTestTopMost(int gx, int gy) {
+        MapDef.Placement best = null;
+        // iterate from end to start to get topmost (last drawn is last added)
+        for (int i = map.placements.size() - 1; i >= 0; i--) {
+            MapDef.Placement p = map.placements.get(i);
+            if (gx >= p.gx && gx < p.gx + p.wTiles && gy >= p.gy && gy < p.gy + p.hTiles) {
+                best = p;
+                break;
+            }
+        }
+        return best;
+    }
+
+    /* ---------- Layout & draw ---------- */
     private void layoutForMap() {
         double pixelW = (map == null ? 64 : map.widthTiles) * tileW.get();
         double pixelH = (map == null ? 36 : map.heightTiles) * tileH.get();
@@ -223,22 +279,16 @@ public class MapCanvasPane extends Region {
     }
 
     private void redraw() {
-        double W = canvas.getWidth();
-        double H = canvas.getHeight();
-
-        // background
+        double W = canvas.getWidth(), H = canvas.getHeight();
         g.setFill(Color.color(0.07, 0.07, 0.07));
         g.fillRect(0, 0, W, H);
 
         g.save();
-        g.scale(zoom.get(), zoom.get()); // draw everything in unzoomed units (tileW, tileH)
+        g.scale(zoom.get(), zoom.get());
 
-        // grid bounds (map size)
         int mw = map == null ? 64 : map.widthTiles;
         int mh = map == null ? 36 : map.heightTiles;
-
-        double mapPxW = mw * tileW.get();
-        double mapPxH = mh * tileH.get();
+        double mapPxW = mw * tileW.get(), mapPxH = mh * tileH.get();
 
         // grid
         g.setStroke(Color.color(1, 1, 1, 0.08));
@@ -252,28 +302,20 @@ public class MapCanvasPane extends Region {
             g.strokeLine(0, py, mapPxW, py);
         }
 
-        // map boundary
+        // border
         g.setStroke(Color.color(1, 1, 1, 0.18));
         g.setLineWidth(2);
         g.strokeRect(0, 0, mapPxW, mapPxH);
 
-        // origin axes
-        g.setStroke(Color.color(0.2, 0.8, 1, 0.6));
-        g.setLineWidth(1.5);
-        g.strokeLine(0, 0, mapPxW, 0);
-        g.strokeLine(0, 0, 0, mapPxH);
-
         // placements
-        if (map != null) {
-            for (MapDef.Placement p : map.placements) drawPlacement(p);
-        }
+        if (map != null) for (MapDef.Placement p : map.placements) drawPlacement(p);
 
         // preview
         if (preview != null) drawPreview(preview);
 
         g.restore();
 
-        // HUD (not zoomed)
+        // HUD
         g.setFill(Color.color(1, 1, 1, 0.6));
         g.setTextAlign(TextAlignment.LEFT);
         g.setTextBaseline(VPos.TOP);
@@ -309,10 +351,16 @@ public class MapCanvasPane extends Region {
 
         g.drawImage(tex, sx, sy, sw, sh, dx, dy, dw, dh);
 
-        // thin outline
-        g.setStroke(Color.color(0, 0, 0, 0.6));
-        g.setLineWidth(1);
-        g.strokeRect(dx, dy, dw, dh);
+        // highlight selection
+        if (p.pid.equals(selectedPid.get())) {
+            g.setStroke(Color.color(0.95, 0.8, 0.2, 1));
+            g.setLineWidth(3);
+            g.strokeRect(dx + 0.5, dy + 0.5, dw - 1, dh - 1);
+        } else {
+            g.setStroke(Color.color(0, 0, 0, 0.6));
+            g.setLineWidth(1);
+            g.strokeRect(dx, dy, dw, dh);
+        }
     }
 
     private void drawPreview(DropPreview pv) {

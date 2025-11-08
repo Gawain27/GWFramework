@@ -6,6 +6,7 @@ import com.gw.editor.template.TemplateDef;
 import com.gw.editor.template.TemplateRepository;
 import com.gw.editor.ui.GridOverlayPane;
 import com.gw.editor.ui.MapCanvasPane;
+import com.gw.editor.ui.TemplateInstancePropertiesPane;
 import com.gw.editor.ui.TilePropertiesPane;
 import com.gwngames.core.api.asset.IAssetManager;
 import com.gwngames.core.api.build.Inject;
@@ -16,7 +17,6 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.geometry.Insets;
-import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.SnapshotParameters;
@@ -64,6 +64,12 @@ public class FxEditorApp extends Application {
     private Spinner<Integer> mapWSpinner;   // NEW
     private Spinner<Integer> mapHSpinner;   // NEW
 
+    // Map stuff
+    private TemplateInstancePropertiesPane instancePropsPane;
+    private TabPane centerTabs;
+    private SplitPane rootSplit;
+    private StackPane rightStack;
+
     @Inject
     private IAssetManager manager;
 
@@ -82,10 +88,13 @@ public class FxEditorApp extends Application {
         sidebar.getTabs().add(new Tab("Maps", buildMapsPane()));
 
         // CENTER
-        TabPane centerTabs = new TabPane();
+        centerTabs = new TabPane();
         centerTabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         centerTabs.getTabs().add(new Tab("Template Editor", buildTemplateEditorCenter()));
         centerTabs.getTabs().add(new Tab("Map Editor", buildMapEditorCenter()));
+        centerTabs.getSelectionModel().selectedIndexProperty().addListener((o,oldIdx,newIdx) -> {
+            showRightPane(newIdx.intValue());
+        });
 
         // RIGHT
         tilePropsPane = new TilePropertiesPane();
@@ -95,11 +104,19 @@ public class FxEditorApp extends Application {
         });
         tilePropsPane.setSelectionSupplier(() -> viewer == null ? Set.of() : viewer.getSelection());
 
-        SplitPane root = new SplitPane(sidebar, centerTabs, tilePropsPane);
-        root.setOrientation(Orientation.HORIZONTAL);
-        root.setDividerPositions(0.25, 0.75);
+        instancePropsPane = new TemplateInstancePropertiesPane(repo);
+        instancePropsPane.setMinWidth(300);
 
-        Scene scene = new Scene(root, 1080, 640);
+        rightStack = new StackPane(tilePropsPane, instancePropsPane);
+        showRightPane(0); // Template Editor initially
+
+        SplitPane sidebarAndCenters = new SplitPane(sidebar, centerTabs);
+        sidebarAndCenters.setDividerPositions(0.25);
+
+        rootSplit = new SplitPane(sidebarAndCenters, rightStack);
+        rootSplit.setDividerPositions(0.75);
+
+        Scene scene = new Scene(rootSplit, 1080, 640);
         stage.setTitle("GW Template & Map Editor (JavaFX)");
         stage.setScene(scene);
         stage.show();
@@ -190,17 +207,27 @@ public class FxEditorApp extends Application {
         return new VBox(toolbar, underBar);
     }
 
+    private void showRightPane(int centerTabIndex) {
+        boolean templateMode = (centerTabIndex == 0);
+        tilePropsPane.setVisible(templateMode);
+        tilePropsPane.setManaged(templateMode);
+        instancePropsPane.setVisible(!templateMode);
+        instancePropsPane.setManaged(!templateMode);
+    }
+
     /* ==================== MAP EDITOR ==================== */
 
+    // Map editor center builder: after mapView creation/binding, wire callbacks
     private BorderPane buildMapEditorCenter() {
         mapView = new MapCanvasPane(repo, manager);
-        // keep tile size consistent with template editor
         mapView.tileWidthProperty().bind(tileW.valueProperty());
         mapView.tileHeightProperty().bind(tileH.valueProperty());
 
+        // selection -> right pane
+        mapView.setOnSelectionChanged(selPlacement -> instancePropsPane.refresh(selPlacement));
+
         BorderPane pane = new BorderPane();
         pane.setTop(buildMapTopControls());
-
         ScrollPane scroll = new ScrollPane(mapView);
         scroll.setPannable(true);
         pane.setCenter(scroll);
@@ -609,18 +636,17 @@ public class FxEditorApp extends Application {
     }
 
     /* ==================== Map flows ==================== */
-
+    // When map changes (new/load), rebind instance pane to map:
     private void newMap() {
         currentMap = new MapDef();
         currentMap.id = "";
         mapIdField.setText("");
-
-        currentMap.tileWidthPx = tileW.getValue();
+        currentMap.tileWidthPx  = tileW.getValue();
         currentMap.tileHeightPx = tileH.getValue();
-        currentMap.widthTiles = mapWSpinner.getValue();
-        currentMap.heightTiles = mapHSpinner.getValue();
-
+        currentMap.widthTiles   = mapWSpinner.getValue();
+        currentMap.heightTiles  = mapHSpinner.getValue();
         mapView.bindMap(currentMap);
+        instancePropsPane.bindMap(currentMap);
     }
 
     private void doSaveMap() {
@@ -648,6 +674,7 @@ public class FxEditorApp extends Application {
         mapWSpinner.getValueFactory().setValue(currentMap.widthTiles);
         mapHSpinner.getValueFactory().setValue(currentMap.heightTiles);
         mapView.bindMap(currentMap);
+        instancePropsPane.bindMap(currentMap);
     }
 
     /* ==================== Refresh helpers & thumbnails ==================== */

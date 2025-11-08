@@ -342,6 +342,20 @@ public class MapCanvasPane extends Region {
         g.setLineWidth(2);
         g.strokeRect(0, 0, mapPxW, mapPxH);
 
+        // inside redraw(), after computing mapPxW/mapPxH and before drawing placements:
+        if (map != null && map.background != null && map.background.logicalPath != null && !map.background.logicalPath.isBlank()) {
+            try {
+                String abs = manager.toAbsolute(map.background.logicalPath);
+                var img = new javafx.scene.image.Image(java.nio.file.Path.of(abs).toUri().toString());
+                double scaleX = (map.widthTiles * tileW.get()) / Math.max(1.0, img.getWidth());
+                double scaleY = (map.heightTiles * tileH.get()) / Math.max(1.0, img.getHeight());
+                double scale = Math.min(scaleX, scaleY); // fit inside the map
+                double w = img.getWidth() * scale;
+                double h = img.getHeight() * scale;
+                g.drawImage(img, 0, 0, img.getWidth(), img.getHeight(), 0, 0, w, h);
+            } catch (Exception ignored) {}
+        }
+
         if (map != null) {
             // draw by layer order (ascending)
             List<MapDef.Placement> ordered = map.placements.stream()

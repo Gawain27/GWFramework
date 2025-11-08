@@ -28,22 +28,22 @@ public class TemplateInstancePropertiesPane extends VBox {
     private final Label lblRegion = new Label("-");
     private final Label lblPos = new Label("-");
 
-    /**
-     * NEW: layer changer
-     */
     private final ComboBox<Integer> layerCombo = new ComboBox<>();
 
+    /* Gates */
     private final ListView<String> gateList = new ListView<>();
+    private final TextField gateNameField = new TextField();  // editable name
+    private final Button saveGateNameBtn = new Button("Save Gate Name");
+
+    /* Links */
     private final ListView<String> linkList = new ListView<>();
+    private final TextField linkNameField = new TextField();  // editable name
     private final ComboBox<String> gateSearch = new ComboBox<>();
     private final Button addLinkBtn = new Button("Add Link");
     private final Button removeLinkBtn = new Button("Remove Selected Link");
+    private final Button saveLinkNameBtn = new Button("Save Link Name");
 
     private List<List<int[]>> cachedIslands = List.of();
-
-    /**
-     * callback to request a redraw of the canvas
-     */
     private Runnable onRequestRedraw = () -> {
     };
 
@@ -55,13 +55,11 @@ public class TemplateInstancePropertiesPane extends VBox {
         setFillWidth(true);
 
         getChildren().add(buildHeader());
-        getChildren().add(buildLayerBox());     // NEW
+        getChildren().add(buildLayerBox());
         getChildren().add(buildGates());
         getChildren().add(buildLinks());
 
         gateSearch.setEditable(true);
-        addLinkBtn.setOnAction(e -> addLinkFromSearch());
-        removeLinkBtn.setOnAction(e -> removeSelectedLink());
 
         layerCombo.setOnAction(e -> {
             if (map == null || sel == null) return;
@@ -71,6 +69,20 @@ public class TemplateInstancePropertiesPane extends VBox {
             sel.layer = newLayer;
             onRequestRedraw.run();
         });
+
+        saveGateNameBtn.setOnAction(e -> {
+            int idx = gateList.getSelectionModel().getSelectedIndex();
+            if (map == null || sel == null || idx < 0) return;
+            var ref = new MapDef.GateRef(sel.pid, idx);
+            var meta = map.ensureGateMeta(ref);
+            meta.name = gateNameField.getText() == null ? "" : gateNameField.getText().trim();
+            refreshLinkList(); // list uses names in display
+            refreshGateList(); // list uses names in display
+        });
+
+        addLinkBtn.setOnAction(e -> addLinkFromSearch());
+        removeLinkBtn.setOnAction(e -> removeSelectedLink());
+        saveLinkNameBtn.setOnAction(e -> renameSelectedLink());
     }
 
     public void setOnRequestRedraw(Runnable r) {
@@ -92,10 +104,14 @@ public class TemplateInstancePropertiesPane extends VBox {
             lblPos.setText("-");
             gateList.getItems().setAll();
             linkList.getItems().setAll();
+            gateNameField.clear();
             gateSearch.getItems().setAll();
+            linkNameField.clear();
             layerCombo.getItems().setAll();
             addLinkBtn.setDisable(true);
             removeLinkBtn.setDisable(true);
+            saveGateNameBtn.setDisable(true);
+            saveLinkNameBtn.setDisable(true);
             return;
         }
 
@@ -103,30 +119,36 @@ public class TemplateInstancePropertiesPane extends VBox {
         lblRegion.setText(sel.regionIndex < 0 ? "(whole)" : ("region " + sel.regionIndex));
         lblPos.setText("(" + sel.gx + "," + sel.gy + ") • " + sel.wTiles + "×" + sel.hTiles + " tiles");
 
-        // layers
         layerCombo.getItems().setAll(map.layers);
         layerCombo.getSelectionModel().select(Math.max(0, Math.min(sel.layer, map.layers.size() - 1)));
 
         TemplateDef snap = sel.dataSnap;
         cachedIslands = TemplateGateUtils.computeGateIslands(snap);
 
-        var items = new ArrayList<String>();
-        for (int i = 0; i < cachedIslands.size(); i++) {
-            items.add("gate #" + i + "  (" + cachedIslands.get(i).size() + " tiles)");
-        }
-        gateList.getItems().setAll(items);
-
+        refreshGateList();
         refreshLinkList();
 
         // choices = all other gates across map
         var others = enumerateAllGateRefsExcept(sel.pid).stream()
-            .map(r -> r.pid + "#gate" + r.gateIndex)
+            .map(this::displayForGateRef)
             .sorted()
             .collect(Collectors.toList());
         gateSearch.getItems().setAll(others);
 
         addLinkBtn.setDisable(false);
         removeLinkBtn.setDisable(false);
+        saveGateNameBtn.setDisable(false);
+        saveLinkNameBtn.setDisable(false);
+
+        gateList.getSelectionModel().selectedIndexProperty().addListener((o, ov, nv) -> {
+            if (nv == null || nv.intValue() < 0) {
+                gateNameField.clear();
+                return;
+            }
+            var ref = new MapDef.GateRef(sel.pid, nv.intValue());
+            var meta = map.findGateMeta(ref).orElse(null);
+            gateNameField.setText(meta == null ? "" : meta.name);
+        });
     }
 
     private Node buildHeader() {
@@ -157,7 +179,8 @@ public class TemplateInstancePropertiesPane extends VBox {
         tp.setText("Gates (islands)");
         VBox box = new VBox(6);
         gateList.setPrefHeight(150);
-        box.getChildren().addAll(gateList);
+        HBox nameRow = new HBox(6, new Label("Name:"), gateNameField, saveGateNameBtn);
+        box.getChildren().addAll(gateList, nameRow);
         tp.setContent(box);
         tp.setCollapsible(false);
         return tp;
@@ -169,12 +192,29 @@ public class TemplateInstancePropertiesPane extends VBox {
         VBox box = new VBox(6);
 
         HBox addRow = new HBox(6, new Label("Connect to:"), gateSearch, addLinkBtn);
+        HBox nameRow = new HBox(6, new Label("Link name:"), linkNameField, saveLinkNameBtn);
+
         linkList.setPrefHeight(160);
 
-        box.getChildren().addAll(addRow, linkList, removeLinkBtn);
+        box.getChildren().addAll(addRow, nameRow, linkList, removeLinkBtn);
         tp.setContent(box);
         tp.setCollapsible(false);
         return tp;
+    }
+
+    private void refreshGateList() {
+        if (map == null || sel == null) {
+            gateList.getItems().setAll();
+            return;
+        }
+        ObservableList<String> items = FXCollections.observableArrayList();
+        for (int i = 0; i < cachedIslands.size(); i++) {
+            var ref = new MapDef.GateRef(sel.pid, i);
+            var meta = map.findGateMeta(ref).orElse(null);
+            String disp = (meta != null && !meta.name.isBlank()) ? meta.name : ("gate #" + i);
+            items.add(disp + "  (" + cachedIslands.get(i).size() + " tiles)");
+        }
+        gateList.setItems(items);
     }
 
     private void refreshLinkList() {
@@ -188,15 +228,26 @@ public class TemplateInstancePropertiesPane extends VBox {
             MapDef.GateRef me = new MapDef.GateRef(sel.pid, gi);
             var targets = map.gateLinks.stream()
                 .filter(gl -> gl.involves(me))
-                .map(gl -> gl.a.equals(me) ? gl.b : gl.a)
-                .map(other -> other.pid + "#gate" + other.gateIndex)
+                .map(gl -> {
+                    String nm = (gl.name == null || gl.name.isBlank()) ? "" : ("[" + gl.name + "] ");
+                    MapDef.GateRef other = gl.a.equals(me) ? gl.b : gl.a;
+                    return nm + displayForGateRef(other) + " {" + gl.id + "}";
+                })
                 .sorted()
                 .toList();
 
-            String head = "gate #" + gi + " -> " + (targets.isEmpty() ? "(none)" : String.join(", ", targets));
+            String head = displayForGateRef(me) + " -> " + (targets.isEmpty() ? "(none)" : String.join(", ", targets));
             items.add(head);
         }
         linkList.setItems(items);
+    }
+
+    private String displayForGateRef(MapDef.GateRef r) {
+        if (map == null) return r.toString();
+        var m = map.findGateMeta(r).orElse(null);
+        String base = (m != null && m.name != null && !m.name.isBlank())
+            ? m.name : (r.pid + "#gate" + r.gateIndex);
+        return base;
     }
 
     private List<MapDef.GateRef> enumerateAllGateRefsExcept(String excludePid) {
@@ -205,7 +256,11 @@ public class TemplateInstancePropertiesPane extends VBox {
         for (MapDef.Placement p : map.placements) {
             if (p.pid.equals(excludePid)) continue;
             var islands = TemplateGateUtils.computeGateIslands(p.dataSnap);
-            for (int gi = 0; gi < islands.size(); gi++) out.add(new MapDef.GateRef(p.pid, gi));
+            for (int gi = 0; gi < islands.size(); gi++) {
+                var ref = new MapDef.GateRef(p.pid, gi);
+                map.ensureGateMeta(ref); // make sure it exists so the name is stable
+                out.add(ref);
+            }
         }
         return out;
     }
@@ -217,27 +272,36 @@ public class TemplateInstancePropertiesPane extends VBox {
             info("Select one of this instance's gates (left list) first.");
             return;
         }
+
         String target = gateSearch.getEditor().getText();
-        if (target == null || !target.contains("#gate")) return;
+        if (target == null || target.isBlank()) return;
 
-        String[] parts = target.split("#gate");
-        if (parts.length != 2) return;
-        String pid = parts[0];
-        int gateIdx;
-        try {
-            gateIdx = Integer.parseInt(parts[1]);
-        } catch (Exception ignored) {
-            return;
-        }
+        // Try to match by display name, then by raw pid#gateN
+        MapDef.GateRef other = map.gateMetas.stream()
+            .filter(m -> target.equals(m.name))
+            .map(m -> m.ref)
+            .findFirst()
+            .orElseGet(() -> {
+                if (!target.contains("#gate")) return null;
+                String[] parts = target.split("#gate");
+                try {
+                    return new MapDef.GateRef(parts[0], Integer.parseInt(parts[1]));
+                } catch (Exception ignored) {
+                    return null;
+                }
+            });
 
-        MapDef.GateRef a = new MapDef.GateRef(sel.pid, myGate);
-        MapDef.GateRef b = new MapDef.GateRef(pid, gateIdx);
+        if (other == null) return;
+
+        MapDef.GateRef me = new MapDef.GateRef(sel.pid, myGate);
 
         boolean exists = map.gateLinks.stream().anyMatch(gl ->
-            (gl.a.equals(a) && gl.b.equals(b)) || (gl.a.equals(b) && gl.b.equals(a))
+            (gl.a.equals(me) && gl.b.equals(other)) || (gl.a.equals(other) && gl.b.equals(me))
         );
-        if (!exists) map.gateLinks.add(new MapDef.GateLink(a, b));
-
+        if (!exists) {
+            String nm = linkNameField.getText() == null ? "" : linkNameField.getText().trim();
+            map.gateLinks.add(new MapDef.GateLink(me, other, nm));
+        }
         refreshLinkList();
     }
 
@@ -250,6 +314,18 @@ public class TemplateInstancePropertiesPane extends VBox {
         }
         MapDef.GateRef me = new MapDef.GateRef(sel.pid, myGate);
         map.gateLinks.removeIf(gl -> gl.involves(me));
+        refreshLinkList();
+    }
+
+    private void renameSelectedLink() {
+        if (map == null) return;
+        String newName = linkNameField.getText() == null ? "" : linkNameField.getText().trim();
+        // Quick way: if there is exactly one link in selection context (common), rename all involving selected gate.
+        int myGate = gateList.getSelectionModel().getSelectedIndex();
+        if (sel != null && myGate >= 0) {
+            MapDef.GateRef me = new MapDef.GateRef(sel.pid, myGate);
+            map.gateLinks.stream().filter(gl -> gl.involves(me)).forEach(gl -> gl.name = newName);
+        }
         refreshLinkList();
     }
 

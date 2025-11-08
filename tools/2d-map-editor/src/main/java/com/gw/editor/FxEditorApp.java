@@ -113,6 +113,7 @@ public class FxEditorApp extends Application {
 
         instancePropsPane = new TemplateInstancePropertiesPane(repo);
         instancePropsPane.setMinWidth(300);
+        tilePropsPane.bindComplexProperty(complexBox.selectedProperty());
 
         rightStack = new StackPane(tilePropsPane, instancePropsPane);
         showRightPane(0); // Template Editor initially
@@ -334,6 +335,7 @@ public class FxEditorApp extends Application {
         btnRemoveLayer = new Button("−");
         btnAddLayer.setOnAction(e -> {
             if (currentMap == null) return;
+            if (!confirm("Add Layer", "Add a new layer at bottom?")) return;
             int idx = currentMap.addLayer();
             refreshLayerList();
             layerList.getSelectionModel().select(idx);
@@ -344,13 +346,20 @@ public class FxEditorApp extends Application {
             if (sel == null) return;
             int removeIdx = currentMap.layers.indexOf(sel);
             if (removeIdx < 0) return;
+            if (!confirm("Remove Layer", "Remove layer " + sel + " and delete everything on it?")) return;
             currentMap.removeLayer(removeIdx);
             refreshLayerList();
             int newSel = Math.min(removeIdx, currentMap.layers.size()-1);
             layerList.getSelectionModel().select(newSel);
             mapView.requestLayout();
-            instancePropsPane.refresh(mapView.getSelected()); // keep right pane consistent
+            instancePropsPane.refresh(mapView.getSelected());
         });
+
+        Button newFromAsset = new Button("New Map from Asset…");
+        Button pasteAsset   = new Button("Paste Asset…");
+
+        newFromAsset.setOnAction(e -> newMapFromAsset());
+        pasteAsset.setOnAction(e -> pasteAssetIntoMap());
 
         var layerBox = new VBox(6, new Label("Layers"), layerList, new HBox(6, btnAddLayer, btnRemoveLayer));
         layerBox.setPadding(new Insets(4));
@@ -362,7 +371,9 @@ public class FxEditorApp extends Application {
             new Separator(),
             zoomIn, zoomOut, zoomRst,
             new Separator(),
-            showCollisionsChk, showGatesChk
+            showCollisionsChk, showGatesChk,
+            new Separator(),
+            newFromAsset, pasteAsset
         );
 
         HBox under = new HBox(24,
@@ -375,6 +386,123 @@ public class FxEditorApp extends Application {
         under.setAlignment(Pos.CENTER_LEFT);
 
         return new VBox(tb, under);
+    }
+
+    private void newMapFromAsset() {
+        TextInputDialog dlg = new TextInputDialog();
+        dlg.setTitle("New Map from Asset");
+        dlg.setHeaderText(null);
+        dlg.setContentText("Enter logical path of asset (e.g. textures/level_bg.png):");
+        var res = dlg.showAndWait();
+        if (res.isEmpty()) return;
+
+        String logical = res.get().trim();
+        try {
+            String abs = manager.toAbsolute(logical);
+            var img = new Image(Path.of(abs).toUri().toString());
+            if (img.isError() || img.getWidth() <= 0 || img.getHeight() <= 0) {
+                alert("Could not load image for asset: " + logical);
+                return;
+            }
+            // Confirm creation
+            if (!confirm("Create Map", "Create a new map sized to the asset as background?")) return;
+
+            // Compute tile grid from current tileW/H
+            int tW = tileW.getValue(), tH = tileH.getValue();
+            int wTiles = Math.max(1, (int)Math.ceil(img.getWidth()  / tW));
+            int hTiles = Math.max(1, (int)Math.ceil(img.getHeight() / tH));
+
+            currentMap = new MapDef();
+            currentMap.id = "";
+            mapIdField.setText("");
+
+            currentMap.tileWidthPx  = tW;
+            currentMap.tileHeightPx = tH;
+            currentMap.widthTiles   = wTiles;
+            currentMap.heightTiles  = hTiles;
+            currentMap.normalizeLayers();
+
+            currentMap.background = new MapDef.Background();
+            currentMap.background.logicalPath = logical;
+            currentMap.background.imageWidthPx  = (int)Math.round(img.getWidth());
+            currentMap.background.imageHeightPx = (int)Math.round(img.getHeight());
+
+            mapView.bindMap(currentMap);
+            instancePropsPane.bindMap(currentMap);
+            refreshLayerList();
+            if (!currentMap.layers.isEmpty()) layerList.getSelectionModel().select(0);
+
+        } catch (Exception ex) {
+            alert("Error: " + ex.getMessage());
+        }
+    }
+
+    private void pasteAssetIntoMap() {
+        if (currentMap == null) { alert("Open or create a map first."); return; }
+
+        TextInputDialog dlg = new TextInputDialog();
+        dlg.setTitle("Paste Asset into Map");
+        dlg.setHeaderText(null);
+        dlg.setContentText("Enter logical path of asset (e.g. textures/tree.png):");
+        var res = dlg.showAndWait();
+        if (res.isEmpty()) return;
+
+        String logical = res.get().trim();
+        try {
+            String abs = manager.toAbsolute(logical);
+            var img = new Image(Path.of(abs).toUri().toString());
+            if (img.isError() || img.getWidth() <= 0 || img.getHeight() <= 0) {
+                alert("Could not load image for asset: " + logical);
+                return;
+            }
+
+            int tW = tileW.getValue(), tH = tileH.getValue();
+            int wTiles = Math.max(1, (int)Math.ceil(img.getWidth()  / tW));
+            int hTiles = Math.max(1, (int)Math.ceil(img.getHeight() / tH));
+
+            // Offer autoresize if it doesn't fit
+            boolean needsResize = (wTiles > currentMap.widthTiles) || (hTiles > currentMap.heightTiles);
+            if (needsResize) {
+                if (!confirm("Auto-resize Map",
+                    "Asset footprint is larger than the current map (" + wTiles + "×" + hTiles +
+                        " tiles). Resize the map to fit?")) return;
+                currentMap.widthTiles  = Math.max(currentMap.widthTiles,  wTiles);
+                currentMap.heightTiles = Math.max(currentMap.heightTiles, hTiles);
+                mapWSpinner.getValueFactory().setValue(currentMap.widthTiles);
+                mapHSpinner.getValueFactory().setValue(currentMap.heightTiles);
+                mapView.setMapSize(currentMap.widthTiles, currentMap.heightTiles);
+            }
+
+            // Create a transient TemplateDef snapshot for this asset
+            TemplateDef snap = new TemplateDef();
+            snap.id = "(asset:" + logical + ")";
+            snap.logicalPath = logical;
+            snap.imageWidthPx  = (int)Math.round(img.getWidth());
+            snap.imageHeightPx = (int)Math.round(img.getHeight());
+            snap.tileWidthPx   = tW;
+            snap.tileHeightPx  = tH;
+            snap.complex = false;
+
+            MapDef.Placement p = new MapDef.Placement(
+                snap.id, -1, 0, 0,
+                wTiles, hTiles,
+                0, 0, snap.imageWidthPx, snap.imageHeightPx,
+                snap,
+                Math.max(0, Math.min(mapView.currentLayerProperty().get(), currentMap.layers.size()-1))
+            );
+
+            currentMap.placements.add(p);
+            mapView.selectPid(p.pid);
+            mapView.requestLayout();
+
+        } catch (Exception ex) {
+            alert("Error: " + ex.getMessage());
+        }
+    }
+
+    private void alert(String msg) {
+        Alert a = new Alert(Alert.AlertType.INFORMATION, msg, ButtonType.OK);
+        a.setHeaderText(null); a.showAndWait();
     }
 
     /* ==================== LEFT: Template Gallery (drag source) ==================== */
@@ -669,13 +797,23 @@ public class FxEditorApp extends Application {
 
     private void doDeleteTemplate() {
         if (current == null || current.id == null || current.id.isBlank()) return;
+        if (!confirm("Delete Template", "Delete template '" + current.id + "'?")) return;
         repo.delete(current.id);
         refreshTemplates();
         renderTemplateCards(galleryGrid);
         newTemplate();
     }
 
+    private boolean confirm(String title, String msg) {
+        Alert a = new Alert(Alert.AlertType.CONFIRMATION, msg, ButtonType.OK, ButtonType.CANCEL);
+        a.setTitle(title); a.setHeaderText(null);
+        return a.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK;
+    }
+
     private void loadTemplate(Path file) {
+        if (current != null && !templateIdField.getText().isBlank()) {
+            if (!confirm("Load Template", "Discard unsaved changes and load selected template?")) return;
+        }
         current = repo.load(file);
         tilePropsPane.bindTo(current);
         templateIdField.setText(current.id);
@@ -721,12 +859,16 @@ public class FxEditorApp extends Application {
 
     private void doDeleteMap() {
         if (currentMap == null || currentMap.id == null || currentMap.id.isBlank()) return;
+        if (!confirm("Delete Map", "Delete map '" + currentMap.id + "'?")) return;
         mapRepo.delete(currentMap.id);
         refreshMaps();
         newMap();
     }
 
     private void loadMap(Path file) {
+        if (currentMap != null && !mapIdField.getText().isBlank()) {
+            if (!confirm("Load Map", "Discard unsaved changes and load selected map?")) return;
+        }
         currentMap = mapRepo.load(file);
         currentMap.normalizeLayers();
         mapIdField.setText(currentMap.id);

@@ -3,6 +3,7 @@ package com.gw.editor.ui;
 import com.gw.editor.template.TemplateDef;
 import com.gw.editor.template.TemplateDef.Orientation;
 import com.gw.editor.template.TemplateDef.ShapeType;
+import javafx.beans.property.BooleanProperty;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
@@ -22,6 +23,7 @@ public class TilePropertiesPane extends VBox {
     private final Label hdr = new Label("Tile Properties");
 
     private final TextField tagField = new TextField();
+    private BooleanProperty complexProp;
     private final CheckBox gateBox = new CheckBox("Gate (green)");
     private final CheckBox solidBox = new CheckBox("Solid (has collision)");
     private final ComboBox<ShapeType> shapeBox = new ComboBox<>();
@@ -103,6 +105,16 @@ public class TilePropertiesPane extends VBox {
     }
 
     public void setSelectionSupplier(SelectionSupplier sup) { this.selectionSupplier = sup; }
+
+    public void bindComplexProperty(BooleanProperty complex) {
+        this.complexProp = complex;
+        markRegionBox.disableProperty().unbind();
+        if (complex != null) {
+            markRegionBox.disableProperty().bind(complex.not());
+        } else {
+            markRegionBox.setDisable(true);
+        }
+    }
 
     public void bindTo(TemplateDef t) {
         this.boundTemplate = t;

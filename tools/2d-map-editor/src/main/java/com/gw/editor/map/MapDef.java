@@ -20,6 +20,24 @@ public class MapDef {
     public String notes;
 
     /**
+     * Optional background asset (drawn below layer 0).
+     */
+    @SerializedName("background")
+    public Background background;
+
+    public static class Background {
+        /**
+         * logical path of the asset used as background
+         */
+        public String logicalPath;
+        /**
+         * image size in pixels (cached for layout convenience)
+         */
+        public int imageWidthPx;
+        public int imageHeightPx;
+    }
+
+    /**
      * Ordered list of layers (0..N-1). Index in this list is draw order.
      */
     @SerializedName("layers")
@@ -27,6 +45,12 @@ public class MapDef {
 
     @SerializedName("placements")
     public List<Placement> placements = new ArrayList<>();
+
+    /**
+     * Gate metadata: human-readable names (per placement’s gate island).
+     */
+    @SerializedName("gateMetas")
+    public List<GateMeta> gateMetas = new ArrayList<>();
 
     /**
      * Global graph: connections between gate nodes living on any placement.
@@ -38,22 +62,13 @@ public class MapDef {
      * Placed template (whole texture or a region); holds a SNAPSHOT of TemplateDef data.
      */
     public static class Placement {
-        /**
-         * Stable instance id (UUID) for cross-references (gate graph).
-         */
         public String pid = UUID.randomUUID().toString();
 
-        /**
-         * Authoring source identity (for provenance/debug only).
-         */
         public String templateId;
-        /**
-         * -1: whole image; >=0: region index from the source template (if any).
-         */
         public int regionIndex = -1;
 
         /**
-         * Assigned drawing layer (0..layers.size()-1).
+         * Rendering layer.
          */
         public int layer = 0;
 
@@ -63,7 +78,7 @@ public class MapDef {
         public int gx, gy;
 
         /**
-         * Footprint in tiles (matches dataSnap’s extents).
+         * Footprint in tiles.
          */
         public int wTiles, hTiles;
 
@@ -133,18 +148,38 @@ public class MapDef {
     }
 
     /**
+     * Human label + UUID for a particular GateRef.
+     */
+    public static class GateMeta {
+        public String id = UUID.randomUUID().toString(); // stable id
+        public String name = "";                         // editable display name
+        public GateRef ref = new GateRef();             // identifies the island in a placement
+
+        public GateMeta() {
+        }
+
+        public GateMeta(GateRef ref, String name) {
+            this.ref = ref;
+            this.name = (name == null ? "" : name);
+        }
+    }
+
+    /**
      * Undirected connection between two gate refs.
      */
     public static class GateLink {
+        public String id = UUID.randomUUID().toString(); // stable id
+        public String name = "";                         // editable display name (optional)
         public GateRef a;
         public GateRef b;
 
         public GateLink() {
         }
 
-        public GateLink(GateRef a, GateRef b) {
+        public GateLink(GateRef a, GateRef b, String name) {
             this.a = a;
             this.b = b;
+            this.name = (name == null ? "" : name);
         }
 
         public boolean involves(GateRef r) {
@@ -154,9 +189,6 @@ public class MapDef {
 
     /* ─────────────── Helpers for layer management ─────────────── */
 
-    /**
-     * Ensure at least one layer exists and all placement layers are in range.
-     */
     public void normalizeLayers() {
         if (layers == null || layers.isEmpty()) layers = new ArrayList<>(List.of(0));
         int max = layers.size() - 1;
@@ -166,45 +198,46 @@ public class MapDef {
         }
     }
 
-    /**
-     * Append a new layer at the bottom; returns its index.
-     */
     public int addLayer() {
         int idx = layers.size();
         layers.add(idx);
         return idx;
     }
 
-    /**
-     * Remove the layer at given index – deletes all placements on that layer,
-     * removes gate links referencing those placements, and shifts higher layers down.
-     */
     public void removeLayer(int removeIdx) {
-        if (layers.size() <= 1) return;  // keep at least one layer
+        if (layers.size() <= 1) return;
         if (removeIdx < 0 || removeIdx >= layers.size()) return;
 
-        // Collect PIDs to be removed
         Set<String> removedPids = placements.stream()
             .filter(p -> p.layer == removeIdx)
             .map(p -> p.pid)
             .collect(Collectors.toSet());
 
-        // Remove placements on that layer
         placements.removeIf(p -> p.layer == removeIdx);
-
-        // Shift layers of remaining placements above removed layer
         for (Placement p : placements) if (p.layer > removeIdx) p.layer--;
 
-        // Purge gate links involving removed placements
         gateLinks.removeIf(gl ->
             (gl.a != null && removedPids.contains(gl.a.pid)) ||
                 (gl.b != null && removedPids.contains(gl.b.pid))
         );
+        gateMetas.removeIf(gm -> removedPids.contains(gm.ref.pid));
 
-        // Remove layer entry and reindex remaining layer ids to 0..N-1
         layers.remove(removeIdx);
         for (int i = 0; i < layers.size(); i++) layers.set(i, i);
 
         normalizeLayers();
+    }
+
+    /* ─────────────── Gate meta helpers ─────────────── */
+    public Optional<GateMeta> findGateMeta(GateRef ref) {
+        return gateMetas.stream().filter(m -> m.ref.equals(ref)).findFirst();
+    }
+
+    public GateMeta ensureGateMeta(GateRef ref) {
+        return findGateMeta(ref).orElseGet(() -> {
+            GateMeta m = new GateMeta(ref, "");
+            gateMetas.add(m);
+            return m;
+        });
     }
 }

@@ -17,9 +17,14 @@ public class TemplateDef {
     public int tileHeightPx = 16;
 
     /**
-     * NEW: marks this template as a complex texture with texture regions.
+     * Marks this template as a complex texture with texture regions.
      */
     public boolean complex = false;
+
+    /**
+     * When complex = true: regions order acts as animation keyframes if animated = true.
+     */
+    public boolean animated = false;
 
     @SerializedName("tiles")
     public Map<String, TileDef> tiles = new HashMap<>(); // key = "gx,gy"
@@ -47,7 +52,7 @@ public class TemplateDef {
         public int gx, gy;
         public String tag;
         public float customFloat;
-        public boolean gate;          // NEW: gate tile (green)
+        public boolean gate;
         public boolean solid;
         public ShapeType shape;
         public Orientation orientation;
@@ -63,8 +68,8 @@ public class TemplateDef {
 
     public static class RegionDef {
         public String id;
-        public int x0, y0;   // inclusive tile coords
-        public int x1, y1;   // inclusive tile coords
+        public int x0, y0; // inclusive tile coords
+        public int x1, y1; // inclusive tile coords
 
         public RegionDef() {
         }
@@ -79,8 +84,7 @@ public class TemplateDef {
 
         @Override
         public String toString() {
-            return (id == null || id.isBlank() ? "(unnamed)" : id) +
-                "  [" + x0 + "," + y0 + " → " + x1 + "," + y1 + "]";
+            return (id == null || id.isBlank() ? "(unnamed)" : id) + "  [" + x0 + "," + y0 + " → " + x1 + "," + y1 + "]";
         }
     }
 

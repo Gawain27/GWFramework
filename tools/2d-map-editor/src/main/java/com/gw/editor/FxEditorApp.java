@@ -11,8 +11,11 @@ import com.gw.editor.ui.TilePropertiesPane;
 import com.gwngames.core.api.asset.IAssetManager;
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.util.Cdi;
+import javafx.animation.AnimationTimer;
 import javafx.application.Application;
 import javafx.beans.binding.Bindings;
+import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.SimpleDoubleProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
@@ -33,6 +36,7 @@ import javafx.stage.Stage;
 
 import java.awt.Point;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -49,12 +53,14 @@ public class FxEditorApp extends Application {
     private Spinner<Integer> tileH;
     private TextField templateIdField;
     private CheckBox complexBox;
+    private CheckBox animatedBox;  // NEW
 
     private FilteredList<AssetScanner.AssetEntry> filteredAssets;
     private ListView<Path> templatesList;
     private ListView<Path> mapsList;        // map files
 
     private TilePane galleryGrid;           // template gallery (drag sources)
+    private Spinner<Double> galleryScale;   // NEW: scale multiplier for drag
 
     private TemplateDef current;            // currently edited template
     private TilePropertiesPane tilePropsPane;
@@ -71,6 +77,11 @@ public class FxEditorApp extends Application {
     private StackPane rightStack;
     private CheckBox showCollisionsChk;
     private CheckBox showGatesChk;
+
+    // animated gallery support
+    private final List<AnimatedCard> animatedCards = new ArrayList<>();
+    private AnimationTimer galleryTimer;
+
     // layers UI
     private ListView<Integer> layerList;
     private Button btnAddLayer;
@@ -86,7 +97,6 @@ public class FxEditorApp extends Application {
         repo = new TemplateRepository();
         mapRepo = new MapRepository();
 
-        // LEFT
         TabPane sidebar = new TabPane();
         sidebar.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         sidebar.getTabs().add(new Tab("Template Gallery", buildTemplateGallery()));
@@ -94,7 +104,6 @@ public class FxEditorApp extends Application {
         sidebar.getTabs().add(new Tab("Templates", buildTemplatesPane()));
         sidebar.getTabs().add(new Tab("Maps", buildMapsPane()));
 
-        // CENTER
         centerTabs = new TabPane();
         centerTabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         centerTabs.getTabs().add(new Tab("Template Editor", buildTemplateEditorCenter()));
@@ -103,20 +112,18 @@ public class FxEditorApp extends Application {
             showRightPane(newIdx.intValue());
         });
 
-        // RIGHT
         tilePropsPane = new TilePropertiesPane();
         tilePropsPane.setMinWidth(300);
-        tilePropsPane.setEditsChangedCallback(() -> {
-            if (viewer != null) viewer.refresh();
-        });
+        tilePropsPane.setEditsChangedCallback(() -> { if (viewer != null) viewer.refresh(); });
         tilePropsPane.setSelectionSupplier(() -> viewer == null ? Set.of() : viewer.getSelection());
+        // let TilePropertiesPane disable regions UI when complex is off
+        tilePropsPane.bindComplexProperty(complexBox.selectedProperty());
 
         instancePropsPane = new TemplateInstancePropertiesPane(repo);
         instancePropsPane.setMinWidth(300);
-        tilePropsPane.bindComplexProperty(complexBox.selectedProperty());
 
         rightStack = new StackPane(tilePropsPane, instancePropsPane);
-        showRightPane(0); // Template Editor initially
+        showRightPane(0);
 
         SplitPane sidebarAndCenters = new SplitPane(sidebar, centerTabs);
         sidebarAndCenters.setDividerPositions(0.25);
@@ -129,6 +136,7 @@ public class FxEditorApp extends Application {
         stage.setScene(scene);
         stage.show();
 
+        startGalleryTimer();
         refreshAll();
 
         filteredAssets.setPredicate(e -> {
@@ -143,26 +151,13 @@ public class FxEditorApp extends Application {
         viewer = new GridOverlayPane();
         viewer.setCollisionProvider((gx, gy) -> tilePropsPane == null ? null : tilePropsPane.getEffectiveTile(gx, gy));
         viewer.setRegionsProvider(() -> tilePropsPane == null ? List.of() : tilePropsPane.getEffectiveRegions());
-        viewer.setSelectionListener(sel -> {
-            if (current == null) return;
-            tilePropsPane.showSelection(sel);
-            viewer.refresh();
-        });
+        viewer.setSelectionListener(sel -> { if (current == null) return; tilePropsPane.showSelection(sel); viewer.refresh(); });
         viewer.setOnKeyPressed(e -> {
             boolean ctrl = e.isControlDown() || e.isMetaDown();
             if (!ctrl) return;
             switch (e.getCode()) {
-                case C -> {
-                    Point p = viewer.getPrimarySelection();
-                    if (p != null) tilePropsPane.copyFrom(p);
-                    e.consume();
-                }
-                case V -> {
-                    var sel = viewer.getSelection();
-                    if (!sel.isEmpty()) tilePropsPane.pasteTo(sel);
-                    viewer.refresh();
-                    e.consume();
-                }
+                case C -> { Point p = viewer.getPrimarySelection(); if (p != null) tilePropsPane.copyFrom(p); e.consume(); }
+                case V -> { var sel = viewer.getSelection(); if (!sel.isEmpty()) tilePropsPane.pasteTo(sel); viewer.refresh(); e.consume(); }
             }
         });
 
@@ -185,26 +180,19 @@ public class FxEditorApp extends Application {
         VBox hBox = new VBox(4, tileH, new Label("Tile H (px)"));
 
         complexBox = new CheckBox("Complex (has texture regions)");
-        VBox complexWrap = new VBox(4, complexBox, new Label("Template Type"));
+        animatedBox = new CheckBox("Animated");
+        animatedBox.disableProperty().bind(complexBox.selectedProperty().not());
+        VBox complexWrap = new VBox(4, complexBox, animatedBox, new Label("Template Type"));
 
-        Button refreshBtn = new Button("Refresh");
-        refreshBtn.setOnAction(e -> refreshAll());
-
-        Button newBtn = new Button("New");
-        newBtn.setOnAction(e -> newTemplate());
-
-        Button saveBtn = new Button("Save");
+        Button refreshBtn = new Button("Refresh"); refreshBtn.setOnAction(e -> refreshAll());
+        Button newBtn     = new Button("New");     newBtn.setOnAction(e -> newTemplate());
+        Button saveBtn    = new Button("Save");
         saveBtn.disableProperty().bind(Bindings.createBooleanBinding(
-            () -> current == null || templateIdField.getText().isBlank(),
-            templateIdField.textProperty()
-        ));
+            () -> current == null || templateIdField.getText().isBlank(), templateIdField.textProperty()));
         saveBtn.setOnAction(e -> doSaveTemplate());
-
-        Button deleteBtn = new Button("Delete");
+        Button deleteBtn  = new Button("Delete");
         deleteBtn.disableProperty().bind(Bindings.createBooleanBinding(
-            () -> current == null || current.id == null || current.id.isBlank(),
-            templateIdField.textProperty()
-        ));
+            () -> current == null || current.id == null || current.id.isBlank(), templateIdField.textProperty()));
         deleteBtn.setOnAction(e -> doDeleteTemplate());
 
         ToolBar toolbar = new ToolBar(refreshBtn, new Separator(), newBtn, saveBtn, deleteBtn);
@@ -230,8 +218,6 @@ public class FxEditorApp extends Application {
         mapView = new MapCanvasPane(repo, manager);
         mapView.tileWidthProperty().bind(tileW.valueProperty());
         mapView.tileHeightProperty().bind(tileH.valueProperty());
-
-        // selection -> right pane
         mapView.setOnSelectionChanged(selPlacement -> instancePropsPane.refresh(selPlacement));
 
         BorderPane pane = new BorderPane();
@@ -243,8 +229,7 @@ public class FxEditorApp extends Application {
     }
 
     private VBox buildMapTopControls() {
-        mapIdField = new TextField();
-        mapIdField.setPromptText("level_1");
+        mapIdField = new TextField(); mapIdField.setPromptText("level_1");
         VBox idBox = new VBox(4, mapIdField, new Label("Map Id"));
 
         mapWSpinner = new Spinner<>(1, 10_000, 64, 1);
@@ -252,32 +237,21 @@ public class FxEditorApp extends Application {
         VBox mwBox = new VBox(4, mapWSpinner, new Label("Map Width (tiles)"));
         VBox mhBox = new VBox(4, mapHSpinner, new Label("Map Height (tiles)"));
 
-        Button newBtn = new Button("New Map");
-        newBtn.setOnAction(e -> newMap());
-
+        Button newBtn = new Button("New Map"); newBtn.setOnAction(e -> newMap());
         Button saveBtn = new Button("Save Map");
         saveBtn.disableProperty().bind(Bindings.createBooleanBinding(
-            () -> currentMap == null || mapIdField.getText().isBlank(),
-            mapIdField.textProperty()
-        ));
+            () -> currentMap == null || mapIdField.getText().isBlank(), mapIdField.textProperty()));
         saveBtn.setOnAction(e -> doSaveMap());
-
         Button delBtn = new Button("Delete Map");
         delBtn.disableProperty().bind(Bindings.createBooleanBinding(
-            () -> currentMap == null || currentMap.id == null || currentMap.id.isBlank(),
-            mapIdField.textProperty()
-        ));
+            () -> currentMap == null || currentMap.id == null || currentMap.id.isBlank(), mapIdField.textProperty()));
         delBtn.setOnAction(e -> doDeleteMap());
 
         Button applySize = new Button("Resize Map");
         applySize.setOnAction(e -> {
             if (currentMap == null) return;
-            int w = mapWSpinner.getValue();
-            int h = mapHSpinner.getValue();
-            if (mapView.setMapSize(w, h)) {
-                currentMap.widthTiles = w;
-                currentMap.heightTiles = h;
-            }
+            int w = mapWSpinner.getValue(), h = mapHSpinner.getValue();
+            if (mapView.setMapSize(w, h)) { currentMap.widthTiles = w; currentMap.heightTiles = h; }
         });
 
         Button expand = new Button("Expand +10");
@@ -310,13 +284,17 @@ public class FxEditorApp extends Application {
         zoomOut.setOnAction(e -> mapView.zoomOut());
         zoomRst.setOnAction(e -> mapView.zoomReset());
 
-        // overlays
         var showCollisionsChk = new CheckBox("Show Collisions"); showCollisionsChk.setSelected(true);
         var showGatesChk      = new CheckBox("Show Gates");      showGatesChk.setSelected(true);
         showCollisionsChk.selectedProperty().addListener((o,ov,nv)-> { mapView.showCollisionsProperty().set(nv); mapView.requestLayout(); });
         showGatesChk.selectedProperty().addListener((o,ov,nv)-> { mapView.showGatesProperty().set(nv); mapView.requestLayout(); });
 
-        // LAYERS UI
+        Button newFromAsset = new Button("New Map from Asset…");
+        Button pasteAsset   = new Button("Paste Asset…");
+        newFromAsset.setOnAction(e -> newMapFromAsset());
+        pasteAsset.setOnAction(e -> pasteAssetIntoMap());
+
+        // layers (same as your previous code)
         layerList = new ListView<>();
         layerList.setPrefHeight(120);
         layerList.setCellFactory(lv -> new ListCell<>() {
@@ -354,12 +332,6 @@ public class FxEditorApp extends Application {
             mapView.requestLayout();
             instancePropsPane.refresh(mapView.getSelected());
         });
-
-        Button newFromAsset = new Button("New Map from Asset…");
-        Button pasteAsset   = new Button("Paste Asset…");
-
-        newFromAsset.setOnAction(e -> newMapFromAsset());
-        pasteAsset.setOnAction(e -> pasteAssetIntoMap());
 
         var layerBox = new VBox(6, new Label("Layers"), layerList, new HBox(6, btnAddLayer, btnRemoveLayer));
         layerBox.setPadding(new Insets(4));
@@ -488,7 +460,8 @@ public class FxEditorApp extends Application {
                 wTiles, hTiles,
                 0, 0, snap.imageWidthPx, snap.imageHeightPx,
                 snap,
-                Math.max(0, Math.min(mapView.currentLayerProperty().get(), currentMap.layers.size()-1))
+                Math.max(0, Math.min(mapView.currentLayerProperty().get(), currentMap.layers.size()-1)),
+                galleryScale.getValue()
             );
 
             currentMap.placements.add(p);
@@ -511,6 +484,11 @@ public class FxEditorApp extends Application {
         VBox box = new VBox(8);
         box.setPadding(new Insets(8));
 
+        // top bar: Scale spinner (multiplier in tiles)
+        galleryScale = new Spinner<>(0.25, 8.0, 1.0, 0.25);
+        galleryScale.setEditable(true);
+        ToolBar top = new ToolBar(new Label("Scale:"), galleryScale);
+
         galleryGrid = new TilePane(10, 10);
         galleryGrid.setPrefColumns(3);
         galleryGrid.setPadding(new Insets(4));
@@ -520,12 +498,10 @@ public class FxEditorApp extends Application {
         ScrollPane scroller = new ScrollPane(galleryGrid);
         scroller.setFitToWidth(true);
 
-        box.sceneProperty().addListener((o, oldS, newS) -> {
-            if (newS != null) renderTemplateCards(galleryGrid);
-        });
+        box.sceneProperty().addListener((o, oldS, newS) -> { if (newS != null) renderTemplateCards(galleryGrid); });
         box.parentProperty().addListener((o, oldP, newP) -> renderTemplateCards(galleryGrid));
 
-        box.getChildren().addAll(scroller);
+        box.getChildren().addAll(top, scroller);
         VBox.setVgrow(scroller, Priority.ALWAYS);
         return box;
     }
@@ -533,6 +509,7 @@ public class FxEditorApp extends Application {
     private void renderTemplateCards(TilePane grid) {
         if (grid == null) return;
         grid.getChildren().setAll();
+        animatedCards.clear(); // rebuild animated list
 
         for (Path p : repo.listJsonFiles()) {
             TemplateDef t = repo.load(p);
@@ -540,19 +517,32 @@ public class FxEditorApp extends Application {
             try {
                 String abs = manager.toAbsolute(t.logicalPath);
                 tex = new Image(Path.of(abs).toUri().toString());
-            } catch (Exception ignored) {
-            }
+            } catch (Exception ignored) {}
 
-            if (t.complex && t.regions != null && !t.regions.isEmpty()) {
+            if (t.complex && t.animated && t.regions != null && !t.regions.isEmpty()) {
+                // ONE card representing the animation. Frame size = first region.
+                var frames = t.pixelRegions();
+                int[] first = frames.get(0);
+                Image frameImg = makeRegionThumb(tex, first, 240, 180, /*blue*/true);
+                var card = cardForTemplate(t, p, frameImg, t.id == null || t.id.isBlank() ? p.getFileName().toString() : t.id, "Animated");
+                enableDrag(card.imageView, t, /*regionIndex*/-2, first); // -2 marks animated
+                grid.getChildren().add(card.root);
+
+                // attach animated updater
+                AnimatedCard ac = new AnimatedCard(card.imageView, tex, frames, 240, 180);
+                animatedCards.add(ac);
+
+            } else if (t.complex && t.regions != null && !t.regions.isEmpty()) {
+                // non-animated complex → one card per region
                 var prs = t.pixelRegions();
                 for (int i = 0; i < prs.size(); i++) {
                     int[] r = prs.get(i);
                     String rid = (t.regions.get(i).id == null || t.regions.get(i).id.isBlank())
                         ? ("region_" + (i + 1)) : t.regions.get(i).id;
 
-                    Image thumb = makeRegionThumb(tex, r, 240, 180);
+                    Image thumb = makeRegionThumb(tex, r, 240, 180, /*blue*/false);
                     var card = cardForTemplate(t, p, thumb, t.id + " • " + rid, "Region");
-                    enableDrag(card.imageView, t, i, r);  // drag source for region
+                    enableDrag(card.imageView, t, i, r);
                     grid.getChildren().add(card.root);
                 }
             } else {
@@ -584,7 +574,10 @@ public class FxEditorApp extends Application {
         name.setMaxWidth(240);
 
         Label subt = new Label(type);
-        subt.setTextFill("Region".equals(type) ? Color.DARKRED : Color.DARKGREEN);
+        subt.setTextFill(
+            "Animated".equals(type) ? Color.DARKBLUE :
+                "Region".equals(type)   ? Color.DARKRED  : Color.DARKGREEN
+        );
 
         card.getChildren().addAll(iv, name, subt);
         return new Card(card, iv);
@@ -598,14 +591,17 @@ public class FxEditorApp extends Application {
             var db = view.startDragAndDrop(TransferMode.COPY);
             db.setDragView(view.getImage(), view.getImage().getWidth() / 2, view.getImage().getHeight() / 2);
 
+            double scaleMul = galleryScale.getValue() == null ? 1.0 : galleryScale.getValue();
+
             ClipboardContent cc = new ClipboardContent();
             String payload = String.join("|",
                 safe(t.id),
-                String.valueOf(regionIndex),
+                String.valueOf(regionIndex), // -2 = animated whole (use regions)
                 String.valueOf(Math.max(1, t.tileWidthPx)),
                 String.valueOf(Math.max(1, t.tileHeightPx)),
                 String.valueOf(rPx[0]), String.valueOf(rPx[1]),
-                String.valueOf(rPx[2]), String.valueOf(rPx[3])
+                String.valueOf(rPx[2]), String.valueOf(rPx[3]),
+                String.valueOf(scaleMul)
             );
             cc.put(MapCanvasPane.DND_FORMAT, payload);
             db.setContent(cc);
@@ -761,6 +757,7 @@ public class FxEditorApp extends Application {
         current.id = "";
         templateIdField.setText("");
         complexBox.setSelected(false);
+        animatedBox.setSelected(false);
         tilePropsPane.bindTo(current);
         viewer.getImageView().setImage(null);
         viewer.clearSelection();
@@ -768,18 +765,13 @@ public class FxEditorApp extends Application {
     }
 
     private void onAssetSelected(AssetScanner.AssetEntry e) {
-        if (current == null) {
-            current = new TemplateDef();
-            tilePropsPane.bindTo(current);
-        }
+        if (current == null) { current = new TemplateDef(); tilePropsPane.bindTo(current); }
         current.logicalPath = e.logicalPath();
         templateIdField.setText(suggestIdFromPath(e.logicalPath()));
-
         viewer.getImageView().setImage(e.thumbnail());
         current.imageWidthPx = (int) Math.round(e.thumbnail().getWidth());
         current.imageHeightPx = (int) Math.round(e.thumbnail().getHeight());
-        viewer.clearSelection();
-        viewer.refresh();
+        viewer.clearSelection(); viewer.refresh();
     }
 
     private void doSaveTemplate() {
@@ -788,6 +780,7 @@ public class FxEditorApp extends Application {
         current.tileWidthPx = tileW.getValue();
         current.tileHeightPx = tileH.getValue();
         current.complex = complexBox.isSelected();
+        current.animated = animatedBox.isSelected();
         if (current.id.isBlank()) return;
         tilePropsPane.applyEditsTo(current);
         repo.save(current);
@@ -820,6 +813,7 @@ public class FxEditorApp extends Application {
         tileW.getValueFactory().setValue(current.tileWidthPx);
         tileH.getValueFactory().setValue(current.tileHeightPx);
         complexBox.setSelected(current.complex);
+        animatedBox.setSelected(current.animated);
 
         String abs = manager.toAbsolute(current.logicalPath);
         String url = Path.of(abs).toUri().toString();
@@ -923,21 +917,19 @@ public class FxEditorApp extends Application {
         double w = maxW, h = maxH;
         if (texture != null) {
             double ratio = texture.getWidth() / texture.getHeight();
-            if (w / h > ratio) w = h * ratio;
-            else h = w / ratio;
+            if (w / h > ratio) w = h * ratio; else h = w / ratio;
         }
         Canvas c = new Canvas(w, h);
         GraphicsContext g = c.getGraphicsContext2D();
-        g.setFill(Color.color(0, 0, 0, 0.05));
-        g.fillRect(0, 0, w, h);
+        g.setFill(Color.color(0, 0, 0, 0.05)); g.fillRect(0, 0, w, h);
         if (texture != null) {
             double imgW = texture.getWidth(), imgH = texture.getHeight();
             double scale = Math.min(w / imgW, h / imgH);
             double dw = imgW * scale, dh = imgH * scale;
             double dx = (w - dw) / 2, dy = (h - dh) / 2;
             g.drawImage(texture, 0, 0, imgW, imgH, dx, dy, dw, dh);
-            if (t != null && t.regions != null && !t.regions.isEmpty()) {
-                g.setStroke(Color.RED);
+            if (t != null && t.regions != null && !t.regions.isEmpty() && t.complex) {
+                g.setStroke(t.animated ? Color.BLUE : Color.RED);
                 g.setLineWidth(2);
                 for (int[] pr : t.pixelRegions()) {
                     double rx = dx + pr[0] * scale, ry = dy + pr[1] * scale;
@@ -946,29 +938,26 @@ public class FxEditorApp extends Application {
                 }
             }
         }
-        SnapshotParameters sp = new SnapshotParameters();
-        sp.setFill(Color.TRANSPARENT);
+        SnapshotParameters sp = new SnapshotParameters(); sp.setFill(Color.TRANSPARENT);
         return c.snapshot(sp, null);
     }
 
-    private static Image makeRegionThumb(Image texture, int[] r, double maxW, double maxH) {
+    private static Image makeRegionThumb(Image texture, int[] r, double maxW, double maxH, boolean blueBorder) {
         double w = maxW, h = maxH;
         Canvas c = new Canvas(w, h);
         GraphicsContext g = c.getGraphicsContext2D();
-        g.setFill(Color.color(0, 0, 0, 0.05));
-        g.fillRect(0, 0, w, h);
+        g.setFill(Color.color(0, 0, 0, 0.05)); g.fillRect(0, 0, w, h);
         if (texture != null) {
             double sx = r[0], sy = r[1], sw = r[2], sh = r[3];
             double scale = Math.min(w / sw, h / sh);
             double dw = sw * scale, dh = sh * scale;
             double dx = (w - dw) / 2, dy = (h - dh) / 2;
             g.drawImage(texture, sx, sy, sw, sh, dx, dy, dw, dh);
-            g.setStroke(Color.RED);
+            g.setStroke(blueBorder ? Color.BLUE : Color.RED);
             g.setLineWidth(2);
             g.strokeRect(dx, dy, dw, dh);
         }
-        SnapshotParameters sp = new SnapshotParameters();
-        sp.setFill(Color.TRANSPARENT);
+        SnapshotParameters sp = new SnapshotParameters(); sp.setFill(Color.TRANSPARENT);
         return c.snapshot(sp, null);
     }
 
@@ -979,6 +968,46 @@ public class FxEditorApp extends Application {
         int dot = base.lastIndexOf('.');
         if (dot > 0) base = base.substring(0, dot);
         return base.toLowerCase().replaceAll("[^a-z0-9_\\-]+", "_");
+    }
+
+    /* ==== gallery animation driver ==== */
+    private void startGalleryTimer() {
+        if (galleryTimer != null) return;
+        galleryTimer = new AnimationTimer() {
+            @Override public void handle(long now) {
+                for (AnimatedCard ac : animatedCards) ac.tick();
+            }
+        };
+        galleryTimer.start();
+    }
+
+    private static class AnimatedCard {
+        private final ImageView iv;
+        private final Image texture;
+        private final List<int[]> frames;
+        private final double maxW, maxH;
+        private int lastDrawnSlot = -1;
+        private final DoubleProperty fpsSlots = new SimpleDoubleProperty(60); // 60-slot timeline
+
+        AnimatedCard(ImageView iv, Image texture, List<int[]> frames, double maxW, double maxH) {
+            this.iv = iv; this.texture = texture; this.frames = frames; this.maxW = maxW; this.maxH = maxH;
+        }
+
+        void tick() {
+            if (texture == null || frames == null || frames.isEmpty()) return;
+            long now = System.nanoTime();
+            int slot = (int)((now / (1_000_000_000L / 60)) % 60);
+            if (slot == lastDrawnSlot) return;
+            lastDrawnSlot = slot;
+
+            int idx = frames.size() >= 60
+                ? (int)Math.floor(slot * (frames.size() / 60.0))
+                : (int)(slot % frames.size());
+
+            int[] r = frames.get(Math.max(0, Math.min(idx, frames.size()-1)));
+            Image thumb = makeRegionThumb(texture, r, maxW, maxH, true);
+            iv.setImage(thumb);
+        }
     }
 
     public static void main(String[] args) {

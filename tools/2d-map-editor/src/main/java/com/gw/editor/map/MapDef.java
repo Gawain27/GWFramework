@@ -62,55 +62,31 @@ public class MapDef {
      * Placed template (whole texture or a region); holds a SNAPSHOT of TemplateDef data.
      */
     public static class Placement {
-        public String pid = UUID.randomUUID().toString();
-
+        public String pid = java.util.UUID.randomUUID().toString();
         public String templateId;
-        public int regionIndex = -1;
-
-        /**
-         * Rendering layer.
-         */
+        public int regionIndex = -1;   // -1: whole image; >=0: region
+        public int gx, gy;             // map grid coords
+        public int wTiles, hTiles;     // base footprint in tiles (before scale)
+        public int srcXpx, srcYpx, srcWpx, srcHpx; // source rect
+        public com.gw.editor.template.TemplateDef dataSnap = new com.gw.editor.template.TemplateDef();
         public int layer = 0;
 
-        /**
-         * Top-left grid position on the map.
-         */
-        public int gx, gy;
+        /** Scale multiplier in tiles (applied on draw/placement footprint). */
+        public double scale = 1.0;
 
-        /**
-         * Footprint in tiles.
-         */
-        public int wTiles, hTiles;
+        public Placement() {}
 
-        /**
-         * Sprite source rect (pixels) inside the original texture; used for drawing.
-         */
-        public int srcXpx, srcYpx, srcWpx, srcHpx;
-
-        /**
-         * Per-instance immutable snapshot of the template data used here (cropped if region).
-         */
-        public TemplateDef dataSnap = new TemplateDef();
-
-        public Placement() {
-        }
-
-        public Placement(String templateId, int regionIndex, int gx, int gy,
-                         int wTiles, int hTiles,
+        public Placement(String templateId, int regionIndex, int gx, int gy, int wTiles, int hTiles,
                          int srcXpx, int srcYpx, int srcWpx, int srcHpx,
-                         TemplateDef dataSnap, int layer) {
+                         com.gw.editor.template.TemplateDef dataSnap, int layer, double scale) {
             this.templateId = templateId;
             this.regionIndex = regionIndex;
-            this.gx = gx;
-            this.gy = gy;
-            this.wTiles = wTiles;
-            this.hTiles = hTiles;
-            this.srcXpx = srcXpx;
-            this.srcYpx = srcYpx;
-            this.srcWpx = srcWpx;
-            this.srcHpx = srcHpx;
+            this.gx = gx; this.gy = gy;
+            this.wTiles = wTiles; this.hTiles = hTiles;
+            this.srcXpx = srcXpx; this.srcYpx = srcYpx; this.srcWpx = srcWpx; this.srcHpx = srcHpx;
             this.dataSnap = dataSnap;
             this.layer = layer;
+            this.scale = scale <= 0 ? 1.0 : scale;
         }
     }
 

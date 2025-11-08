@@ -32,15 +32,8 @@ public class MapCanvasPane extends Region {
     private final IntegerProperty tileH = new SimpleIntegerProperty(16);
     private final DoubleProperty zoom = new SimpleDoubleProperty(1.0);
 
-    /**
-     * Visibility toggles.
-     */
     private final BooleanProperty showCollisions = new SimpleBooleanProperty(true);
     private final BooleanProperty showGates = new SimpleBooleanProperty(true);
-
-    /**
-     * Currently selected layer index for new drops.
-     */
     private final IntegerProperty currentLayer = new SimpleIntegerProperty(0);
 
     private final TemplateRepository templateRepo;
@@ -49,7 +42,6 @@ public class MapCanvasPane extends Region {
     private MapDef map;
     private DropPreview preview = null;
 
-    // selection & move
     private final StringProperty selectedPid = new SimpleStringProperty(null);
     private boolean draggingInstance = false;
     private int dragOffsetGX = 0, dragOffsetGY = 0;
@@ -128,11 +120,10 @@ public class MapCanvasPane extends Region {
     }
 
     public boolean setMapSize(int w, int h) {
-        if (map == null) return false;
-        if (w < 1 || h < 1) return false;
+        if (map == null || w < 1 || h < 1) return false;
         boolean anyOut = map.placements.stream().anyMatch(p ->
-            p.gx < 0 || p.gy < 0 || p.gx + p.wTiles > w || p.gy + p.hTiles > h
-        );
+            p.gx < 0 || p.gy < 0 || p.gx + Math.max(1, (int) Math.ceil(p.wTiles * p.scale)) > w ||
+                p.gy + Math.max(1, (int) Math.ceil(p.hTiles * p.scale)) > h);
         if (anyOut) return false;
         map.widthTiles = w;
         map.heightTiles = h;
@@ -169,7 +160,7 @@ public class MapCanvasPane extends Region {
         if (!db.hasContent(DND_FORMAT)) return;
 
         String[] tok = ((String) db.getContent(DND_FORMAT)).split("\\|");
-        if (tok.length < 8) return;
+        if (tok.length < 9) return;
 
         String templateId = tok[0];
         int regionIndex = Integer.parseInt(tok[1]);
@@ -179,13 +170,16 @@ public class MapCanvasPane extends Region {
         int rpY = Integer.parseInt(tok[5]);
         int rpW = Integer.parseInt(tok[6]);
         int rpH = Integer.parseInt(tok[7]);
+        double scaleMul = Double.parseDouble(tok[8]);
 
         double localX = e.getX() / zoom.get();
         double localY = e.getY() / zoom.get();
         int gx = (int) Math.floor(localX / tileW.get());
         int gy = (int) Math.floor(localY / tileH.get());
-        int wTiles = Math.max(1, (int) Math.round((double) rpW / tW));
-        int hTiles = Math.max(1, (int) Math.round((double) rpH / tH));
+        int baseWTiles = Math.max(1, (int) Math.round((double) rpW / tW));
+        int baseHTiles = Math.max(1, (int) Math.round((double) rpH / tH));
+        int wTiles = Math.max(1, (int) Math.ceil(baseWTiles * Math.max(0.01, scaleMul)));
+        int hTiles = Math.max(1, (int) Math.ceil(baseHTiles * Math.max(0.01, scaleMul)));
 
         if (map != null) {
             gx = Math.max(0, Math.min(gx, Math.max(0, map.widthTiles - wTiles)));
@@ -202,7 +196,7 @@ public class MapCanvasPane extends Region {
         } catch (Exception ignored) {
         }
 
-        preview = new DropPreview(templateId, regionIndex, gx, gy, wTiles, hTiles, tW, tH, rpX, rpY, rpW, rpH, texture);
+        preview = new DropPreview(templateId, regionIndex, gx, gy, wTiles, hTiles, tW, tH, rpX, rpY, rpW, rpH, scaleMul, texture);
         e.acceptTransferModes(TransferMode.COPY);
         e.consume();
         redraw();
@@ -215,29 +209,29 @@ public class MapCanvasPane extends Region {
         }
 
         var src = templateRepo.findById(preview.templateId);
-        TemplateDef snap;
-        if (preview.regionIndex >= 0 && src != null && src.regions != null && preview.rpw > 0 && preview.rph > 0) {
-            int x0 = preview.rpx / Math.max(1, preview.tW);
-            int y0 = preview.rpy / Math.max(1, preview.tH);
-            int wT = Math.max(1, (int) Math.round((double) preview.rpw / preview.tW));
-            int hT = Math.max(1, (int) Math.round((double) preview.rph / preview.tH));
-            snap = TemplateSlice.copyRegion(src, x0, y0, x0 + wT - 1, y0 + hT - 1);
-        } else {
-            snap = TemplateSlice.copyWhole(src);
-        }
+        TemplateDef snap = (preview.regionIndex >= 0 && src != null && src.regions != null && preview.rpw > 0 && preview.rph > 0)
+            ? TemplateSlice.copyRegion(src,
+            preview.rpx / Math.max(1, preview.tW),
+            preview.rpy / Math.max(1, preview.tH),
+            preview.rpx / Math.max(1, preview.tW) + Math.max(1, (int) Math.round((double) preview.rpw / preview.tW)) - 1,
+            preview.rpy / Math.max(1, preview.tH) + Math.max(1, (int) Math.round((double) preview.rph / preview.tH)) - 1)
+            : TemplateSlice.copyWhole(src);
 
-        int wTiles = Math.max(1, snap.imageWidthPx / Math.max(1, snap.tileWidthPx));
-        int hTiles = Math.max(1, snap.imageHeightPx / Math.max(1, snap.tileHeightPx));
+        int baseW = Math.max(1, snap.imageWidthPx / Math.max(1, snap.tileWidthPx));
+        int baseH = Math.max(1, snap.imageHeightPx / Math.max(1, snap.tileHeightPx));
+        double scl = preview.scaleMul <= 0 ? 1.0 : preview.scaleMul;
+
+        int wTiles = Math.max(1, (int) Math.ceil(baseW * scl));
+        int hTiles = Math.max(1, (int) Math.ceil(baseH * scl));
         int gx = Math.max(0, Math.min(preview.gx, map.widthTiles - wTiles));
         int gy = Math.max(0, Math.min(preview.gy, map.heightTiles - hTiles));
-
         int layerIdx = Math.max(0, Math.min(currentLayer.get(), Math.max(0, map.layers.size() - 1)));
 
         MapDef.Placement p = new MapDef.Placement(
             preview.templateId, preview.regionIndex, gx, gy,
-            wTiles, hTiles,
+            baseW, baseH,
             preview.rpx, preview.rpy, preview.rpw, preview.rph,
-            snap, layerIdx
+            snap, layerIdx, scl
         );
 
         map.placements.add(p);
@@ -276,8 +270,11 @@ public class MapCanvasPane extends Region {
         int gx = (int) Math.floor(lx / tileW.get()) - dragOffsetGX;
         int gy = (int) Math.floor(ly / tileH.get()) - dragOffsetGY;
 
-        gx = Math.max(0, Math.min(gx, map.widthTiles - sel.wTiles));
-        gy = Math.max(0, Math.min(gy, map.heightTiles - sel.hTiles));
+        int wTiles = Math.max(1, (int) Math.ceil(sel.wTiles * sel.scale));
+        int hTiles = Math.max(1, (int) Math.ceil(sel.hTiles * sel.scale));
+
+        gx = Math.max(0, Math.min(gx, map.widthTiles - wTiles));
+        gy = Math.max(0, Math.min(gy, map.heightTiles - hTiles));
 
         sel.gx = gx;
         sel.gy = gy;
@@ -292,14 +289,15 @@ public class MapCanvasPane extends Region {
 
     private MapDef.Placement hitTestTopMost(int gx, int gy) {
         if (map == null) return null;
-        // Top-most = highest layer, last in draw order
         List<MapDef.Placement> ordered = map.placements.stream()
             .sorted(Comparator.comparingInt((MapDef.Placement p) -> p.layer)
                 .thenComparingInt(map.placements::indexOf))
             .toList();
         for (int i = ordered.size() - 1; i >= 0; i--) {
             MapDef.Placement p = ordered.get(i);
-            if (gx >= p.gx && gx < p.gx + p.wTiles && gy >= p.gy && gy < p.gy + p.hTiles) return p;
+            int wTiles = Math.max(1, (int) Math.ceil(p.wTiles * p.scale));
+            int hTiles = Math.max(1, (int) Math.ceil(p.hTiles * p.scale));
+            if (gx >= p.gx && gx < p.gx + wTiles && gy >= p.gy && gy < p.gy + hTiles) return p;
         }
         return null;
     }
@@ -328,36 +326,28 @@ public class MapCanvasPane extends Region {
         // grid
         g.setStroke(Color.color(1, 1, 1, 0.08));
         g.setLineWidth(1.0);
-        for (int x = 0; x <= mw; x++) {
-            double px = x * tileW.get();
-            g.strokeLine(px, 0, px, mapPxH);
-        }
-        for (int y = 0; y <= mh; y++) {
-            double py = y * tileH.get();
-            g.strokeLine(0, py, mapPxW, py);
-        }
+        for (int x = 0; x <= mw; x++) g.strokeLine(x * tileW.get(), 0, x * tileW.get(), mapPxH);
+        for (int y = 0; y <= mh; y++) g.strokeLine(0, y * tileH.get(), mapPxW, y * tileH.get());
 
         // border
         g.setStroke(Color.color(1, 1, 1, 0.18));
         g.setLineWidth(2);
         g.strokeRect(0, 0, mapPxW, mapPxH);
 
-        // inside redraw(), after computing mapPxW/mapPxH and before drawing placements:
+        // background
         if (map != null && map.background != null && map.background.logicalPath != null && !map.background.logicalPath.isBlank()) {
             try {
                 String abs = manager.toAbsolute(map.background.logicalPath);
-                var img = new javafx.scene.image.Image(java.nio.file.Path.of(abs).toUri().toString());
+                var img = new Image(Path.of(abs).toUri().toString());
                 double scaleX = (map.widthTiles * tileW.get()) / Math.max(1.0, img.getWidth());
                 double scaleY = (map.heightTiles * tileH.get()) / Math.max(1.0, img.getHeight());
-                double scale = Math.min(scaleX, scaleY); // fit inside the map
-                double w = img.getWidth() * scale;
-                double h = img.getHeight() * scale;
-                g.drawImage(img, 0, 0, img.getWidth(), img.getHeight(), 0, 0, w, h);
-            } catch (Exception ignored) {}
+                double scale = Math.min(scaleX, scaleY);
+                g.drawImage(img, 0, 0, img.getWidth(), img.getHeight(), 0, 0, img.getWidth() * scale, img.getHeight() * scale);
+            } catch (Exception ignored) {
+            }
         }
 
         if (map != null) {
-            // draw by layer order (ascending)
             List<MapDef.Placement> ordered = map.placements.stream()
                 .sorted(Comparator.comparingInt((MapDef.Placement p) -> p.layer)
                     .thenComparingInt(map.placements::indexOf))
@@ -378,6 +368,23 @@ public class MapCanvasPane extends Region {
             + "   |   layer: " + currentLayer.get(), 6, 6);
     }
 
+    /**
+     * Map a running time to a frame index in [0..frames-1], with a 60-slot timeline.
+     */
+    private int animatedFrameIndex(int frames) {
+        if (frames <= 0) return 0;
+        long now = System.nanoTime();
+        // 60 slots per second
+        long slot = (now / (1_000_000_000L / 60)) % 60;
+        if (frames >= 60) {
+            // speed up: sample frames across slots
+            return (int) Math.floor(slot * (frames / 60.0));
+        } else {
+            // repeat pattern
+            return (int) (slot % frames);
+        }
+    }
+
     private void drawPlacement(MapDef.Placement p) {
         TemplateDef snap = p.dataSnap;
         if (snap == null) return;
@@ -390,12 +397,37 @@ public class MapCanvasPane extends Region {
             return;
         }
 
+        int drawWtiles = Math.max(1, (int) Math.ceil(p.wTiles * p.scale));
+        int drawHtiles = Math.max(1, (int) Math.ceil(p.hTiles * p.scale));
         double dx = p.gx * tileW.get();
         double dy = p.gy * tileH.get();
-        double dw = p.wTiles * tileW.get();
-        double dh = p.hTiles * tileH.get();
-        g.drawImage(tex, p.srcXpx, p.srcYpx, p.srcWpx, p.srcHpx, dx, dy, dw, dh);
+        double dw = drawWtiles * tileW.get();
+        double dh = drawHtiles * tileH.get();
 
+        int sx = p.srcXpx, sy = p.srcYpx, sw = p.srcWpx, sh = p.srcHpx;
+
+        // Animated: choose the frame’s pixel rect from the snapshot regions
+        if (snap.complex && snap.animated && snap.regions != null && !snap.regions.isEmpty()) {
+            List<int[]> frames = snap.pixelRegions();
+            int idx = animatedFrameIndex(frames.size());
+            int[] r = frames.get(Math.max(0, Math.min(idx, frames.size() - 1)));
+            sx = r[0];
+            sy = r[1];
+            sw = r[2];
+            sh = r[3];
+
+            // Recompute base footprint from frame size (so scale applies to frame)
+            int baseW = Math.max(1, (int) Math.round((double) sw / Math.max(1, snap.tileWidthPx)));
+            int baseH = Math.max(1, (int) Math.round((double) sh / Math.max(1, snap.tileHeightPx)));
+            drawWtiles = Math.max(1, (int) Math.ceil(baseW * p.scale));
+            drawHtiles = Math.max(1, (int) Math.ceil(baseH * p.scale));
+            dw = drawWtiles * tileW.get();
+            dh = drawHtiles * tileH.get();
+        }
+
+        g.drawImage(tex, sx, sy, sw, sh, dx, dy, dw, dh);
+
+        // selection/bounds
         if (p.pid.equals(selectedPid.get())) {
             g.setStroke(Color.color(0.95, 0.8, 0.2, 1));
             g.setLineWidth(3);
@@ -406,7 +438,7 @@ public class MapCanvasPane extends Region {
             g.strokeRect(dx, dy, dw, dh);
         }
 
-        // overlays
+        // overlays (from snapshot), scaled to current tileW/H only (not per-scale; collision/gates are per-tile)
         int cols = Math.max(1, snap.imageWidthPx / Math.max(1, snap.tileWidthPx));
         int rows = Math.max(1, snap.imageHeightPx / Math.max(1, snap.tileHeightPx));
         double tw = tileW.get(), th = tileH.get();
@@ -437,8 +469,10 @@ public class MapCanvasPane extends Region {
                     double x = dx + gx * tw, y = dy + gy * th;
                     switch (t.shape) {
                         case RECT_FULL -> g.strokeRect(x, y, tw, th);
-                        case HALF_RECT -> drawHalfRect(x, y, tw, th, t.orientation);
-                        case TRIANGLE -> drawTriangle(x, y, tw, th, t.orientation);
+                        case HALF_RECT ->
+                            CollisionShapes.get(TemplateDef.ShapeType.HALF_RECT).draw(g, x, y, tw, th, t.orientation);
+                        case TRIANGLE ->
+                            CollisionShapes.get(TemplateDef.ShapeType.TRIANGLE).draw(g, x, y, tw, th, t.orientation);
                         default -> {
                         }
                     }
@@ -447,22 +481,11 @@ public class MapCanvasPane extends Region {
         }
     }
 
-    private void drawHalfRect(double x, double y, double tw, double th, TemplateDef.Orientation o) {
-        CollisionShapes.CollisionShapeStrategy rect = CollisionShapes.get(TemplateDef.ShapeType.HALF_RECT);
-        rect.draw(g, x, y, tw, th, o);
-    }
-
-    private void drawTriangle(double x, double y, double tw, double th, TemplateDef.Orientation o) {
-        CollisionShapes.CollisionShapeStrategy trg = CollisionShapes.get(TemplateDef.ShapeType.TRIANGLE);
-        trg.draw(g, x, y, tw, th, o);
-    }
-
     private void drawPreview(DropPreview pv) {
         double dx = pv.gx * tileW.get();
         double dy = pv.gy * tileH.get();
         double dw = pv.wTiles * tileW.get();
         double dh = pv.hTiles * tileH.get();
-
         if (pv.texture != null) {
             g.setGlobalAlpha(0.85);
             g.drawImage(pv.texture, pv.rpx, pv.rpy, pv.rpw, pv.rph, dx, dy, dw, dh);
@@ -477,7 +500,7 @@ public class MapCanvasPane extends Region {
 
     private record DropPreview(
         String templateId, int regionIndex, int gx, int gy, int wTiles, int hTiles,
-        int tW, int tH, int rpx, int rpy, int rpw, int rph, Image texture
+        int tW, int tH, int rpx, int rpy, int rpw, int rph, double scaleMul, Image texture
     ) {
     }
 }

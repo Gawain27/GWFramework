@@ -2,62 +2,98 @@ package com.gw.editor.util;
 
 import com.gw.editor.template.TemplateDef;
 
+import java.util.HashMap;
 import java.util.Map;
 
-/** Utility to create a per-instance snapshot of a TemplateDef (optionally cropped to a region). */
+/**
+ * Helpers to clone templates (whole image or a region).
+ */
 public final class TemplateSlice {
-    private TemplateSlice(){}
-
-    /** Whole template copy (shallow for image info, deep for tiles). */
-    public static TemplateDef copyWhole(TemplateDef src) {
-        TemplateDef dst = new TemplateDef();
-        dst.id = src.id;
-        dst.logicalPath = src.logicalPath;
-        dst.imageWidthPx = src.imageWidthPx;
-        dst.imageHeightPx = src.imageHeightPx;
-        dst.tileWidthPx = src.tileWidthPx;
-        dst.tileHeightPx = src.tileHeightPx;
-        dst.complex = false;        // snapshot is always treated “flat” on map
-        for (Map.Entry<String, TemplateDef.TileDef> e : src.tiles.entrySet()) {
-            TemplateDef.TileDef t = e.getValue();
-            TemplateDef.TileDef c = new TemplateDef.TileDef(t.gx, t.gy);
-            c.tag = t.tag; c.customFloat = t.customFloat; c.gate = t.gate;
-            c.solid = t.solid; c.shape = t.shape; c.orientation = t.orientation;
-            dst.tiles.put(e.getKey(), c);
-        }
-        return dst;
+    private TemplateSlice() {
     }
 
     /**
-     * Crop to a region given in TILE coordinates (inclusive x0,y0,x1,y1).
-     * Returns a new TemplateDef where tiles are re-keyed starting at (0,0).
+     * Deep copy that preserves complex/animated state, regions, and all tiles.
+     */
+    public static TemplateDef copyWhole(TemplateDef src) {
+        if (src == null) return null;
+        TemplateDef d = new TemplateDef();
+        d.id = src.id;
+        d.logicalPath = src.logicalPath;
+        d.imageWidthPx = src.imageWidthPx;
+        d.imageHeightPx = src.imageHeightPx;
+        d.tileWidthPx = src.tileWidthPx;
+        d.tileHeightPx = src.tileHeightPx;
+
+        // IMPORTANT: keep both flags and all regions for animation
+        d.complex = src.complex;
+        // if you already added this field in TemplateDef:
+        // public boolean animated = false;
+        d.animated = src.animated;
+
+        // deep copy tiles
+        d.tiles = new HashMap<>();
+        for (Map.Entry<String, TemplateDef.TileDef> e : src.tiles.entrySet()) {
+            TemplateDef.TileDef t = e.getValue();
+            TemplateDef.TileDef nt = new TemplateDef.TileDef(t.gx, t.gy);
+            nt.tag = t.tag;
+            nt.customFloat = t.customFloat;
+            nt.gate = t.gate;
+            nt.solid = t.solid;
+            nt.shape = t.shape;
+            nt.orientation = t.orientation;
+            d.tiles.put(e.getKey(), nt);
+        }
+
+        // deep copy regions (order is the animation order if animated)
+        d.regions = new java.util.ArrayList<>();
+        for (TemplateDef.RegionDef r : src.regions) {
+            d.regions.add(new TemplateDef.RegionDef(r.id, r.x0, r.y0, r.x1, r.y1));
+        }
+        return d;
+    }
+
+    /**
+     * Copy just a rectangular region in tile coordinates.
+     * NOTE: For animated templates you typically want copyWhole() so all frames are preserved.
      */
     public static TemplateDef copyRegion(TemplateDef src, int x0, int y0, int x1, int y1) {
-        int minx = Math.min(x0, x1), miny = Math.min(y0, y1);
-        int maxx = Math.max(x0, x1), maxy = Math.max(y0, y1);
-        int wTiles = (maxx - minx + 1);
-        int hTiles = (maxy - miny + 1);
+        if (src == null) return null;
+        int lx = Math.min(x0, x1), rx = Math.max(x0, x1);
+        int ty = Math.min(y0, y1), by = Math.max(y0, y1);
 
-        TemplateDef dst = new TemplateDef();
-        dst.id = src.id;
-        dst.logicalPath = src.logicalPath;
-        dst.tileWidthPx = src.tileWidthPx;
-        dst.tileHeightPx = src.tileHeightPx;
-        dst.imageWidthPx  = wTiles * src.tileWidthPx;
-        dst.imageHeightPx = hTiles * src.tileHeightPx;
-        dst.complex = false;
+        TemplateDef d = new TemplateDef();
+        d.id = src.id;
+        d.logicalPath = src.logicalPath;
+        d.tileWidthPx = src.tileWidthPx;
+        d.tileHeightPx = src.tileHeightPx;
 
-        for (int gy = miny; gy <= maxy; gy++) {
-            for (int gx = minx; gx <= maxx; gx++) {
-                TemplateDef.TileDef t = src.tileAt(gx, gy);
-                if (t == null) continue;
-                int lx = gx - minx, ly = gy - miny; // rebase
-                TemplateDef.TileDef c = new TemplateDef.TileDef(lx, ly);
-                c.tag = t.tag; c.customFloat = t.customFloat; c.gate = t.gate;
-                c.solid = t.solid; c.shape = t.shape; c.orientation = t.orientation;
-                dst.tiles.put(lx + "," + ly, c);
+        // pixel size of the cropped texture (used by map draw math)
+        d.imageWidthPx = (rx - lx + 1) * d.tileWidthPx;
+        d.imageHeightPx = (by - ty + 1) * d.tileHeightPx;
+
+        // keep complex flag; region crop is a single “frame”, so animated = false here
+        d.complex = src.complex;
+        d.animated = false;
+
+        // copy tiles that fall inside the crop, remapping gx/gy to start at 0
+        d.tiles = new HashMap<>();
+        for (Map.Entry<String, TemplateDef.TileDef> e : src.tiles.entrySet()) {
+            TemplateDef.TileDef t = e.getValue();
+            if (t.gx >= lx && t.gx <= rx && t.gy >= ty && t.gy <= by) {
+                TemplateDef.TileDef nt = new TemplateDef.TileDef(t.gx - lx, t.gy - ty);
+                nt.tag = t.tag;
+                nt.customFloat = t.customFloat;
+                nt.gate = t.gate;
+                nt.solid = t.solid;
+                nt.shape = t.shape;
+                nt.orientation = t.orientation;
+                d.tiles.put((nt.gx) + "," + (nt.gy), nt);
             }
         }
-        return dst;
+
+        // regions inside the crop can be normalized (optional); simplest is none for a sliced static texture
+        d.regions = java.util.List.of();
+        return d;
     }
 }

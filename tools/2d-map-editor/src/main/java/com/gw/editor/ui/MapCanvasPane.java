@@ -5,10 +5,13 @@ import com.gw.editor.template.TemplateDef;
 import com.gw.editor.template.TemplateRepository;
 import com.gw.editor.util.TemplateSlice;
 import com.gwngames.core.api.asset.IAssetManager;
+import javafx.animation.AnimationTimer;
 import javafx.beans.property.*;
 import javafx.geometry.VPos;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
 import javafx.scene.image.Image;
 import javafx.scene.input.*;
 import javafx.scene.layout.Region;
@@ -47,6 +50,15 @@ public class MapCanvasPane extends Region {
     private int dragOffsetGX = 0, dragOffsetGY = 0;
     private java.util.function.Consumer<MapDef.Placement> onSelectionChanged;
 
+    // NEW: lightweight animation driver for animated placements
+    private final AnimationTimer animTimer = new AnimationTimer() {
+        @Override
+        public void handle(long now) {
+            // Only redraw if we actually have something animated on screen.
+            if (hasAnimatedPlacements()) redraw();
+        }
+    };
+
     public MapCanvasPane(TemplateRepository repo, IAssetManager manager) {
         this.templateRepo = repo;
         this.manager = manager;
@@ -77,7 +89,18 @@ public class MapCanvasPane extends Region {
         setOnMouseDragged(this::onMouseDragged);
         setOnMouseReleased(this::onMouseReleased);
 
+        // NEW: Delete key to remove selected placement (with confirm)
+        setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.DELETE) {
+                deleteSelectedWithConfirm();
+                e.consume();
+            }
+        });
+
         setFocusTraversable(true);
+
+        // Start timer; it only repaints when animations exist.
+        animTimer.start();
     }
 
     /* ---------- API ------------ */
@@ -113,16 +136,11 @@ public class MapCanvasPane extends Region {
         this.onSelectionChanged = cb;
     }
 
-    public void bindMap(MapDef map) {
-        this.map = map;
-        if (map != null) map.normalizeLayers();
-        layoutForMap();
-    }
-
     public boolean setMapSize(int w, int h) {
         if (map == null || w < 1 || h < 1) return false;
         boolean anyOut = map.placements.stream().anyMatch(p ->
-            p.gx < 0 || p.gy < 0 || p.gx + Math.max(1, (int) Math.ceil(p.wTiles * p.scale)) > w ||
+            p.gx < 0 || p.gy < 0 ||
+                p.gx + Math.max(1, (int) Math.ceil(p.wTiles * p.scale)) > w ||
                 p.gy + Math.max(1, (int) Math.ceil(p.hTiles * p.scale)) > h);
         if (anyOut) return false;
         map.widthTiles = w;
@@ -152,6 +170,7 @@ public class MapCanvasPane extends Region {
         selectedPid.set(pid);
         if (onSelectionChanged != null) onSelectionChanged.accept(getSelected());
         redraw();
+        requestFocus(); // so Delete works without extra click
     }
 
     /* ---------- DnD ---------- */
@@ -196,7 +215,8 @@ public class MapCanvasPane extends Region {
         } catch (Exception ignored) {
         }
 
-        preview = new DropPreview(templateId, regionIndex, gx, gy, wTiles, hTiles, tW, tH, rpX, rpY, rpW, rpH, scaleMul, texture);
+        preview = new DropPreview(templateId, regionIndex, gx, gy, wTiles, hTiles,
+            tW, tH, rpX, rpY, rpW, rpH, scaleMul, texture);
         e.acceptTransferModes(TransferMode.COPY);
         e.consume();
         redraw();
@@ -209,27 +229,53 @@ public class MapCanvasPane extends Region {
         }
 
         var src = templateRepo.findById(preview.templateId);
+        // Take a snapshot. For animations we want ALL frames (copyWhole); for static regions we slice.
         TemplateDef snap = (preview.regionIndex >= 0 && src != null && src.regions != null && preview.rpw > 0 && preview.rph > 0)
             ? TemplateSlice.copyRegion(src,
             preview.rpx / Math.max(1, preview.tW),
             preview.rpy / Math.max(1, preview.tH),
-            preview.rpx / Math.max(1, preview.tW) + Math.max(1, (int) Math.round((double) preview.rpw / preview.tW)) - 1,
-            preview.rpy / Math.max(1, preview.tH) + Math.max(1, (int) Math.round((double) preview.rph / preview.tH)) - 1)
+            preview.rpx / Math.max(1, preview.tW) + Math.max(1, (int)Math.round((double)preview.rpw / preview.tW)) - 1,
+            preview.rpy / Math.max(1, preview.tH) + Math.max(1, (int)Math.round((double)preview.rph / preview.tH)) - 1)
             : TemplateSlice.copyWhole(src);
 
-        int baseW = Math.max(1, snap.imageWidthPx / Math.max(1, snap.tileWidthPx));
+        // --- Compute base footprint in tiles ---
+        // Default (static or simple): from snapshot image size
+        int baseW = Math.max(1, snap.imageWidthPx  / Math.max(1, snap.tileWidthPx));
         int baseH = Math.max(1, snap.imageHeightPx / Math.max(1, snap.tileHeightPx));
+
+        if (isAnimated(snap)) {
+            int[] wh = firstFrameTilesWH(snap);
+            baseW = wh[0]; baseH = wh[1];
+        } else {
+            baseW = Math.max(1, snap.imageWidthPx  / Math.max(1, snap.tileWidthPx));
+            baseH = Math.max(1, snap.imageHeightPx / Math.max(1, snap.tileHeightPx));
+        }
+
+        // Animated: use FIRST FRAME ONLY for the base footprint
+        if (snap.complex && snap.animated && snap.regions != null && !snap.regions.isEmpty()) {
+            int[] first = snap.pixelRegions().getFirst(); // [x,y,w,h] in px
+            baseW = Math.max(1, (int)Math.round((double) first[2] / Math.max(1, snap.tileWidthPx)));
+            baseH = Math.max(1, (int)Math.round((double) first[3] / Math.max(1, snap.tileHeightPx)));
+        }
+
+        // Scale multiplier from preview
         double scl = preview.scaleMul <= 0 ? 1.0 : preview.scaleMul;
 
-        int wTiles = Math.max(1, (int) Math.ceil(baseW * scl));
-        int hTiles = Math.max(1, (int) Math.ceil(baseH * scl));
-        int gx = Math.max(0, Math.min(preview.gx, map.widthTiles - wTiles));
+        // Final snapped placement footprint in tiles (kept on Placement)
+        int wTiles = Math.max(1, (int)Math.ceil(baseW * scl));
+        int hTiles = Math.max(1, (int)Math.ceil(baseH * scl));
+
+        // Clamp drop origin so it fits the map
+        int gx = Math.max(0, Math.min(preview.gx, map.widthTiles  - wTiles));
         int gy = Math.max(0, Math.min(preview.gy, map.heightTiles - hTiles));
+
         int layerIdx = Math.max(0, Math.min(currentLayer.get(), Math.max(0, map.layers.size() - 1)));
 
         MapDef.Placement p = new MapDef.Placement(
             preview.templateId, preview.regionIndex, gx, gy,
+            /* base (unscaled) footprint to keep on the placement */
             baseW, baseH,
+            /* src rect stays the first frame (for previewed region or whole anim) */
             preview.rpx, preview.rpy, preview.rpw, preview.rph,
             snap, layerIdx, scl
         );
@@ -289,14 +335,15 @@ public class MapCanvasPane extends Region {
 
     private MapDef.Placement hitTestTopMost(int gx, int gy) {
         if (map == null) return null;
-        List<MapDef.Placement> ordered = map.placements.stream()
+        var ordered = map.placements.stream()
             .sorted(Comparator.comparingInt((MapDef.Placement p) -> p.layer)
                 .thenComparingInt(map.placements::indexOf))
             .toList();
         for (int i = ordered.size() - 1; i >= 0; i--) {
             MapDef.Placement p = ordered.get(i);
-            int wTiles = Math.max(1, (int) Math.ceil(p.wTiles * p.scale));
-            int hTiles = Math.max(1, (int) Math.ceil(p.hTiles * p.scale));
+            int[] wh = baseFootprintTiles(p);
+            int wTiles = Math.max(1, (int)Math.ceil(wh[0] * p.scale));
+            int hTiles = Math.max(1, (int)Math.ceil(wh[1] * p.scale));
             if (gx >= p.gx && gx < p.gx + wTiles && gy >= p.gy && gy < p.gy + hTiles) return p;
         }
         return null;
@@ -369,20 +416,65 @@ public class MapCanvasPane extends Region {
     }
 
     /**
+     * Does the map currently contain any animated placement (or an animated preview)?
+     */
+    private boolean hasAnimatedPlacements() {
+        if (preview != null) return false; // preview isn't animated
+        if (map == null || map.placements.isEmpty()) return false;
+        for (MapDef.Placement p : map.placements) {
+            TemplateDef d = p.dataSnap;
+            if (d != null && d.complex && d.animated && d.regions != null && !d.regions.isEmpty())
+                return true;
+        }
+        return false;
+    }
+
+    // --- First-frame helpers ---
+    private boolean isAnimated(TemplateDef t) {
+        return t != null && t.complex && t.animated && t.regions != null && !t.regions.isEmpty();
+    }
+
+    private int[] firstFrameRectPx(TemplateDef t) {
+        // Returns [x,y,w,h] in pixels (falls back to whole image if no regions)
+        if (isAnimated(t)) return t.pixelRegions().get(0);
+        return new int[]{0, 0, Math.max(1, t.imageWidthPx), Math.max(1, t.imageHeightPx)};
+    }
+
+    private int[] firstFrameTilesWH(TemplateDef t) {
+        int[] r = firstFrameRectPx(t);
+        int wTiles = Math.max(1, (int)Math.round((double) r[2] / Math.max(1, t.tileWidthPx)));
+        int hTiles = Math.max(1, (int)Math.round((double) r[3] / Math.max(1, t.tileHeightPx)));
+        return new int[]{wTiles, hTiles};
+    }
+
+    /** Returns *base* tiles (unscaled) to use for bounds/hit-tests: first frame if animated, else p.wTiles/hTiles. */
+    private int[] baseFootprintTiles(MapDef.Placement p) {
+        TemplateDef snap = p.dataSnap;
+        if (isAnimated(snap)) return firstFrameTilesWH(snap);
+        return new int[]{Math.max(1, p.wTiles), Math.max(1, p.hTiles)};
+    }
+
+    /** For loaded maps created before this rule, normalize animated placements to first-frame footprint. */
+    private void normalizeAnimatedFootprints() {
+        if (map == null) return;
+        for (MapDef.Placement p : map.placements) {
+            if (isAnimated(p.dataSnap)) {
+                int[] wh = firstFrameTilesWH(p.dataSnap);
+                p.wTiles = wh[0];
+                p.hTiles = wh[1];
+            }
+        }
+    }
+
+    /**
      * Map a running time to a frame index in [0..frames-1], with a 60-slot timeline.
      */
     private int animatedFrameIndex(int frames) {
         if (frames <= 0) return 0;
         long now = System.nanoTime();
-        // 60 slots per second
         long slot = (now / (1_000_000_000L / 60)) % 60;
-        if (frames >= 60) {
-            // speed up: sample frames across slots
-            return (int) Math.floor(slot * (frames / 60.0));
-        } else {
-            // repeat pattern
-            return (int) (slot % frames);
-        }
+        if (frames >= 60) return (int) Math.floor(slot * (frames / 60.0));
+        return (int) (slot % frames);
     }
 
     private void drawPlacement(MapDef.Placement p) {
@@ -393,41 +485,31 @@ public class MapCanvasPane extends Region {
         try {
             String abs = manager.toAbsolute(snap.logicalPath);
             tex = new Image(Path.of(abs).toUri().toString());
-        } catch (Exception e) {
-            return;
-        }
+        } catch (Exception ex) { return; }
 
-        int drawWtiles = Math.max(1, (int) Math.ceil(p.wTiles * p.scale));
-        int drawHtiles = Math.max(1, (int) Math.ceil(p.hTiles * p.scale));
+        // Bounds from *first* frame (constant)
+        int[] wh = baseFootprintTiles(p);
+        int drawWtiles = Math.max(1, (int)Math.ceil(wh[0] * p.scale));
+        int drawHtiles = Math.max(1, (int)Math.ceil(wh[1] * p.scale));
+
         double dx = p.gx * tileW.get();
         double dy = p.gy * tileH.get();
         double dw = drawWtiles * tileW.get();
         double dh = drawHtiles * tileH.get();
 
+        // Source rect: animated => current frame; else placement’s src
         int sx = p.srcXpx, sy = p.srcYpx, sw = p.srcWpx, sh = p.srcHpx;
-
-        // Animated: choose the frame’s pixel rect from the snapshot regions
-        if (snap.complex && snap.animated && snap.regions != null && !snap.regions.isEmpty()) {
-            List<int[]> frames = snap.pixelRegions();
+        if (isAnimated(snap)) {
+            var frames = snap.pixelRegions();
             int idx = animatedFrameIndex(frames.size());
             int[] r = frames.get(Math.max(0, Math.min(idx, frames.size() - 1)));
-            sx = r[0];
-            sy = r[1];
-            sw = r[2];
-            sh = r[3];
-
-            // Recompute base footprint from frame size (so scale applies to frame)
-            int baseW = Math.max(1, (int) Math.round((double) sw / Math.max(1, snap.tileWidthPx)));
-            int baseH = Math.max(1, (int) Math.round((double) sh / Math.max(1, snap.tileHeightPx)));
-            drawWtiles = Math.max(1, (int) Math.ceil(baseW * p.scale));
-            drawHtiles = Math.max(1, (int) Math.ceil(baseH * p.scale));
-            dw = drawWtiles * tileW.get();
-            dh = drawHtiles * tileH.get();
+            sx = r[0]; sy = r[1]; sw = r[2]; sh = r[3];
         }
 
+        // Draw current frame INSIDE the fixed first-frame box
         g.drawImage(tex, sx, sy, sw, sh, dx, dy, dw, dh);
 
-        // selection/bounds
+        // Selection/border uses the same fixed box
         if (p.pid.equals(selectedPid.get())) {
             g.setStroke(Color.color(0.95, 0.8, 0.2, 1));
             g.setLineWidth(3);
@@ -438,7 +520,7 @@ public class MapCanvasPane extends Region {
             g.strokeRect(dx, dy, dw, dh);
         }
 
-        // overlays (from snapshot), scaled to current tileW/H only (not per-scale; collision/gates are per-tile)
+        // overlays from snapshot (per tile)
         int cols = Math.max(1, snap.imageWidthPx / Math.max(1, snap.tileWidthPx));
         int rows = Math.max(1, snap.imageHeightPx / Math.max(1, snap.tileHeightPx));
         double tw = tileW.get(), th = tileH.get();
@@ -496,6 +578,36 @@ public class MapCanvasPane extends Region {
         g.setStroke(Color.color(0, 0.8, 1, 0.9));
         g.setLineWidth(2);
         g.strokeRect(dx, dy, dw, dh);
+    }
+
+    private void deleteSelectedWithConfirm() {
+        if (map == null) return;
+        MapDef.Placement sel = getSelected();
+        if (sel == null) return;
+        Alert a = new Alert(Alert.AlertType.CONFIRMATION, "Delete selected placement?", ButtonType.OK, ButtonType.CANCEL);
+        a.setHeaderText(null);
+        if (a.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) return;
+
+        // remove links and metas pointing to this placement
+        String pid = sel.pid;
+        map.gateLinks.removeIf(gl ->
+            (gl.a != null && pid.equals(gl.a.pid)) ||
+                (gl.b != null && pid.equals(gl.b.pid))
+        );
+        map.gateMetas.removeIf(gm -> gm.ref != null && pid.equals(gm.ref.pid));
+
+        map.placements.removeIf(p -> p.pid.equals(pid));
+        selectPid(null);
+        redraw();
+    }
+
+    public void bindMap(MapDef map) {
+        this.map = map;
+        if (map != null) {
+            map.normalizeLayers();
+            normalizeAnimatedFootprints(); // new: fix footprints for animated placements
+        }
+        layoutForMap();
     }
 
     private record DropPreview(

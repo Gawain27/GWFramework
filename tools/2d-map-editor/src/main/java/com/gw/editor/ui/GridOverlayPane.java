@@ -46,6 +46,7 @@ public final class GridOverlayPane extends StackPane {
     // Multi-select
     private final LinkedHashSet<Point> selection = new LinkedHashSet<>();
     private Point anchor = null;
+    private BooleanProperty isAnimated;
 
     public GridOverlayPane() {
         getChildren().addAll(imageView, grid);
@@ -215,7 +216,11 @@ public final class GridOverlayPane extends StackPane {
         if (regionsProvider != null) {
             var regions = regionsProvider.regions();
             if (regions != null) {
-                g.setStroke(Color.color(1, 0, 0, 0.95));
+                if (isAnimated.get()){
+                    g.setStroke(Color.color(0, 0, 1, 0.95));
+                } else {
+                    g.setStroke(Color.color(1, 0, 0, 0.95));
+                }
                 g.setLineWidth(3);
                 for (var r : regions) {
                     double x = drawOffX + r.x0 * stepX;
@@ -236,6 +241,10 @@ public final class GridOverlayPane extends StackPane {
             g.fillRect(x, y, stepX, stepY);
             g.strokeRect(x, y, stepX, stepY);
         }
+    }
+
+    public void bintAnimated(BooleanProperty isAnimated){
+        isAnimated.bind(isAnimated);
     }
 
     private Point pixelToTile(int mx, int my) {

@@ -108,13 +108,15 @@ public class FxEditorApp extends Application {
         centerTabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         centerTabs.getTabs().add(new Tab("Template Editor", buildTemplateEditorCenter()));
         centerTabs.getTabs().add(new Tab("Map Editor", buildMapEditorCenter()));
-        centerTabs.getSelectionModel().selectedIndexProperty().addListener((o,oldIdx,newIdx) -> {
+        centerTabs.getSelectionModel().selectedIndexProperty().addListener((o, oldIdx, newIdx) -> {
             showRightPane(newIdx.intValue());
         });
 
         tilePropsPane = new TilePropertiesPane();
         tilePropsPane.setMinWidth(300);
-        tilePropsPane.setEditsChangedCallback(() -> { if (viewer != null) viewer.refresh(); });
+        tilePropsPane.setEditsChangedCallback(() -> {
+            if (viewer != null) viewer.refresh();
+        });
         tilePropsPane.setSelectionSupplier(() -> viewer == null ? Set.of() : viewer.getSelection());
         // let TilePropertiesPane disable regions UI when complex is off
         tilePropsPane.bindComplexProperty(complexBox.selectedProperty());
@@ -151,13 +153,27 @@ public class FxEditorApp extends Application {
         viewer = new GridOverlayPane();
         viewer.setCollisionProvider((gx, gy) -> tilePropsPane == null ? null : tilePropsPane.getEffectiveTile(gx, gy));
         viewer.setRegionsProvider(() -> tilePropsPane == null ? List.of() : tilePropsPane.getEffectiveRegions());
-        viewer.setSelectionListener(sel -> { if (current == null) return; tilePropsPane.showSelection(sel); viewer.refresh(); });
+        viewer.setSelectionListener(sel -> {
+            if (current == null) return;
+            tilePropsPane.showSelection(sel);
+            viewer.refresh();
+        });
+        viewer.bintAnimated(this.animatedBox.selectedProperty());
         viewer.setOnKeyPressed(e -> {
             boolean ctrl = e.isControlDown() || e.isMetaDown();
             if (!ctrl) return;
             switch (e.getCode()) {
-                case C -> { Point p = viewer.getPrimarySelection(); if (p != null) tilePropsPane.copyFrom(p); e.consume(); }
-                case V -> { var sel = viewer.getSelection(); if (!sel.isEmpty()) tilePropsPane.pasteTo(sel); viewer.refresh(); e.consume(); }
+                case C -> {
+                    Point p = viewer.getPrimarySelection();
+                    if (p != null) tilePropsPane.copyFrom(p);
+                    e.consume();
+                }
+                case V -> {
+                    var sel = viewer.getSelection();
+                    if (!sel.isEmpty()) tilePropsPane.pasteTo(sel);
+                    viewer.refresh();
+                    e.consume();
+                }
             }
         });
 
@@ -184,15 +200,15 @@ public class FxEditorApp extends Application {
         animatedBox.disableProperty().bind(complexBox.selectedProperty().not());
         VBox complexWrap = new VBox(4, complexBox, animatedBox, new Label("Template Type"));
 
-        Button refreshBtn = new Button("Refresh"); refreshBtn.setOnAction(e -> refreshAll());
-        Button newBtn     = new Button("New");     newBtn.setOnAction(e -> newTemplate());
-        Button saveBtn    = new Button("Save");
-        saveBtn.disableProperty().bind(Bindings.createBooleanBinding(
-            () -> current == null || templateIdField.getText().isBlank(), templateIdField.textProperty()));
+        Button refreshBtn = new Button("Refresh");
+        refreshBtn.setOnAction(e -> refreshAll());
+        Button newBtn = new Button("New");
+        newBtn.setOnAction(e -> newTemplate());
+        Button saveBtn = new Button("Save");
+        saveBtn.disableProperty().bind(Bindings.createBooleanBinding(() -> current == null || templateIdField.getText().isBlank(), templateIdField.textProperty()));
         saveBtn.setOnAction(e -> doSaveTemplate());
-        Button deleteBtn  = new Button("Delete");
-        deleteBtn.disableProperty().bind(Bindings.createBooleanBinding(
-            () -> current == null || current.id == null || current.id.isBlank(), templateIdField.textProperty()));
+        Button deleteBtn = new Button("Delete");
+        deleteBtn.disableProperty().bind(Bindings.createBooleanBinding(() -> current == null || current.id == null || current.id.isBlank(), templateIdField.textProperty()));
         deleteBtn.setOnAction(e -> doDeleteTemplate());
 
         ToolBar toolbar = new ToolBar(refreshBtn, new Separator(), newBtn, saveBtn, deleteBtn);
@@ -229,7 +245,8 @@ public class FxEditorApp extends Application {
     }
 
     private VBox buildMapTopControls() {
-        mapIdField = new TextField(); mapIdField.setPromptText("level_1");
+        mapIdField = new TextField();
+        mapIdField.setPromptText("level_1");
         VBox idBox = new VBox(4, mapIdField, new Label("Map Id"));
 
         mapWSpinner = new Spinner<>(1, 10_000, 64, 1);
@@ -237,21 +254,23 @@ public class FxEditorApp extends Application {
         VBox mwBox = new VBox(4, mapWSpinner, new Label("Map Width (tiles)"));
         VBox mhBox = new VBox(4, mapHSpinner, new Label("Map Height (tiles)"));
 
-        Button newBtn = new Button("New Map"); newBtn.setOnAction(e -> newMap());
+        Button newBtn = new Button("New Map");
+        newBtn.setOnAction(e -> newMap());
         Button saveBtn = new Button("Save Map");
-        saveBtn.disableProperty().bind(Bindings.createBooleanBinding(
-            () -> currentMap == null || mapIdField.getText().isBlank(), mapIdField.textProperty()));
+        saveBtn.disableProperty().bind(Bindings.createBooleanBinding(() -> currentMap == null || mapIdField.getText().isBlank(), mapIdField.textProperty()));
         saveBtn.setOnAction(e -> doSaveMap());
         Button delBtn = new Button("Delete Map");
-        delBtn.disableProperty().bind(Bindings.createBooleanBinding(
-            () -> currentMap == null || currentMap.id == null || currentMap.id.isBlank(), mapIdField.textProperty()));
+        delBtn.disableProperty().bind(Bindings.createBooleanBinding(() -> currentMap == null || currentMap.id == null || currentMap.id.isBlank(), mapIdField.textProperty()));
         delBtn.setOnAction(e -> doDeleteMap());
 
         Button applySize = new Button("Resize Map");
         applySize.setOnAction(e -> {
             if (currentMap == null) return;
             int w = mapWSpinner.getValue(), h = mapHSpinner.getValue();
-            if (mapView.setMapSize(w, h)) { currentMap.widthTiles = w; currentMap.heightTiles = h; }
+            if (mapView.setMapSize(w, h)) {
+                currentMap.widthTiles = w;
+                currentMap.heightTiles = h;
+            }
         });
 
         Button expand = new Button("Expand +10");
@@ -259,7 +278,8 @@ public class FxEditorApp extends Application {
             if (currentMap == null) return;
             int w = currentMap.widthTiles + 10, h = currentMap.heightTiles + 10;
             if (mapView.setMapSize(w, h)) {
-                currentMap.widthTiles = w; currentMap.heightTiles = h;
+                currentMap.widthTiles = w;
+                currentMap.heightTiles = h;
                 mapWSpinner.getValueFactory().setValue(w);
                 mapHSpinner.getValueFactory().setValue(h);
             }
@@ -271,7 +291,8 @@ public class FxEditorApp extends Application {
             int w = Math.max(1, currentMap.widthTiles - 10);
             int h = Math.max(1, currentMap.heightTiles - 10);
             if (mapView.setMapSize(w, h)) {
-                currentMap.widthTiles = w; currentMap.heightTiles = h;
+                currentMap.widthTiles = w;
+                currentMap.heightTiles = h;
                 mapWSpinner.getValueFactory().setValue(w);
                 mapHSpinner.getValueFactory().setValue(h);
             }
@@ -284,26 +305,34 @@ public class FxEditorApp extends Application {
         zoomOut.setOnAction(e -> mapView.zoomOut());
         zoomRst.setOnAction(e -> mapView.zoomReset());
 
-        var showCollisionsChk = new CheckBox("Show Collisions"); showCollisionsChk.setSelected(true);
-        var showGatesChk      = new CheckBox("Show Gates");      showGatesChk.setSelected(true);
-        showCollisionsChk.selectedProperty().addListener((o,ov,nv)-> { mapView.showCollisionsProperty().set(nv); mapView.requestLayout(); });
-        showGatesChk.selectedProperty().addListener((o,ov,nv)-> { mapView.showGatesProperty().set(nv); mapView.requestLayout(); });
+        var showCollisionsChk = new CheckBox("Show Collisions");
+        showCollisionsChk.setSelected(true);
+        var showGatesChk = new CheckBox("Show Gates");
+        showGatesChk.setSelected(true);
+        showCollisionsChk.selectedProperty().addListener((o, ov, nv) -> {
+            mapView.showCollisionsProperty().set(nv);
+            mapView.requestLayout();
+        });
+        showGatesChk.selectedProperty().addListener((o, ov, nv) -> {
+            mapView.showGatesProperty().set(nv);
+            mapView.requestLayout();
+        });
 
         Button newFromAsset = new Button("New Map from Asset…");
-        Button pasteAsset   = new Button("Paste Asset…");
+        Button pasteAsset = new Button("Paste Asset…");
         newFromAsset.setOnAction(e -> newMapFromAsset());
         pasteAsset.setOnAction(e -> pasteAssetIntoMap());
 
-        // layers (same as your previous code)
         layerList = new ListView<>();
         layerList.setPrefHeight(120);
         layerList.setCellFactory(lv -> new ListCell<>() {
-            @Override protected void updateItem(Integer item, boolean empty) {
+            @Override
+            protected void updateItem(Integer item, boolean empty) {
                 super.updateItem(item, empty);
                 setText(empty || item == null ? null : ("Layer " + item));
             }
         });
-        layerList.getSelectionModel().selectedItemProperty().addListener((o,ov,nv) -> {
+        layerList.getSelectionModel().selectedItemProperty().addListener((o, ov, nv) -> {
             if (nv == null || currentMap == null) return;
             int idx = currentMap.layers.indexOf(nv);
             if (idx >= 0) mapView.currentLayerProperty().set(idx);
@@ -327,33 +356,96 @@ public class FxEditorApp extends Application {
             if (!confirm("Remove Layer", "Remove layer " + sel + " and delete everything on it?")) return;
             currentMap.removeLayer(removeIdx);
             refreshLayerList();
-            int newSel = Math.min(removeIdx, currentMap.layers.size()-1);
-            layerList.getSelectionModel().select(newSel);
+            int newSel = Math.min(removeIdx, currentMap.layers.size() - 1);
+            if (newSel >= 0) layerList.getSelectionModel().select(newSel);
             mapView.requestLayout();
             instancePropsPane.refresh(mapView.getSelected());
         });
 
-        var layerBox = new VBox(6, new Label("Layers"), layerList, new HBox(6, btnAddLayer, btnRemoveLayer));
-        layerBox.setPadding(new Insets(4));
+        // NEW: collapsible layer UI with an "eye" toggle
+        HBox layerButtons = new HBox(6, btnAddLayer, btnRemoveLayer);
+        VBox layerInner = new VBox(6, new Label("Layers"), layerList, layerButtons);
+        layerInner.setPadding(new Insets(4));
 
-        ToolBar tb = new ToolBar(
-            newBtn, saveBtn, delBtn,
-            new Separator(),
-            applySize, expand, shrink,
-            new Separator(),
-            zoomIn, zoomOut, zoomRst,
-            new Separator(),
-            showCollisionsChk, showGatesChk,
-            new Separator(),
-            newFromAsset, pasteAsset
-        );
+        ToggleButton eyeToggle = new ToggleButton("👁"); // eye
+        eyeToggle.setSelected(true);
+        eyeToggle.setOnAction(e -> {
+            boolean show = eyeToggle.isSelected();
+            layerInner.setVisible(show);
+            layerInner.setManaged(show);
+        });
 
-        HBox under = new HBox(24,
-            new VBox(4, idBox),
-            new VBox(4, mwBox),
-            new VBox(4, mhBox),
-            layerBox
-        );
+        HBox layerHeader = new HBox(8, eyeToggle);
+        VBox layerBox = new VBox(6, layerHeader, layerInner);
+
+        // tool bar remains the same (zoom, overlays, etc.)
+        ToolBar tb = new ToolBar(new Button("New Map") {{
+            setOnAction(e -> newMap());
+        }}, new Button("Save Map") {{
+            disableProperty().bind(Bindings.createBooleanBinding(() -> currentMap == null || mapIdField.getText().isBlank(), mapIdField.textProperty()));
+            setOnAction(e -> doSaveMap());
+        }}, new Button("Delete Map") {{
+            disableProperty().bind(Bindings.createBooleanBinding(() -> currentMap == null || currentMap.id == null || currentMap.id.isBlank(), mapIdField.textProperty()));
+            setOnAction(e -> doDeleteMap());
+        }}, new Separator(), new Button("Resize Map") {{
+            setOnAction(e -> {
+                if (currentMap == null) return;
+                int w = mapWSpinner.getValue(), h = mapHSpinner.getValue();
+                if (mapView.setMapSize(w, h)) {
+                    currentMap.widthTiles = w;
+                    currentMap.heightTiles = h;
+                }
+            });
+        }}, new Button("Expand +10") {{
+            setOnAction(e -> {
+                if (currentMap == null) return;
+                int w = currentMap.widthTiles + 10, h = currentMap.heightTiles + 10;
+                if (mapView.setMapSize(w, h)) {
+                    currentMap.widthTiles = w;
+                    currentMap.heightTiles = h;
+                    mapWSpinner.getValueFactory().setValue(w);
+                    mapHSpinner.getValueFactory().setValue(h);
+                }
+            });
+        }}, new Button("Shrink -10") {{
+            setOnAction(e -> {
+                if (currentMap == null) return;
+                int w = Math.max(1, currentMap.widthTiles - 10);
+                int h = Math.max(1, currentMap.heightTiles - 10);
+                if (mapView.setMapSize(w, h)) {
+                    currentMap.widthTiles = w;
+                    currentMap.heightTiles = h;
+                    mapWSpinner.getValueFactory().setValue(w);
+                    mapHSpinner.getValueFactory().setValue(h);
+                }
+            });
+        }}, new Separator(), new Button("Zoom +") {{
+            setOnAction(e -> mapView.zoomIn());
+        }}, new Button("Zoom −") {{
+            setOnAction(e -> mapView.zoomOut());
+        }}, new Button("Reset") {{
+            setOnAction(e -> mapView.zoomReset());
+        }}, new Separator(), new CheckBox("Show Collisions") {{
+            setSelected(true);
+            selectedProperty().addListener((o, ov, nv) -> {
+                mapView.showCollisionsProperty().set(nv);
+                mapView.requestLayout();
+            });
+        }}, new CheckBox("Show Gates") {{
+            setSelected(true);
+            selectedProperty().addListener((o, ov, nv) -> {
+                mapView.showGatesProperty().set(nv);
+                mapView.requestLayout();
+            });
+        }}, new Separator(), new Button("New Map from Asset…") {{
+            setOnAction(e -> newMapFromAsset());
+        }}, new Button("Paste Asset…") {{
+            setOnAction(e -> pasteAssetIntoMap());
+        }});
+
+        // id / size rows unchanged
+
+        HBox under = new HBox(24, new VBox(4, idBox), new VBox(4, mwBox), new VBox(4, mhBox), layerBox);
         under.setPadding(new Insets(8));
         under.setAlignment(Pos.CENTER_LEFT);
 
@@ -381,23 +473,23 @@ public class FxEditorApp extends Application {
 
             // Compute tile grid from current tileW/H
             int tW = tileW.getValue(), tH = tileH.getValue();
-            int wTiles = Math.max(1, (int)Math.ceil(img.getWidth()  / tW));
-            int hTiles = Math.max(1, (int)Math.ceil(img.getHeight() / tH));
+            int wTiles = Math.max(1, (int) Math.ceil(img.getWidth() / tW));
+            int hTiles = Math.max(1, (int) Math.ceil(img.getHeight() / tH));
 
             currentMap = new MapDef();
             currentMap.id = "";
             mapIdField.setText("");
 
-            currentMap.tileWidthPx  = tW;
+            currentMap.tileWidthPx = tW;
             currentMap.tileHeightPx = tH;
-            currentMap.widthTiles   = wTiles;
-            currentMap.heightTiles  = hTiles;
+            currentMap.widthTiles = wTiles;
+            currentMap.heightTiles = hTiles;
             currentMap.normalizeLayers();
 
             currentMap.background = new MapDef.Background();
             currentMap.background.logicalPath = logical;
-            currentMap.background.imageWidthPx  = (int)Math.round(img.getWidth());
-            currentMap.background.imageHeightPx = (int)Math.round(img.getHeight());
+            currentMap.background.imageWidthPx = (int) Math.round(img.getWidth());
+            currentMap.background.imageHeightPx = (int) Math.round(img.getHeight());
 
             mapView.bindMap(currentMap);
             instancePropsPane.bindMap(currentMap);
@@ -410,7 +502,10 @@ public class FxEditorApp extends Application {
     }
 
     private void pasteAssetIntoMap() {
-        if (currentMap == null) { alert("Open or create a map first."); return; }
+        if (currentMap == null) {
+            alert("Open or create a map first.");
+            return;
+        }
 
         TextInputDialog dlg = new TextInputDialog();
         dlg.setTitle("Paste Asset into Map");
@@ -429,16 +524,15 @@ public class FxEditorApp extends Application {
             }
 
             int tW = tileW.getValue(), tH = tileH.getValue();
-            int wTiles = Math.max(1, (int)Math.ceil(img.getWidth()  / tW));
-            int hTiles = Math.max(1, (int)Math.ceil(img.getHeight() / tH));
+            int wTiles = Math.max(1, (int) Math.ceil(img.getWidth() / tW));
+            int hTiles = Math.max(1, (int) Math.ceil(img.getHeight() / tH));
 
             // Offer autoresize if it doesn't fit
             boolean needsResize = (wTiles > currentMap.widthTiles) || (hTiles > currentMap.heightTiles);
             if (needsResize) {
-                if (!confirm("Auto-resize Map",
-                    "Asset footprint is larger than the current map (" + wTiles + "×" + hTiles +
-                        " tiles). Resize the map to fit?")) return;
-                currentMap.widthTiles  = Math.max(currentMap.widthTiles,  wTiles);
+                if (!confirm("Auto-resize Map", "Asset footprint is larger than the current map (" + wTiles + "×" + hTiles + " tiles). Resize the map to fit?"))
+                    return;
+                currentMap.widthTiles = Math.max(currentMap.widthTiles, wTiles);
                 currentMap.heightTiles = Math.max(currentMap.heightTiles, hTiles);
                 mapWSpinner.getValueFactory().setValue(currentMap.widthTiles);
                 mapHSpinner.getValueFactory().setValue(currentMap.heightTiles);
@@ -449,20 +543,13 @@ public class FxEditorApp extends Application {
             TemplateDef snap = new TemplateDef();
             snap.id = "(asset:" + logical + ")";
             snap.logicalPath = logical;
-            snap.imageWidthPx  = (int)Math.round(img.getWidth());
-            snap.imageHeightPx = (int)Math.round(img.getHeight());
-            snap.tileWidthPx   = tW;
-            snap.tileHeightPx  = tH;
+            snap.imageWidthPx = (int) Math.round(img.getWidth());
+            snap.imageHeightPx = (int) Math.round(img.getHeight());
+            snap.tileWidthPx = tW;
+            snap.tileHeightPx = tH;
             snap.complex = false;
 
-            MapDef.Placement p = new MapDef.Placement(
-                snap.id, -1, 0, 0,
-                wTiles, hTiles,
-                0, 0, snap.imageWidthPx, snap.imageHeightPx,
-                snap,
-                Math.max(0, Math.min(mapView.currentLayerProperty().get(), currentMap.layers.size()-1)),
-                galleryScale.getValue()
-            );
+            MapDef.Placement p = new MapDef.Placement(snap.id, -1, 0, 0, wTiles, hTiles, 0, 0, snap.imageWidthPx, snap.imageHeightPx, snap, Math.max(0, Math.min(mapView.currentLayerProperty().get(), currentMap.layers.size() - 1)), galleryScale.getValue());
 
             currentMap.placements.add(p);
             mapView.selectPid(p.pid);
@@ -475,7 +562,8 @@ public class FxEditorApp extends Application {
 
     private void alert(String msg) {
         Alert a = new Alert(Alert.AlertType.INFORMATION, msg, ButtonType.OK);
-        a.setHeaderText(null); a.showAndWait();
+        a.setHeaderText(null);
+        a.showAndWait();
     }
 
     /* ==================== LEFT: Template Gallery (drag source) ==================== */
@@ -498,7 +586,9 @@ public class FxEditorApp extends Application {
         ScrollPane scroller = new ScrollPane(galleryGrid);
         scroller.setFitToWidth(true);
 
-        box.sceneProperty().addListener((o, oldS, newS) -> { if (newS != null) renderTemplateCards(galleryGrid); });
+        box.sceneProperty().addListener((o, oldS, newS) -> {
+            if (newS != null) renderTemplateCards(galleryGrid);
+        });
         box.parentProperty().addListener((o, oldP, newP) -> renderTemplateCards(galleryGrid));
 
         box.getChildren().addAll(top, scroller);
@@ -517,28 +607,49 @@ public class FxEditorApp extends Application {
             try {
                 String abs = manager.toAbsolute(t.logicalPath);
                 tex = new Image(Path.of(abs).toUri().toString());
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
 
             if (t.complex && t.animated && t.regions != null && !t.regions.isEmpty()) {
-                // ONE card representing the animation. Frame size = first region.
+                // ONE draggable card for the animation. Use first frame for thumbnail & preview sizing.
                 var frames = t.pixelRegions();
-                int[] first = frames.get(0);
-                Image frameImg = makeRegionThumb(tex, first, 240, 180, /*blue*/true);
-                var card = cardForTemplate(t, p, frameImg, t.id == null || t.id.isBlank() ? p.getFileName().toString() : t.id, "Animated");
-                enableDrag(card.imageView, t, /*regionIndex*/-2, first); // -2 marks animated
-                grid.getChildren().add(card.root);
+                int[] first = frames.getFirst();
+                Image thumb = makeRegionThumb(tex, first, 240, 180, t.animated);
 
-                // attach animated updater
-                AnimatedCard ac = new AnimatedCard(card.imageView, tex, frames, 240, 180);
-                animatedCards.add(ac);
+                String title = (t.id == null || t.id.isBlank() ? p.getFileName().toString() : t.id) + " • (animated)";
+                var card = cardForTemplate(t, p, thumb, title, "Animated");
+
+                // regionIndex = -1 means "use whole template snapshot" (keeps all frames)
+                // last field is scale multiplier, default 1.0
+                card.imageView.setOnDragDetected(e -> {
+                    var db = card.imageView.startDragAndDrop(TransferMode.COPY);
+                    db.setDragView(card.imageView.getImage(),
+                        card.imageView.getImage().getWidth()/2,
+                        card.imageView.getImage().getHeight()/2);
+
+                    javafx.scene.input.ClipboardContent cc = new javafx.scene.input.ClipboardContent();
+                    String payload = String.join("|",
+                        safe(t.id),
+                        String.valueOf(-1),                                   // regionIndex
+                        String.valueOf(Math.max(1, t.tileWidthPx)),
+                        String.valueOf(Math.max(1, t.tileHeightPx)),
+                        String.valueOf(first[0]), String.valueOf(first[1]),   // preview rect (first frame)
+                        String.valueOf(first[2]), String.valueOf(first[3]),
+                        String.valueOf(1.0)                                    // scale
+                    );
+                    cc.put(MapCanvasPane.DND_FORMAT, payload);
+                    db.setContent(cc);
+                    e.consume();
+                });
+
+                grid.getChildren().add(card.root);
 
             } else if (t.complex && t.regions != null && !t.regions.isEmpty()) {
                 // non-animated complex → one card per region
                 var prs = t.pixelRegions();
                 for (int i = 0; i < prs.size(); i++) {
                     int[] r = prs.get(i);
-                    String rid = (t.regions.get(i).id == null || t.regions.get(i).id.isBlank())
-                        ? ("region_" + (i + 1)) : t.regions.get(i).id;
+                    String rid = (t.regions.get(i).id == null || t.regions.get(i).id.isBlank()) ? ("region_" + (i + 1)) : t.regions.get(i).id;
 
                     Image thumb = makeRegionThumb(tex, r, 240, 180, /*blue*/false);
                     var card = cardForTemplate(t, p, thumb, t.id + " • " + rid, "Region");
@@ -574,10 +685,7 @@ public class FxEditorApp extends Application {
         name.setMaxWidth(240);
 
         Label subt = new Label(type);
-        subt.setTextFill(
-            "Animated".equals(type) ? Color.DARKBLUE :
-                "Region".equals(type)   ? Color.DARKRED  : Color.DARKGREEN
-        );
+        subt.setTextFill("Animated".equals(type) ? Color.DARKBLUE : "Region".equals(type) ? Color.DARKRED : Color.DARKGREEN);
 
         card.getChildren().addAll(iv, name, subt);
         return new Card(card, iv);
@@ -594,15 +702,8 @@ public class FxEditorApp extends Application {
             double scaleMul = galleryScale.getValue() == null ? 1.0 : galleryScale.getValue();
 
             ClipboardContent cc = new ClipboardContent();
-            String payload = String.join("|",
-                safe(t.id),
-                String.valueOf(regionIndex), // -2 = animated whole (use regions)
-                String.valueOf(Math.max(1, t.tileWidthPx)),
-                String.valueOf(Math.max(1, t.tileHeightPx)),
-                String.valueOf(rPx[0]), String.valueOf(rPx[1]),
-                String.valueOf(rPx[2]), String.valueOf(rPx[3]),
-                String.valueOf(scaleMul)
-            );
+            String payload = String.join("|", safe(t.id), String.valueOf(regionIndex), // -2 = animated whole (use regions)
+                String.valueOf(Math.max(1, t.tileWidthPx)), String.valueOf(Math.max(1, t.tileHeightPx)), String.valueOf(rPx[0]), String.valueOf(rPx[1]), String.valueOf(rPx[2]), String.valueOf(rPx[3]), String.valueOf(scaleMul));
             cc.put(MapCanvasPane.DND_FORMAT, payload);
             db.setContent(cc);
             e.consume();
@@ -765,13 +866,17 @@ public class FxEditorApp extends Application {
     }
 
     private void onAssetSelected(AssetScanner.AssetEntry e) {
-        if (current == null) { current = new TemplateDef(); tilePropsPane.bindTo(current); }
+        if (current == null) {
+            current = new TemplateDef();
+            tilePropsPane.bindTo(current);
+        }
         current.logicalPath = e.logicalPath();
         templateIdField.setText(suggestIdFromPath(e.logicalPath()));
         viewer.getImageView().setImage(e.thumbnail());
         current.imageWidthPx = (int) Math.round(e.thumbnail().getWidth());
         current.imageHeightPx = (int) Math.round(e.thumbnail().getHeight());
-        viewer.clearSelection(); viewer.refresh();
+        viewer.clearSelection();
+        viewer.refresh();
     }
 
     private void doSaveTemplate() {
@@ -799,7 +904,8 @@ public class FxEditorApp extends Application {
 
     private boolean confirm(String title, String msg) {
         Alert a = new Alert(Alert.AlertType.CONFIRMATION, msg, ButtonType.OK, ButtonType.CANCEL);
-        a.setTitle(title); a.setHeaderText(null);
+        a.setTitle(title);
+        a.setHeaderText(null);
         return a.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK;
     }
 
@@ -829,16 +935,15 @@ public class FxEditorApp extends Application {
         currentMap = new MapDef();
         currentMap.id = "";
         mapIdField.setText("");
-        currentMap.tileWidthPx  = tileW.getValue();
+        currentMap.tileWidthPx = tileW.getValue();
         currentMap.tileHeightPx = tileH.getValue();
-        currentMap.widthTiles   = mapWSpinner.getValue();
-        currentMap.heightTiles  = mapHSpinner.getValue();
+        currentMap.widthTiles = mapWSpinner.getValue();
+        currentMap.heightTiles = mapHSpinner.getValue();
         currentMap.normalizeLayers();
         mapView.bindMap(currentMap);
         instancePropsPane.bindMap(currentMap);
         refreshLayerList();
-        if (!currentMap.layers.isEmpty())
-            layerList.getSelectionModel().select(0);
+        if (!currentMap.layers.isEmpty()) layerList.getSelectionModel().select(0);
     }
 
     private void doSaveMap() {
@@ -874,7 +979,7 @@ public class FxEditorApp extends Application {
         instancePropsPane.bindMap(currentMap);
         refreshLayerList();
         if (!currentMap.layers.isEmpty())
-            layerList.getSelectionModel().select(Math.min(0, currentMap.layers.size()-1));
+            layerList.getSelectionModel().select(Math.min(0, currentMap.layers.size() - 1));
     }
 
     /* ==================== Refresh helpers & thumbnails ==================== */
@@ -897,8 +1002,7 @@ public class FxEditorApp extends Application {
         AssetScanner scanner = new AssetScanner();
         List<AssetScanner.AssetEntry> entries = scanner.scanAll();
 
-        ObservableList<AssetScanner.AssetEntry> source =
-            (ObservableList<AssetScanner.AssetEntry>) filteredAssets.getSource();
+        ObservableList<AssetScanner.AssetEntry> source = (ObservableList<AssetScanner.AssetEntry>) filteredAssets.getSource();
         source.setAll(entries);
 
         filteredAssets.setPredicate(e -> true);
@@ -917,11 +1021,13 @@ public class FxEditorApp extends Application {
         double w = maxW, h = maxH;
         if (texture != null) {
             double ratio = texture.getWidth() / texture.getHeight();
-            if (w / h > ratio) w = h * ratio; else h = w / ratio;
+            if (w / h > ratio) w = h * ratio;
+            else h = w / ratio;
         }
         Canvas c = new Canvas(w, h);
         GraphicsContext g = c.getGraphicsContext2D();
-        g.setFill(Color.color(0, 0, 0, 0.05)); g.fillRect(0, 0, w, h);
+        g.setFill(Color.color(0, 0, 0, 0.05));
+        g.fillRect(0, 0, w, h);
         if (texture != null) {
             double imgW = texture.getWidth(), imgH = texture.getHeight();
             double scale = Math.min(w / imgW, h / imgH);
@@ -938,26 +1044,29 @@ public class FxEditorApp extends Application {
                 }
             }
         }
-        SnapshotParameters sp = new SnapshotParameters(); sp.setFill(Color.TRANSPARENT);
+        SnapshotParameters sp = new SnapshotParameters();
+        sp.setFill(Color.TRANSPARENT);
         return c.snapshot(sp, null);
     }
 
-    private static Image makeRegionThumb(Image texture, int[] r, double maxW, double maxH, boolean blueBorder) {
+    private static Image makeRegionThumb(Image texture, int[] r, double maxW, double maxH, boolean animated) {
         double w = maxW, h = maxH;
         Canvas c = new Canvas(w, h);
         GraphicsContext g = c.getGraphicsContext2D();
-        g.setFill(Color.color(0, 0, 0, 0.05)); g.fillRect(0, 0, w, h);
+        g.setFill(Color.color(0, 0, 0, 0.05));
+        g.fillRect(0, 0, w, h);
         if (texture != null) {
             double sx = r[0], sy = r[1], sw = r[2], sh = r[3];
             double scale = Math.min(w / sw, h / sh);
             double dw = sw * scale, dh = sh * scale;
             double dx = (w - dw) / 2, dy = (h - dh) / 2;
             g.drawImage(texture, sx, sy, sw, sh, dx, dy, dw, dh);
-            g.setStroke(blueBorder ? Color.BLUE : Color.RED);
+            g.setStroke(animated ? Color.BLUE : Color.RED);
             g.setLineWidth(2);
             g.strokeRect(dx, dy, dw, dh);
         }
-        SnapshotParameters sp = new SnapshotParameters(); sp.setFill(Color.TRANSPARENT);
+        SnapshotParameters sp = new SnapshotParameters();
+        sp.setFill(Color.TRANSPARENT);
         return c.snapshot(sp, null);
     }
 
@@ -974,7 +1083,8 @@ public class FxEditorApp extends Application {
     private void startGalleryTimer() {
         if (galleryTimer != null) return;
         galleryTimer = new AnimationTimer() {
-            @Override public void handle(long now) {
+            @Override
+            public void handle(long now) {
                 for (AnimatedCard ac : animatedCards) ac.tick();
             }
         };
@@ -990,21 +1100,23 @@ public class FxEditorApp extends Application {
         private final DoubleProperty fpsSlots = new SimpleDoubleProperty(60); // 60-slot timeline
 
         AnimatedCard(ImageView iv, Image texture, List<int[]> frames, double maxW, double maxH) {
-            this.iv = iv; this.texture = texture; this.frames = frames; this.maxW = maxW; this.maxH = maxH;
+            this.iv = iv;
+            this.texture = texture;
+            this.frames = frames;
+            this.maxW = maxW;
+            this.maxH = maxH;
         }
 
         void tick() {
             if (texture == null || frames == null || frames.isEmpty()) return;
             long now = System.nanoTime();
-            int slot = (int)((now / (1_000_000_000L / 60)) % 60);
+            int slot = (int) ((now / (1_000_000_000L / 60)) % 60);
             if (slot == lastDrawnSlot) return;
             lastDrawnSlot = slot;
 
-            int idx = frames.size() >= 60
-                ? (int)Math.floor(slot * (frames.size() / 60.0))
-                : (int)(slot % frames.size());
+            int idx = frames.size() >= 60 ? (int) Math.floor(slot * (frames.size() / 60.0)) : (int) (slot % frames.size());
 
-            int[] r = frames.get(Math.max(0, Math.min(idx, frames.size()-1)));
+            int[] r = frames.get(Math.max(0, Math.min(idx, frames.size() - 1)));
             Image thumb = makeRegionThumb(texture, r, maxW, maxH, true);
             iv.setImage(thumb);
         }

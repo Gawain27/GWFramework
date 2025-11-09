@@ -244,7 +244,7 @@ public final class GridOverlayPane extends StackPane {
     }
 
     public void bintAnimated(BooleanProperty isAnimated){
-        isAnimated.bind(isAnimated);
+        this.isAnimated = isAnimated;
     }
 
     private Point pixelToTile(int mx, int my) {

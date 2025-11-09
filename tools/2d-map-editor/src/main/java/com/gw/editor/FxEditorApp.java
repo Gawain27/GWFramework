@@ -158,7 +158,6 @@ public class FxEditorApp extends Application {
             tilePropsPane.showSelection(sel);
             viewer.refresh();
         });
-        viewer.bintAnimated(this.animatedBox.selectedProperty());
         viewer.setOnKeyPressed(e -> {
             boolean ctrl = e.isControlDown() || e.isMetaDown();
             if (!ctrl) return;
@@ -197,6 +196,8 @@ public class FxEditorApp extends Application {
 
         complexBox = new CheckBox("Complex (has texture regions)");
         animatedBox = new CheckBox("Animated");
+        if (viewer != null)
+            viewer.bintAnimated(this.animatedBox.selectedProperty());
         animatedBox.disableProperty().bind(complexBox.selectedProperty().not());
         VBox complexWrap = new VBox(4, complexBox, animatedBox, new Label("Template Type"));
 

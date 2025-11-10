@@ -485,19 +485,21 @@ public class MapCanvasPane extends Region {
         try {
             String abs = manager.toAbsolute(snap.logicalPath);
             tex = new Image(Path.of(abs).toUri().toString());
-        } catch (Exception ex) { return; }
+        } catch (Exception e) {
+            return;
+        }
 
-        // Bounds from *first* frame (constant)
-        int[] wh = baseFootprintTiles(p);
-        int drawWtiles = Math.max(1, (int)Math.ceil(wh[0] * p.scale));
-        int drawHtiles = Math.max(1, (int)Math.ceil(wh[1] * p.scale));
+        // Fixed bounds from first frame (or base for non-animated), then scale
+        int[] baseWH = baseFootprintTiles(p);
+        int drawWtiles = Math.max(1, (int)Math.ceil(baseWH[0] * p.scale));
+        int drawHtiles = Math.max(1, (int)Math.ceil(baseWH[1] * p.scale));
 
         double dx = p.gx * tileW.get();
         double dy = p.gy * tileH.get();
         double dw = drawWtiles * tileW.get();
         double dh = drawHtiles * tileH.get();
 
-        // Source rect: animated => current frame; else placement’s src
+        // Choose source rect (current frame if animated; otherwise placement src)
         int sx = p.srcXpx, sy = p.srcYpx, sw = p.srcWpx, sh = p.srcHpx;
         if (isAnimated(snap)) {
             var frames = snap.pixelRegions();
@@ -506,10 +508,10 @@ public class MapCanvasPane extends Region {
             sx = r[0]; sy = r[1]; sw = r[2]; sh = r[3];
         }
 
-        // Draw current frame INSIDE the fixed first-frame box
+        // Draw the texture to the fixed box (keeps animation inside first-frame footprint)
         g.drawImage(tex, sx, sy, sw, sh, dx, dy, dw, dh);
 
-        // Selection/border uses the same fixed box
+        // Selection/border
         if (p.pid.equals(selectedPid.get())) {
             g.setStroke(Color.color(0.95, 0.8, 0.2, 1));
             g.setLineWidth(3);
@@ -520,10 +522,26 @@ public class MapCanvasPane extends Region {
             g.strokeRect(dx, dy, dw, dh);
         }
 
-        // overlays from snapshot (per tile)
-        int cols = Math.max(1, snap.imageWidthPx / Math.max(1, snap.tileWidthPx));
-        int rows = Math.max(1, snap.imageHeightPx / Math.max(1, snap.tileHeightPx));
-        double tw = tileW.get(), th = tileH.get();
+        // ----- Scaled overlays -----
+        // We want to render gate/collision tiles *inside the fixed box*, proportionally scaled.
+        // Compute how much a source "first-frame tile" maps to screen pixels.
+        double tw = tileW.get(), th = tileH.get(); // editor’s tile draw size
+        double scaleX = dw / (baseWH[0] * tw);
+        double scaleY = dh / (baseWH[1] * th);
+        double cellW  = tw * scaleX;
+        double cellH  = th * scaleY;
+
+        // Where to read tiles from:
+        int tileOffsetX = 0, tileOffsetY = 0;
+        if (isAnimated(snap)) {
+            int[] off = firstFrameTileOffset(snap);
+            tileOffsetX = off[0];
+            tileOffsetY = off[1];
+        }
+
+        // Limit loops to the base (first-frame) footprint so overlays line up with the scaled box
+        int cols = baseWH[0];
+        int rows = baseWH[1];
 
         if (showGates.get()) {
             g.setFill(Color.color(0, 1, 0, 0.25));
@@ -531,11 +549,11 @@ public class MapCanvasPane extends Region {
             g.setLineWidth(1.5);
             for (int gy = 0; gy < rows; gy++) {
                 for (int gx = 0; gx < cols; gx++) {
-                    TemplateDef.TileDef t = snap.tileAt(gx, gy);
+                    TemplateDef.TileDef t = snap.tileAt(tileOffsetX + gx, tileOffsetY + gy);
                     if (t != null && t.gate) {
-                        double x = dx + gx * tw, y = dy + gy * th;
-                        g.fillRect(x, y, tw, th);
-                        g.strokeRect(x + 0.5, y + 0.5, tw - 1, th - 1);
+                        double x = dx + gx * cellW, y = dy + gy * cellH;
+                        g.fillRect(x, y, cellW, cellH);
+                        g.strokeRect(x + 0.5, y + 0.5, cellW - 1, cellH - 1);
                     }
                 }
             }
@@ -546,17 +564,18 @@ public class MapCanvasPane extends Region {
             g.setLineWidth(2.0);
             for (int gy = 0; gy < rows; gy++) {
                 for (int gx = 0; gx < cols; gx++) {
-                    TemplateDef.TileDef t = snap.tileAt(gx, gy);
+                    TemplateDef.TileDef t = snap.tileAt(tileOffsetX + gx, tileOffsetY + gy);
                     if (t == null || !t.solid) continue;
-                    double x = dx + gx * tw, y = dy + gy * th;
+                    double x = dx + gx * cellW, y = dy + gy * cellH;
                     switch (t.shape) {
-                        case RECT_FULL -> g.strokeRect(x, y, tw, th);
+                        case RECT_FULL -> g.strokeRect(x, y, cellW, cellH);
                         case HALF_RECT ->
-                            CollisionShapes.get(TemplateDef.ShapeType.HALF_RECT).draw(g, x, y, tw, th, t.orientation);
-                        case TRIANGLE ->
-                            CollisionShapes.get(TemplateDef.ShapeType.TRIANGLE).draw(g, x, y, tw, th, t.orientation);
-                        default -> {
-                        }
+                            CollisionShapes.get(TemplateDef.ShapeType.HALF_RECT)
+                                .draw(g, x, y, cellW, cellH, t.orientation);
+                        case TRIANGLE  ->
+                            CollisionShapes.get(TemplateDef.ShapeType.TRIANGLE)
+                                .draw(g, x, y, cellW, cellH, t.orientation);
+                        default -> { /* no-op */ }
                     }
                 }
             }
@@ -608,6 +627,14 @@ public class MapCanvasPane extends Region {
             normalizeAnimatedFootprints(); // new: fix footprints for animated placements
         }
         layoutForMap();
+    }
+
+    /** Tile offset (in tiles) of first frame within the source texture. */
+    private int[] firstFrameTileOffset(TemplateDef t) {
+        int[] r = firstFrameRectPx(t);
+        int offX = Math.max(0, r[0] / Math.max(1, t.tileWidthPx));
+        int offY = Math.max(0, r[1] / Math.max(1, t.tileHeightPx));
+        return new int[]{offX, offY};
     }
 
     private record DropPreview(

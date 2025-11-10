@@ -35,13 +35,18 @@ public class TemplateInstancePropertiesPane extends VBox {
     private final TextField gateNameField = new TextField();  // editable name
     private final Button saveGateNameBtn = new Button("Save Gate Name");
 
-    /* Links */
+    /* Links (each row = one link now) */
     private final ListView<String> linkList = new ListView<>();
     private final TextField linkNameField = new TextField();  // editable name
     private final ComboBox<String> gateSearch = new ComboBox<>();
     private final Button addLinkBtn = new Button("Add Link");
     private final Button removeLinkBtn = new Button("Remove Selected Link");
     private final Button saveLinkNameBtn = new Button("Save Link Name");
+
+    /**
+     * View-model for linkList: same order as linkList items.
+     */
+    private final List<MapDef.GateLink> linkVm = new ArrayList<>();
 
     private List<List<int[]>> cachedIslands = List.of();
     private Runnable onRequestRedraw = () -> {
@@ -76,13 +81,23 @@ public class TemplateInstancePropertiesPane extends VBox {
             var ref = new MapDef.GateRef(sel.pid, idx);
             var meta = map.ensureGateMeta(ref);
             meta.name = gateNameField.getText() == null ? "" : gateNameField.getText().trim();
-            refreshLinkList(); // list uses names in display
-            refreshGateList(); // list uses names in display
+            refreshLinkList(); // reflects names immediately
+            refreshGateList();
         });
 
         addLinkBtn.setOnAction(e -> addLinkFromSearch());
         removeLinkBtn.setOnAction(e -> removeSelectedLink());
         saveLinkNameBtn.setOnAction(e -> renameSelectedLink());
+
+        // When selecting a link, show its name in the text field
+        linkList.getSelectionModel().selectedIndexProperty().addListener((o, ov, nv) -> {
+            if (nv == null || nv.intValue() < 0 || nv.intValue() >= linkVm.size()) {
+                linkNameField.clear();
+            } else {
+                var gl = linkVm.get(nv.intValue());
+                linkNameField.setText(gl.name == null ? "" : gl.name);
+            }
+        });
     }
 
     public void setOnRequestRedraw(Runnable r) {
@@ -112,6 +127,7 @@ public class TemplateInstancePropertiesPane extends VBox {
             removeLinkBtn.setDisable(true);
             saveGateNameBtn.setDisable(true);
             saveLinkNameBtn.setDisable(true);
+            linkVm.clear();
             return;
         }
 
@@ -217,28 +233,44 @@ public class TemplateInstancePropertiesPane extends VBox {
         gateList.setItems(items);
     }
 
+    /**
+     * Build a flat list of all links that involve ANY gate of this placement.
+     * Each list row shows the link name prominently.
+     */
     private void refreshLinkList() {
+        linkVm.clear();
         if (map == null || sel == null) {
             linkList.getItems().setAll();
             return;
         }
-        ObservableList<String> items = FXCollections.observableArrayList();
 
+        // Collect all GateRefs for this placement
+        List<MapDef.GateRef> myRefs = new ArrayList<>();
         for (int gi = 0; gi < cachedIslands.size(); gi++) {
-            MapDef.GateRef me = new MapDef.GateRef(sel.pid, gi);
-            var targets = map.gateLinks.stream()
-                .filter(gl -> gl.involves(me))
-                .map(gl -> {
-                    String nm = (gl.name == null || gl.name.isBlank()) ? "" : ("[" + gl.name + "] ");
-                    MapDef.GateRef other = gl.a.equals(me) ? gl.b : gl.a;
-                    return nm + displayForGateRef(other) + " {" + gl.id + "}";
-                })
-                .sorted()
-                .toList();
-
-            String head = displayForGateRef(me) + " -> " + (targets.isEmpty() ? "(none)" : String.join(", ", targets));
-            items.add(head);
+            myRefs.add(new MapDef.GateRef(sel.pid, gi));
         }
+
+        // Filter links that involve any of my gates, keep order of map.gateLinks
+        for (MapDef.GateLink gl : map.gateLinks) {
+            for (MapDef.GateRef r : myRefs) {
+                if (gl.involves(r)) {
+                    linkVm.add(gl);
+                    break;
+                }
+            }
+        }
+
+        ObservableList<String> items = FXCollections.observableArrayList();
+        for (MapDef.GateLink gl : linkVm) {
+            boolean aIsMe = (gl.a != null && gl.a.pid != null && gl.a.pid.equals(sel.pid));
+            MapDef.GateRef me = aIsMe ? gl.a : gl.b;
+            MapDef.GateRef other = aIsMe ? gl.b : gl.a;
+
+            String name = (gl.name == null || gl.name.isBlank()) ? "(unnamed)" : gl.name;
+            String row = "[" + name + "]  " + displayForGateRef(me) + "  ⇄  " + displayForGateRef(other) + "  {" + gl.id + "}";
+            items.add(row);
+        }
+
         linkList.setItems(items);
     }
 
@@ -258,7 +290,7 @@ public class TemplateInstancePropertiesPane extends VBox {
             var islands = TemplateGateUtils.computeGateIslands(p.dataSnap);
             for (int gi = 0; gi < islands.size(); gi++) {
                 var ref = new MapDef.GateRef(p.pid, gi);
-                map.ensureGateMeta(ref); // make sure it exists so the name is stable
+                map.ensureGateMeta(ref); // ensure stable naming
                 out.add(ref);
             }
         }
@@ -307,24 +339,36 @@ public class TemplateInstancePropertiesPane extends VBox {
 
     private void removeSelectedLink() {
         if (map == null || sel == null) return;
-        int myGate = gateList.getSelectionModel().getSelectedIndex();
-        if (myGate < 0) {
-            info("Select your gate in the left list first.");
-            return;
+
+        int idx = linkList.getSelectionModel().getSelectedIndex();
+        if (idx >= 0 && idx < linkVm.size()) {
+            MapDef.GateLink gl = linkVm.get(idx);
+            map.gateLinks.remove(gl);
+        } else {
+            // fallback: remove all links involving selected gate (legacy behavior)
+            int myGate = gateList.getSelectionModel().getSelectedIndex();
+            if (myGate >= 0) {
+                MapDef.GateRef me = new MapDef.GateRef(sel.pid, myGate);
+                map.gateLinks.removeIf(gl -> gl.involves(me));
+            }
         }
-        MapDef.GateRef me = new MapDef.GateRef(sel.pid, myGate);
-        map.gateLinks.removeIf(gl -> gl.involves(me));
         refreshLinkList();
     }
 
     private void renameSelectedLink() {
         if (map == null) return;
         String newName = linkNameField.getText() == null ? "" : linkNameField.getText().trim();
-        // Quick way: if there is exactly one link in selection context (common), rename all involving selected gate.
-        int myGate = gateList.getSelectionModel().getSelectedIndex();
-        if (sel != null && myGate >= 0) {
-            MapDef.GateRef me = new MapDef.GateRef(sel.pid, myGate);
-            map.gateLinks.stream().filter(gl -> gl.involves(me)).forEach(gl -> gl.name = newName);
+
+        int idx = linkList.getSelectionModel().getSelectedIndex();
+        if (idx >= 0 && idx < linkVm.size()) {
+            linkVm.get(idx).name = newName;  // rename the single selected link
+        } else {
+            // fallback: rename all links involving selected gate
+            int myGate = gateList.getSelectionModel().getSelectedIndex();
+            if (sel != null && myGate >= 0) {
+                MapDef.GateRef me = new MapDef.GateRef(sel.pid, myGate);
+                map.gateLinks.stream().filter(gl -> gl.involves(me)).forEach(gl -> gl.name = newName);
+            }
         }
         refreshLinkList();
     }

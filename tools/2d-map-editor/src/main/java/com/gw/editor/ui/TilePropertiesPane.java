@@ -58,7 +58,6 @@ public class TilePropertiesPane extends VBox {
         var solidWrap = new VBox(2, solidBox, new Label("Collision enabled"));
         var shapeWrap = new VBox(4, shapeBox, new Label("Shape"));
         var orientWrap = new VBox(4, orientBox, new Label("Orientation"));
-        var floatBox = new VBox(4, floatSpinner, new Label("Custom"));
 
         // Tag/custom disabled when multi-select
         tagField.disableProperty().bind(new javafx.beans.binding.BooleanBinding() {
@@ -70,7 +69,7 @@ public class TilePropertiesPane extends VBox {
         shapeBox.disableProperty().bind(solidBox.selectedProperty().not());
         orientBox.disableProperty().bind(solidBox.selectedProperty().not());
 
-        getChildren().addAll(hdr, tagBox, gateWrap, solidWrap, shapeWrap, orientWrap, floatBox);
+        getChildren().addAll(hdr, tagBox, gateWrap, solidWrap, shapeWrap, orientWrap);
 
         // listeners – stage without touching template
         tagField.textProperty().addListener((obs, o, n) -> stageForSelection(true, false, false));

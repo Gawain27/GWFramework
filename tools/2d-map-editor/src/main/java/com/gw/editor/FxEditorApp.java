@@ -21,6 +21,7 @@ import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.SnapshotParameters;
 import javafx.scene.canvas.Canvas;
@@ -454,25 +455,19 @@ public class FxEditorApp extends Application {
     }
 
     private void newMapFromAsset() {
-        TextInputDialog dlg = new TextInputDialog();
-        dlg.setTitle("New Map from Asset");
-        dlg.setHeaderText(null);
-        dlg.setContentText("Enter logical path of asset (e.g. textures/level_bg.png):");
-        var res = dlg.showAndWait();
-        if (res.isEmpty()) return;
+        TemplateDef chosen = pickTemplateDialog("Choose Background Template");
+        if (chosen == null) return;
 
-        String logical = res.get().trim();
         try {
-            String abs = manager.toAbsolute(logical);
-            var img = new Image(Path.of(abs).toUri().toString());
+            String abs = manager.toAbsolute(chosen.logicalPath);
+            Image img = new Image(Path.of(abs).toUri().toString());
             if (img.isError() || img.getWidth() <= 0 || img.getHeight() <= 0) {
-                alert("Could not load image for asset: " + logical);
+                alert("Could not load image for asset: " + chosen.logicalPath);
                 return;
             }
-            // Confirm creation
-            if (!confirm("Create Map", "Create a new map sized to the asset as background?")) return;
+            if (!confirm("Create Map", "Create a new map sized to the selected template's texture as background?"))
+                return;
 
-            // Compute tile grid from current tileW/H
             int tW = tileW.getValue(), tH = tileH.getValue();
             int wTiles = Math.max(1, (int) Math.ceil(img.getWidth() / tW));
             int hTiles = Math.max(1, (int) Math.ceil(img.getHeight() / tH));
@@ -488,7 +483,7 @@ public class FxEditorApp extends Application {
             currentMap.normalizeLayers();
 
             currentMap.background = new MapDef.Background();
-            currentMap.background.logicalPath = logical;
+            currentMap.background.logicalPath = chosen.logicalPath;
             currentMap.background.imageWidthPx = (int) Math.round(img.getWidth());
             currentMap.background.imageHeightPx = (int) Math.round(img.getHeight());
 
@@ -508,19 +503,14 @@ public class FxEditorApp extends Application {
             return;
         }
 
-        TextInputDialog dlg = new TextInputDialog();
-        dlg.setTitle("Paste Asset into Map");
-        dlg.setHeaderText(null);
-        dlg.setContentText("Enter logical path of asset (e.g. textures/tree.png):");
-        var res = dlg.showAndWait();
-        if (res.isEmpty()) return;
+        TemplateDef chosen = pickTemplateDialog("Choose Background Template");
+        if (chosen == null) return;
 
-        String logical = res.get().trim();
         try {
-            String abs = manager.toAbsolute(logical);
+            String abs = manager.toAbsolute(chosen.logicalPath);
             var img = new Image(Path.of(abs).toUri().toString());
             if (img.isError() || img.getWidth() <= 0 || img.getHeight() <= 0) {
-                alert("Could not load image for asset: " + logical);
+                alert("Could not load image for asset: " + chosen.logicalPath);
                 return;
             }
 
@@ -542,8 +532,8 @@ public class FxEditorApp extends Application {
 
             // Create a transient TemplateDef snapshot for this asset
             TemplateDef snap = new TemplateDef();
-            snap.id = "(asset:" + logical + ")";
-            snap.logicalPath = logical;
+            snap.id = "(asset:" + chosen.logicalPath + ")";
+            snap.logicalPath = chosen.logicalPath;
             snap.imageWidthPx = (int) Math.round(img.getWidth());
             snap.imageHeightPx = (int) Math.round(img.getHeight());
             snap.tileWidthPx = tW;
@@ -559,6 +549,57 @@ public class FxEditorApp extends Application {
         } catch (Exception ex) {
             alert("Error: " + ex.getMessage());
         }
+    }
+
+    private TemplateDef pickTemplateDialog(String title) {
+        Dialog<TemplateDef> dlg = new Dialog<>();
+        dlg.setTitle(title);
+        dlg.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        TextField search = new TextField();
+        search.setPromptText("Search by id or path…");
+
+        ListView<TemplateDef> list = new ListView<>();
+        list.setCellFactory(lv -> new ListCell<>() {
+            @Override
+            protected void updateItem(TemplateDef item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    return;
+                }
+                String id = (item.id == null || item.id.isBlank()) ? "(unnamed)" : item.id;
+                setText(id + "   •   " + item.logicalPath);
+            }
+        });
+
+        var all = repo.listAll();
+        ObservableList<TemplateDef> backing = FXCollections.observableArrayList(all);
+        FilteredList<TemplateDef> filtered = new FilteredList<>(backing, t -> true);
+        list.setItems(filtered);
+
+        search.textProperty().addListener((o, ov, nv) -> {
+            String q = (nv == null) ? "" : nv.toLowerCase();
+            filtered.setPredicate(t -> {
+                String id = t.id == null ? "" : t.id.toLowerCase();
+                String path = t.logicalPath == null ? "" : t.logicalPath.toLowerCase();
+                return id.contains(q) || path.contains(q);
+            });
+        });
+
+        list.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
+        list.getSelectionModel().selectFirst();
+
+        VBox content = new VBox(8, search, list);
+        content.setPadding(new Insets(8));
+        dlg.getDialogPane().setContent(content);
+
+        // Enable OK only when something is selected
+        Node okBtn = dlg.getDialogPane().lookupButton(ButtonType.OK);
+        okBtn.disableProperty().bind(list.getSelectionModel().selectedItemProperty().isNull());
+
+        dlg.setResultConverter(bt -> (bt == ButtonType.OK) ? list.getSelectionModel().getSelectedItem() : null);
+        return dlg.showAndWait().orElse(null);
     }
 
     private void alert(String msg) {
@@ -625,8 +666,8 @@ public class FxEditorApp extends Application {
                 card.imageView.setOnDragDetected(e -> {
                     var db = card.imageView.startDragAndDrop(TransferMode.COPY);
                     db.setDragView(card.imageView.getImage(),
-                        card.imageView.getImage().getWidth()/2,
-                        card.imageView.getImage().getHeight()/2);
+                        card.imageView.getImage().getWidth() / 2,
+                        card.imageView.getImage().getHeight() / 2);
 
                     javafx.scene.input.ClipboardContent cc = new javafx.scene.input.ClipboardContent();
                     // AFTER: use the gallery scale spinner value

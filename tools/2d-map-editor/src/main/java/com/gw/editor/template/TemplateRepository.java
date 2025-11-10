@@ -63,4 +63,15 @@ public final class TemplateRepository {
         }
         return null;
     }
+
+    /** Load and return all templates in the repository. */
+    public List<TemplateDef> listAll() {
+        List<TemplateDef> all = new ArrayList<>();
+        for (Path p : listJsonFiles()) {
+            try {
+                all.add(load(p));
+            } catch (RuntimeException ignored) { /* skip malformed */ }
+        }
+        return all;
+    }
 }

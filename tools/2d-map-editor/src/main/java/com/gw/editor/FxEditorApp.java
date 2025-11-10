@@ -629,14 +629,16 @@ public class FxEditorApp extends Application {
                         card.imageView.getImage().getHeight()/2);
 
                     javafx.scene.input.ClipboardContent cc = new javafx.scene.input.ClipboardContent();
+                    // AFTER: use the gallery scale spinner value
+                    double scaleMul = (galleryScale.getValue() == null ? 1.0 : galleryScale.getValue());
                     String payload = String.join("|",
                         safe(t.id),
-                        String.valueOf(-1),                                   // regionIndex
+                        String.valueOf(-1),                                   // regionIndex (animated whole)
                         String.valueOf(Math.max(1, t.tileWidthPx)),
                         String.valueOf(Math.max(1, t.tileHeightPx)),
-                        String.valueOf(first[0]), String.valueOf(first[1]),   // preview rect (first frame)
+                        String.valueOf(first[0]), String.valueOf(first[1]),   // preview rect = first frame
                         String.valueOf(first[2]), String.valueOf(first[3]),
-                        String.valueOf(1.0)                                    // scale
+                        String.valueOf(scaleMul)                               // <-- pass real scale
                     );
                     cc.put(MapCanvasPane.DND_FORMAT, payload);
                     db.setContent(cc);

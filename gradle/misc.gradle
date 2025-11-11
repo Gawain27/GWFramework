@@ -23,10 +23,16 @@ tasks.register('translationEditor', JavaExec) {
     }
 }
 
-tasks.register('2dMapEditor') {
+tasks.register('TemplateEditor') {
   group = 'gdx'
-  description = 'Run the desktop 2D Map Editor (JavaFX)'
+  description = 'Run the desktop Template Editor (JavaFX)'
   dependsOn ':tools:2d-map-editor:run'
+}
+
+tasks.register('MapEditor') {
+  group = 'gdx'
+  description = 'Run the desktop Map Editor (JavaFX)'
+  dependsOn ':tools:2d-map-editor:runMap'
 }
 
 

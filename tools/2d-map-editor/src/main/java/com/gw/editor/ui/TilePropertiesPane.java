@@ -3,6 +3,7 @@ package com.gw.editor.ui;
 import com.gw.editor.template.TemplateDef;
 import com.gw.editor.template.TemplateDef.Orientation;
 import com.gw.editor.template.TemplateDef.ShapeType;
+import com.gw.editor.util.TemplateSlice;
 import javafx.beans.property.BooleanProperty;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
@@ -292,14 +293,7 @@ public class TilePropertiesPane extends VBox {
 
     private static TemplateDef.TileDef deepCopy(TemplateDef.TileDef src) {
         if (src == null) return null;
-        TemplateDef.TileDef c = new TemplateDef.TileDef(src.gx, src.gy);
-        c.tag = src.tag;
-        c.customFloat = src.customFloat;
-        c.gate = src.gate;
-        c.solid = src.solid;
-        c.shape = src.shape;
-        c.orientation = src.orientation;
-        return c;
+        return TemplateSlice.createTile(src);
     }
 
     private static TemplateDef.TileDef baseCopyOrNew(TemplateDef.TileDef base, Point p) {

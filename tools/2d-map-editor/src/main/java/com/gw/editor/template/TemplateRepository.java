@@ -13,7 +13,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class TemplateRepository {
+public class TemplateRepository {
     private final Path templatesDir;
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 

@@ -2,13 +2,15 @@ package com.gw.editor.util;
 
 import com.gw.editor.template.TemplateDef;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
  * Helpers to clone templates (whole image or a region).
  */
-public final class TemplateSlice {
+public class TemplateSlice {
     private TemplateSlice() {
     }
 
@@ -27,30 +29,33 @@ public final class TemplateSlice {
 
         // IMPORTANT: keep both flags and all regions for animation
         d.complex = src.complex;
-        // if you already added this field in TemplateDef:
-        // public boolean animated = false;
         d.animated = src.animated;
 
         // deep copy tiles
         d.tiles = new HashMap<>();
         for (Map.Entry<String, TemplateDef.TileDef> e : src.tiles.entrySet()) {
             TemplateDef.TileDef t = e.getValue();
-            TemplateDef.TileDef nt = new TemplateDef.TileDef(t.gx, t.gy);
-            nt.tag = t.tag;
-            nt.customFloat = t.customFloat;
-            nt.gate = t.gate;
-            nt.solid = t.solid;
-            nt.shape = t.shape;
-            nt.orientation = t.orientation;
+            TemplateDef.TileDef nt = createTile(t);
             d.tiles.put(e.getKey(), nt);
         }
 
         // deep copy regions (order is the animation order if animated)
-        d.regions = new java.util.ArrayList<>();
+        d.regions = new ArrayList<>();
         for (TemplateDef.RegionDef r : src.regions) {
             d.regions.add(new TemplateDef.RegionDef(r.id, r.x0, r.y0, r.x1, r.y1));
         }
         return d;
+    }
+
+    public static TemplateDef.TileDef createTile(TemplateDef.TileDef t) {
+        TemplateDef.TileDef nt = new TemplateDef.TileDef(t.gx, t.gy);
+        nt.tag = t.tag;
+        nt.customFloat = t.customFloat;
+        nt.gate = t.gate;
+        nt.solid = t.solid;
+        nt.shape = t.shape;
+        nt.orientation = t.orientation;
+        return nt;
     }
 
     /**
@@ -93,7 +98,7 @@ public final class TemplateSlice {
         }
 
         // regions inside the crop can be normalized (optional); simplest is none for a sliced static texture
-        d.regions = java.util.List.of();
+        d.regions = List.of();
         return d;
     }
 }

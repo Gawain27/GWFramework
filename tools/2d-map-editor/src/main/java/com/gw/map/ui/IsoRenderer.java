@@ -21,15 +21,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-/**
- * 3D-ish orthographic renderer with camera yaw/pitch/roll.
- * - In tile-select mode: only the selected plane + its placements render.
- * - Placements are drawn tile-by-tile on the plane, so they remain perfectly glued to the plane grid.
- */
 public class IsoRenderer {
 
     private final Canvas canvas;
-    private final double baseScale = 32.0; // pixels per world unit before zoom
+    private final double baseScale = 32.0;
 
     private MapDef map;
     private TextureResolver textureResolver = new DefaultTextureResolver();
@@ -39,7 +34,7 @@ public class IsoRenderer {
         this.canvas = canvas;
     }
 
-    // R = Rz(roll) * Rx(pitch) * Ry(yaw)
+    // ---- camera math ----
     private static double[][] rotationMatrix(double yawDeg, double pitchDeg, double rollDeg) {
         double cy = Math.cos(Math.toRadians(yawDeg)), sy = Math.sin(Math.toRadians(yawDeg));
         double cx = Math.cos(Math.toRadians(pitchDeg)), sx = Math.sin(Math.toRadians(pitchDeg));
@@ -58,7 +53,6 @@ public class IsoRenderer {
         return R;
     }
 
-    // Orthographic projection after rotation; screen y grows down → invert Y
     private static double[] project(double[][] R, double scale, double ox, double oy, double x, double y, double z) {
         double xr = R[0][0] * x + R[0][1] * y + R[0][2] * z;
         double yr = R[1][0] * x + R[1][1] * y + R[1][2] * z;
@@ -66,20 +60,15 @@ public class IsoRenderer {
         return new double[]{ox + xr * scale, oy - yr * scale, zr};
     }
 
-    /* ---------------- Camera math ---------------- */
-
     private static boolean pointInTri(double px, double py, double[] a, double[] b, double[] c) {
         double v0x = c[0] - a[0], v0y = c[1] - a[1];
         double v1x = b[0] - a[0], v1y = b[1] - a[1];
         double v2x = px - a[0], v2y = py - a[1];
-        double dot00 = v0x * v0x + v0y * v0y;
-        double dot01 = v0x * v1x + v0y * v1y;
-        double dot02 = v0x * v2x + v0y * v2y;
-        double dot11 = v1x * v1x + v1y * v1y;
-        double dot12 = v1x * v2x + v1y * v2y;
-        double invDen = 1.0 / (dot00 * dot11 - dot01 * dot01 + 1e-9);
-        double u = (dot11 * dot02 - dot01 * dot12) * invDen;
-        double v = (dot00 * dot12 - dot01 * dot02) * invDen;
+        double dot00 = v0x * v0x + v0y * v0y, dot01 = v0x * v1x + v0y * v1y, dot02 = v0x * v2x + v0y * v2y;
+        double dot11 = v1x * v1x + v1y * v1y, dot12 = v1x * v2x + v1y * v2y;
+        double inv = 1.0 / (dot00 * dot11 - dot01 * dot01 + 1e-9);
+        double u = (dot11 * dot02 - dot01 * dot12) * inv;
+        double v = (dot00 * dot12 - dot01 * dot02) * inv;
         return (u >= 0) && (v >= 0) && (u + v <= 1);
     }
 
@@ -99,10 +88,8 @@ public class IsoRenderer {
         if (repo != null) this.templateRepo = repo;
     }
 
-    /* ---------------- Public render ---------------- */
-
+    // ---- render ----
     public void render(GraphicsContext g, MapDef map, SelectionState sel, boolean tileMode, String ghostTemplateId, double[] ghostScreenPos) {
-
         g.setFill(Color.WHITE);
         g.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
         if (map == null) return;
@@ -112,14 +99,13 @@ public class IsoRenderer {
         double oy = canvas.getHeight() * 0.25 + map.cameraPanY;
         double[][] R = rotationMatrix(map.cameraYawDeg, map.cameraPitchDeg, map.cameraRollDeg);
 
-        // Axes with labels
         drawAxes(g, R, scale, ox, oy, map);
 
-        // Placements (in tile mode, only the selected plane)
+        // placements first
         if (tileMode) drawPlanePlacementsFiltered(g, map, R, scale, ox, oy, sel.base, sel.index);
         else drawPlanePlacementsAll(g, map, R, scale, ox, oy);
 
-        // Build plane/tile quads for grid
+        // grid
         List<Quad> quads = new ArrayList<>();
         if (tileMode) {
             switch (sel.base) {
@@ -132,13 +118,12 @@ public class IsoRenderer {
             for (int k = 0; k < map.size.widthX; k++) addPlaneX(quads, k);
             for (int k = 0; k < map.size.heightY; k++) addPlaneY(quads, k);
         }
-
-        quads.sort(Comparator.comparingDouble(q -> -q.avgZ)); // back-to-front
+        quads.sort(Comparator.comparingDouble(q -> -q.avgZ));
 
         for (Quad q : quads) {
-            boolean highlightPlane = (!tileMode) && ((q.kind == Kind.Z && q.index == (sel.base == SelectionState.BasePlane.Z ? sel.index : -1)) || (q.kind == Kind.X && q.index == (sel.base == SelectionState.BasePlane.X ? sel.index : -1)) || (q.kind == Kind.Y && q.index == (sel.base == SelectionState.BasePlane.Y ? sel.index : -1)));
+            boolean hi = (!tileMode) && ((q.kind == Kind.Z && q.index == (sel.base == SelectionState.BasePlane.Z ? sel.index : -1)) || (q.kind == Kind.X && q.index == (sel.base == SelectionState.BasePlane.X ? sel.index : -1)) || (q.kind == Kind.Y && q.index == (sel.base == SelectionState.BasePlane.Y ? sel.index : -1)));
 
-            Color line = highlightPlane ? Color.rgb(0, 128, 255, 0.9) : Color.rgb(0, 0, 0, 0.12);
+            Color line = hi ? Color.rgb(0, 128, 255, 0.9) : Color.rgb(0, 0, 0, 0.12);
             Color fill = switch (q.kind) {
                 case Z -> Color.rgb(0, 0, 0, tileMode ? 0.05 : 0.03);
                 case X -> Color.rgb(0, 0, 0, tileMode ? 0.06 : 0.02);
@@ -153,11 +138,11 @@ public class IsoRenderer {
             g.setFill(fill);
             g.fillPolygon(new double[]{s0[0], s1[0], s2[0], s3[0]}, new double[]{s0[1], s1[1], s2[1], s3[1]}, 4);
             g.setStroke(line);
-            g.setLineWidth(highlightPlane ? 2.0 : 1.0);
+            g.setLineWidth(hi ? 2.0 : 1.0);
             g.strokePolygon(new double[]{s0[0], s1[0], s2[0], s3[0]}, new double[]{s0[1], s1[1], s2[1], s3[1]}, 4);
         }
 
-        // Single-tile highlight in tile mode
+        // tile highlight
         if (tileMode && !sel.selectedTiles.isEmpty()) {
             var tk = sel.selectedTiles.iterator().next();
             switch (sel.base) {
@@ -168,14 +153,11 @@ public class IsoRenderer {
         }
     }
 
-    /* ---------------- Axes ---------------- */
-
     private void drawAxes(GraphicsContext g, double[][] R, double scale, double ox, double oy, MapDef map) {
         double[] O = project(R, scale, ox, oy, 0, 0, 0);
         double[] Xp = project(R, scale, ox, oy, Math.max(1, map.size.widthX), 0, 0);
         double[] Yp = project(R, scale, ox, oy, 0, Math.max(1, map.size.heightY), 0);
         double[] Zp = project(R, scale, ox, oy, 0, 0, Math.max(1, map.size.depthZ));
-
         g.setLineWidth(2.0);
         g.setStroke(Color.rgb(220, 40, 40, 0.9));
         g.strokeLine(O[0], O[1], Xp[0], Xp[1]);
@@ -191,11 +173,11 @@ public class IsoRenderer {
         g.fillText("Z", Zp[0] + 6, Zp[1] - 6);
     }
 
-    /* ---------------- Plane placements ---------------- */
-
+    // ---- placements ----
     private void drawPlanePlacementsAll(GraphicsContext g, MapDef map, double[][] R, double scale, double ox, double oy) {
         if (map.planes == null || map.planes.isEmpty()) return;
         g.save();
+        g.setImageSmoothing(false);
         for (Plane2DMap plane : map.planes.values()) {
             if (plane == null || plane.placements.isEmpty()) continue;
             drawPlanePlacementsFor(g, plane, R, scale, ox, oy);
@@ -208,13 +190,13 @@ public class IsoRenderer {
         Plane2DMap plane = map.planes.get(map.planeKey(base, index));
         if (plane == null || plane.placements.isEmpty()) return;
         g.save();
+        g.setImageSmoothing(false);
         drawPlanePlacementsFor(g, plane, R, scale, ox, oy);
         g.restore();
     }
 
     /**
-     * Draw placements on one plane tile-by-tile. Each source sub-rect is mapped to one world tile
-     * patch, so the texture is locked to the plane grid and follows it under camera rotation.
+     * Tile-by-tile draw; corrected Affine coefficients so each sub-rect lands exactly on its world tile.
      */
     private void drawPlanePlacementsFor(GraphicsContext g, Plane2DMap plane, double[][] R, double scale, double ox, double oy) {
         for (Plane2DMap.Placement p : plane.placements) {
@@ -238,7 +220,7 @@ public class IsoRenderer {
             if (url == null) continue;
             Image img = new Image(url, false);
 
-            // Source rect (first frame if animated)
+            // source rect (first frame if animated)
             int sx = p.srcXpx, sy = p.srcYpx, sw = p.srcWpx, sh = p.srcHpx;
             if (snap.complex && snap.animated && snap.regions != null && !snap.regions.isEmpty()) {
                 int[] r = snap.pixelRegions().get(0);
@@ -248,18 +230,15 @@ public class IsoRenderer {
                 sh = r[3];
             }
 
-            // Placement footprint in tiles (scaled)
             int Wt = Math.max(1, (int) Math.ceil(p.wTiles * Math.max(0.01, p.scale)));
             int Ht = Math.max(1, (int) Math.ceil(p.hTiles * Math.max(0.01, p.scale)));
-
-            // Per-tile source slice size
             double cellSw = sw / (double) Wt;
             double cellSh = sh / (double) Ht;
 
-            // World origin (top-left tile) + plane U/V unit tile vectors
+            // placement origin + unit tile vectors per plane
             double x0 = 0, y0 = 0, z0 = 0, uxX = 0, uxY = 0, uxZ = 0, vyX = 0, vyY = 0, vyZ = 0;
             switch (plane.base) {
-                case Z -> { // z=k, U→+X, V→+Y
+                case Z -> {
                     x0 = p.gx;
                     y0 = p.gy;
                     z0 = plane.planeIndex;
@@ -270,7 +249,7 @@ public class IsoRenderer {
                     vyY = 1;
                     vyZ = 0;
                 }
-                case X -> { // x=k, U→+Y, V→+Z
+                case X -> {
                     x0 = plane.planeIndex;
                     y0 = p.gx;
                     z0 = p.gy;
@@ -281,7 +260,7 @@ public class IsoRenderer {
                     vyY = 0;
                     vyZ = 1;
                 }
-                case Y -> { // y=k, U→+X, V→+Z
+                case Y -> {
                     x0 = p.gx;
                     y0 = plane.planeIndex;
                     z0 = p.gy;
@@ -294,28 +273,27 @@ public class IsoRenderer {
                 }
             }
 
-            // Draw each tile cell
             for (int v = 0; v < Ht; v++) {
                 for (int u = 0; u < Wt; u++) {
-                    // Destination: one world tile patch at (u,v) from the placement origin
                     double wx = x0 + u * uxX + v * vyX;
                     double wy = y0 + u * uxY + v * vyY;
                     double wz = z0 + u * uxZ + v * vyZ;
 
-                    // Project the three points that define the affine for this single tile:
-                    // (0,0) -> S00, (1,0) -> S10, (0,1) -> S01 (all in "tiles")
                     double[] S00 = project(R, scale, ox, oy, wx, wy, wz);
                     double[] S10 = project(R, scale, ox, oy, wx + uxX, wy + uxY, wz + uxZ);
                     double[] S01 = project(R, scale, ox, oy, wx + vyX, wy + vyY, wz + vyZ);
 
-                    // Build affine from source sub-rect pixels to that one-tile parallelogram
+                    // Correct mapping: U to x-axis, V to y-axis of the Affine
+                    double Ux = S10[0] - S00[0], Uy = S10[1] - S00[1];
+                    double Vx = S01[0] - S00[0], Vy = S01[1] - S00[1];
+
                     double subSx = sx + u * cellSw;
                     double subSy = sy + v * cellSh;
 
-                    double mxx = (S10[0] - S00[0]) / Math.max(1.0, cellSw);
-                    double mxy = (S10[1] - S00[1]) / Math.max(1.0, cellSw);
-                    double myx = (S01[0] - S00[0]) / Math.max(1.0, cellSh);
-                    double myy = (S01[1] - S00[1]) / Math.max(1.0, cellSh);
+                    double mxx = Ux / Math.max(1.0, cellSw);
+                    double mxy = Vx / Math.max(1.0, cellSh);
+                    double myx = Uy / Math.max(1.0, cellSw);
+                    double myy = Vy / Math.max(1.0, cellSh);
                     double tx = S00[0];
                     double ty = S00[1];
 
@@ -329,8 +307,7 @@ public class IsoRenderer {
         }
     }
 
-    /* ---------------- Picking ---------------- */
-
+    // ---- picking & helpers ----
     public PlaneHit hitTestPlane(double sx, double sy) {
         double scale = baseScale * map.cameraZoom;
         double ox = canvas.getWidth() * 0.5 + map.cameraPanX;
@@ -385,8 +362,6 @@ public class IsoRenderer {
         return null;
     }
 
-    /* ---------------- Plane/tile quad builders ---------------- */
-
     private void addPlaneZ(List<Quad> out, int k) {
         for (int y = 0; y < map.size.heightY; y++)
             for (int x = 0; x < map.size.widthX; x++)
@@ -434,9 +409,9 @@ public class IsoRenderer {
         double[] s1 = project(R, scale, ox, oy, x + 1, y, z);
         double[] s2 = project(R, scale, ox, oy, x + 1, y + 1, z);
         double[] s3 = project(R, scale, ox, oy, x, y + 1, z);
-        g.setFill(Color.color(1, 0.8, 0.0, 0.25));
+        g.setFill(Color.color(1, 0.8, 0, 0.25));
         g.fillPolygon(new double[]{s0[0], s1[0], s2[0], s3[0]}, new double[]{s0[1], s1[1], s2[1], s3[1]}, 4);
-        g.setStroke(Color.color(1, 0.8, 0.0, 0.95));
+        g.setStroke(Color.color(1, 0.8, 0, 0.95));
         g.setLineWidth(2.0);
         g.strokePolygon(new double[]{s0[0], s1[0], s2[0], s3[0]}, new double[]{s0[1], s1[1], s2[1], s3[1]}, 4);
     }

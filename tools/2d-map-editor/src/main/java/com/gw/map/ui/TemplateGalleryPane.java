@@ -85,7 +85,6 @@ public class TemplateGalleryPane extends VBox {
     }
 
     // -------- Rendering --------
-
     public TemplateGalleryPane(TemplateRepository repository) {
         this.repo = repository != null ? repository : new TemplateRepository();
 

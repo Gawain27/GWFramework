@@ -1,9 +1,7 @@
 package com.gw.map.ui.sidebar;
 
-import com.gw.map.model.SelectionState;
-import com.gw.map.ui.MapEditorPane;
 import javafx.geometry.Insets;
-import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
@@ -11,28 +9,108 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 
 /**
- * Right-side content for MAP tab: base-plane, plane index navigation, zoom
- * controls.
+ * Right sidebar: Map tab (base plane, plane index, zoom, edit).
  */
 public class MapSidebarPane extends VBox {
-    public final ComboBox<SelectionState.BasePlane> basePlaneCombo = new ComboBox<>();
-    public final Label planeIndexLabel = new Label();
-    public final Button prevPlaneBtn = new Button("Prev plane");
-    public final Button nextPlaneBtn = new Button("Next plane");
-    public final Button zoomInBtn = new Button("Zoom +");
-    public final Button zoomOutBtn = new Button("Zoom -");
 
-    public MapSidebarPane(MapEditorPane editor) {
+    private final ComboBox<UiBasePlane> basePlaneCombo = new ComboBox<>();
+    private final Button prevPlaneBtn = new Button("◀");
+    private final Button nextPlaneBtn = new Button("▶");
+    private final Label planeIndexLabel = new Label("-");
+    private final Button zoomInBtn = new Button("+");
+    private final Button zoomOutBtn = new Button("−");
+    private final Button editBtn = new Button("Edit");
+    // callbacks
+    private java.util.function.Consumer<UiBasePlane> onBasePlaneChanged = bp -> {
+    };
+    private Runnable onPrevPlane = () -> {
+    };
+    private Runnable onNextPlane = () -> {
+    };
+    private Runnable onZoomIn = () -> {
+    };
+    private Runnable onZoomOut = () -> {
+    };
+    private Runnable onEdit = () -> {
+    };
+    public MapSidebarPane() {
+        setSpacing(8);
         setPadding(new Insets(10));
-        setSpacing(12);
-        getChildren().add(new Label("Map Controls"));
-        basePlaneCombo.getItems().addAll(SelectionState.BasePlane.values());
-        basePlaneCombo.setMaxWidth(Double.MAX_VALUE);
-        getChildren().add(new HBox(6, new Label("Base plane:"), basePlaneCombo));
-        HBox planeNav = new HBox(6, prevPlaneBtn, planeIndexLabel, nextPlaneBtn);
-        planeNav.setAlignment(Pos.CENTER_LEFT);
-        getChildren().add(planeNav);
-        HBox zoom = new HBox(6, zoomOutBtn, zoomInBtn);
-        getChildren().add(zoom);
+        setFillWidth(true);
+
+        getChildren().addAll(
+            buildBasePlaneRow(),
+            buildPlaneIndexRow(),
+            buildZoomRow(),
+            editBtn
+        );
+
+        basePlaneCombo.getItems().setAll(UiBasePlane.values());
+        basePlaneCombo.getSelectionModel().select(UiBasePlane.X); // default
+        basePlaneCombo.valueProperty().addListener((o, ov, nv) -> {
+            if (nv != null) onBasePlaneChanged.accept(nv);
+        });
+
+        prevPlaneBtn.setOnAction(e -> onPrevPlane.run());
+        nextPlaneBtn.setOnAction(e -> onNextPlane.run());
+        zoomInBtn.setOnAction(e -> onZoomIn.run());
+        zoomOutBtn.setOnAction(e -> onZoomOut.run());
+        editBtn.setOnAction(e -> onEdit.run());
     }
+
+    private Node buildBasePlaneRow() {
+        HBox row = new HBox(8, new Label("Base plane:"), basePlaneCombo);
+        return row;
+    }
+
+    private Node buildPlaneIndexRow() {
+        HBox row = new HBox(8, new Label("Index:"), prevPlaneBtn, planeIndexLabel, nextPlaneBtn);
+        return row;
+    }
+
+    private Node buildZoomRow() {
+        HBox row = new HBox(8, new Label("Zoom:"), zoomOutBtn, zoomInBtn);
+        return row;
+    }
+
+    // API for MapEditorPane
+    public void setPlaneIndexText(String text) {
+        planeIndexLabel.setText(text);
+    }
+
+    public void setSelectedBasePlane(UiBasePlane ui) {
+        basePlaneCombo.getSelectionModel().select(ui);
+    }
+
+    public void setOnBasePlaneChanged(java.util.function.Consumer<UiBasePlane> cb) {
+        this.onBasePlaneChanged = (cb != null) ? cb : (x -> {
+        });
+    }
+
+    public void setOnPrevPlane(Runnable r) {
+        this.onPrevPlane = (r != null) ? r : () -> {
+        };
+    }
+
+    public void setOnNextPlane(Runnable r) {
+        this.onNextPlane = (r != null) ? r : () -> {
+        };
+    }
+
+    public void setOnZoomIn(Runnable r) {
+        this.onZoomIn = (r != null) ? r : () -> {
+        };
+    }
+
+    public void setOnZoomOut(Runnable r) {
+        this.onZoomOut = (r != null) ? r : () -> {
+        };
+    }
+
+    public void setOnEditCurrentPlane(Runnable r) {
+        this.onEdit = (r != null) ? r : () -> {
+        };
+    }
+
+    public enum UiBasePlane {X, Y, Z} // UI labels
 }

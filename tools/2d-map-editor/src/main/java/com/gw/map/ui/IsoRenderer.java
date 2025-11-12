@@ -108,6 +108,7 @@ public class IsoRenderer {
 
         // Build rotation matrix from yaw (Y), pitch (X), roll (Z)
         double[][] R = rotationMatrix(map.cameraYawDeg, map.cameraPitchDeg, map.cameraRollDeg);
+        drawAxes(g, R, scale, ox, oy, map);
 
         // Collect quads to draw (depth sort helps overlapping)
         List<Quad> quads = new ArrayList<>();
@@ -163,6 +164,37 @@ public class IsoRenderer {
                 case Y -> drawTileHighlight(g, R, scale, ox, oy, tk.a, sel.index, tk.b);
             }
         }
+    }
+
+    private void drawAxes(GraphicsContext g, double[][] R, double scale, double ox, double oy, MapDef map) {
+        double lx = Math.max(1, map.size.widthX);
+        double ly = Math.max(1, map.size.heightY);
+        double lz = Math.max(1, map.size.depthZ);
+
+        double[] O  = project(R, scale, ox, oy, 0, 0, 0);
+        double[] Xp = project(R, scale, ox, oy, lx, 0, 0);
+        double[] Yp = project(R, scale, ox, oy, 0, ly, 0);
+        double[] Zp = project(R, scale, ox, oy, 0, 0, lz);
+
+        g.setLineWidth(2.0);
+
+        // X axis (red)
+        g.setStroke(Color.rgb(220, 40, 40, 0.9));
+        g.strokeLine(O[0], O[1], Xp[0], Xp[1]);
+        g.setFill(Color.rgb(220, 40, 40, 0.95));
+        g.fillText("X", Xp[0] + 6, Xp[1] - 6);
+
+        // Y axis (green)
+        g.setStroke(Color.rgb(40, 180, 60, 0.9));
+        g.strokeLine(O[0], O[1], Yp[0], Yp[1]);
+        g.setFill(Color.rgb(40, 180, 60, 0.95));
+        g.fillText("Y", Yp[0] + 6, Yp[1] - 6);
+
+        // Z axis (blue)
+        g.setStroke(Color.rgb(40, 100, 220, 0.9));
+        g.strokeLine(O[0], O[1], Zp[0], Zp[1]);
+        g.setFill(Color.rgb(40, 100, 220, 0.95));
+        g.fillText("Z", Zp[0] + 6, Zp[1] - 6);
     }
 
     /**

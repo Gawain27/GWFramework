@@ -1,6 +1,7 @@
 package com.gw.map.ui;
 
 import com.gw.editor.template.TemplateRepository;
+import com.gw.map.io.DefaultTextureResolver;
 import com.gw.map.io.MapRepository;
 import com.gw.map.model.MapDef;
 import com.gw.map.model.Plane2DMap;
@@ -34,8 +35,6 @@ import javafx.scene.control.ToolBar;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
@@ -90,6 +89,9 @@ public class MapEditorPane extends BorderPane {
     // Mouse (3D)
     private double lastX, lastY;
     private boolean rightDragging = false;
+    private double lastLeftWidthFrac = 0.22; // remember user size
+    private double lastRightWidthFrac = 0.22;
+
     public MapEditorPane(MapRepository repo) {
         this.repo = repo;
 
@@ -139,30 +141,45 @@ public class MapEditorPane extends BorderPane {
     public void setMap(MapDef def) {
         this.map = def != null ? def : MapDef.createDefault();
         renderer.setMap(this.map);
+        renderer.setTemplateRepository(new TemplateRepository());
+        renderer.setTextureResolver(new DefaultTextureResolver());
+
+        // Rehydrate every plane’s transient snapshots
+        TemplateRepository tr = new TemplateRepository();
+        if (map.planes != null) map.planes.values().forEach(p -> p.rehydrateSnapshots(tr));
+
         ensurePlaneIndexInBounds();
         redraw();
         updateMapSidebarLabels();
-        // sync base-plane combobox with current base on load
         syncUiBasePlaneComboFromSel();
     }
+
 
     /* ------------------------- Layout helpers ------------------------- */
 
     private void buildThreeWaySplit() {
         split.setOrientation(Orientation.HORIZONTAL);
-
-        // Sensible mins so handles are easy to grab
-        leftContainer.setMinWidth(140);
-        rightContainer.setMinWidth(220);
+        leftContainer.setMinWidth(0);
+        rightContainer.setMinWidth(0);
         centerContainer.setMinWidth(300);
 
-        // Allow growing
-        HBox.setHgrow(centerContainer, Priority.ALWAYS);
-
         split.getItems().addAll(leftContainer, centerContainer, rightContainer);
+        // initial: left 22%, right 22%
         split.setDividerPositions(0.22, 0.78);
 
-        // Put the split in the BorderPane center
+        // Track divider changes so we can restore later
+        split.getDividers().get(0).positionProperty().addListener((o, ov, nv) -> {
+            if (leftContainer.isVisible() && leftContainer.isManaged()) {
+                lastLeftWidthFrac = Math.max(0.05, Math.min(nv.doubleValue(), 0.45));
+            }
+        });
+        split.getDividers().get(1).positionProperty().addListener((o, ov, nv) -> {
+            if (rightContainer.isVisible() && rightContainer.isManaged()) {
+                // right fractional width = 1 - nv
+                lastRightWidthFrac = Math.max(0.15, Math.min(1.0 - nv.doubleValue(), 0.45));
+            }
+        });
+
         setCenter(split);
     }
 
@@ -203,25 +220,33 @@ public class MapEditorPane extends BorderPane {
     private void toggleLeft(boolean show) {
         leftVisible = show;
         if (leftGallery == null) return;
-        leftContainer.setManaged(show);
-        leftContainer.setVisible(show);
-        // If re-showing, ensure the split still has 3 items (it always does)
-        if (show && split.getItems().size() == 3) {
-            // nudge divider if completely collapsed by user
-            if (split.getDividerPositions().length >= 1 && split.getDividerPositions()[0] < 0.02) {
-                split.setDividerPositions(0.18, split.getDividerPositions().length >= 2 ? split.getDividerPositions()[1] : 0.78);
-            }
+        leftContainer.setManaged(true);
+        leftContainer.setVisible(true);
+        double[] d = split.getDividerPositions();
+        if (show) {
+            // restore previous left fraction and keep right as is
+            double leftFrac = lastLeftWidthFrac <= 0 ? 0.18 : lastLeftWidthFrac;
+            double rightFrac = (d.length >= 2) ? (1.0 - d[1]) : lastRightWidthFrac;
+            split.setDividerPositions(leftFrac, 1.0 - rightFrac);
+        } else {
+            // collapse left to 0 -> first divider to 0.0; keep right width
+            double rightFrac = (d.length >= 2) ? (1.0 - d[1]) : lastRightWidthFrac;
+            split.setDividerPositions(0.0, 1.0 - rightFrac);
         }
     }
 
     private void toggleRight(boolean show) {
         rightVisible = show;
-        rightContainer.setManaged(show);
-        rightContainer.setVisible(show);
-        if (show && split.getItems().size() == 3) {
-            // nudge second divider if needed
-            double[] ds = split.getDividerPositions();
-            if (ds.length >= 2 && ds[1] > 0.98) split.setDividerPositions(ds[0], 0.82);
+        rightContainer.setManaged(true);
+        rightContainer.setVisible(true);
+        double[] d = split.getDividerPositions();
+        if (show) {
+            double leftFrac = (d.length >= 1) ? d[0] : (lastLeftWidthFrac > 0 ? lastLeftWidthFrac : 0.18);
+            double rightFrac = lastRightWidthFrac <= 0 ? 0.22 : lastRightWidthFrac;
+            split.setDividerPositions(leftFrac, 1.0 - rightFrac);
+        } else {
+            double leftFrac = (d.length >= 1) ? d[0] : (lastLeftWidthFrac > 0 ? lastLeftWidthFrac : 0.18);
+            split.setDividerPositions(leftFrac, 1.0); // second divider to 1 → right width = 0
         }
     }
 
@@ -318,20 +343,28 @@ public class MapEditorPane extends BorderPane {
 
     private void openCurrentPlaneEditor() {
         String key = sel.base + "=" + sel.index;
-
-        // If already open, select it
         for (Tab t : centerTabs.getTabs()) {
             if (key.equals(t.getUserData())) {
                 centerTabs.getSelectionModel().select(t);
                 return;
             }
         }
+        Plane2DMap plane = map.getOrCreatePlane(sel.base, sel.index);
+        // ensure sizes correct if map dimensions changed
+        plane.widthTiles = switch (sel.base) {
+            case Z -> map.size.widthX;
+            case X -> map.size.heightY;
+            case Y -> map.size.widthX;
+        };
+        plane.heightTiles = switch (sel.base) {
+            case Z -> map.size.heightY;
+            case X -> map.size.depthZ;
+            case Y -> map.size.depthZ;
+        };
 
-        Plane2DMap plane = Plane2DMap.from3D(map, sel.base, sel.index);
         PlaneCanvasPane canvasPane = new PlaneCanvasPane(new TemplateRepository());
         canvasPane.bindMap(plane);
 
-        // Canvas only in tab content (right sidebar lives in this shell)
         ScrollPane scroller = new ScrollPane(canvasPane);
         scroller.setFitToWidth(true);
         scroller.setFitToHeight(true);
@@ -339,12 +372,10 @@ public class MapEditorPane extends BorderPane {
         Tab editorTab = new Tab("Plane " + key, scroller);
         editorTab.setUserData(key);
         centerTabs.getTabs().add(editorTab);
-
-        // Track its context so we can bind sidebar when selected
         planeTabs.put(editorTab, new PlaneTabCtx(plane, canvasPane));
 
         centerTabs.getSelectionModel().select(editorTab);
-        updateRightSidebarForActiveTab(); // switch to planeSidebar + bind
+        updateRightSidebarForActiveTab();
     }
 
     private void updateRightSidebarForActiveTab() {
@@ -487,6 +518,6 @@ public class MapEditorPane extends BorderPane {
     }
 
     // Track open plane tabs → model/canvas so we can bind the sidebar when active
-        private record PlaneTabCtx(Plane2DMap plane, PlaneCanvasPane canvas) {
+    private record PlaneTabCtx(Plane2DMap plane, PlaneCanvasPane canvas) {
     }
 }

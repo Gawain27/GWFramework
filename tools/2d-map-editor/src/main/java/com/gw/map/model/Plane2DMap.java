@@ -1,6 +1,8 @@
 package com.gw.map.model;
 
 import com.gw.editor.template.TemplateDef;
+import com.gw.editor.template.TemplateRepository;
+import com.gw.editor.util.TemplateSlice;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -9,13 +11,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * Minimal per-plane 2D editing model:
- * - tile grid (widthTiles x heightTiles)
- * - placements (instances of TemplateDef snapshots)
- * - rendering layers
- * - gate metadata + links (by placement + island index)
- */
 public class Plane2DMap {
 
     public final List<Integer> layers = new ArrayList<>(List.of(0, 1, 2));
@@ -28,35 +23,24 @@ public class Plane2DMap {
     public int widthTiles = 16;
     public int heightTiles = 16;
 
-    public static Plane2DMap from3D(MapDef map3d, SelectionState.BasePlane base, int index) {
+    /**
+     * Build a new empty plane with known sizes.
+     */
+    public static Plane2DMap fromSize(SelectionState.BasePlane sbase, int index, int w, int h) {
         Plane2DMap pm = new Plane2DMap();
-        pm.base = switch (base) {
+        pm.base = switch (sbase) {
             case X -> Base.X;
             case Y -> Base.Y;
             case Z -> Base.Z;
         };
         pm.planeIndex = index;
-        // size across the two free axes:
-        switch (base) {
-            case Z -> {
-                pm.widthTiles = map3d.size.widthX;
-                pm.heightTiles = map3d.size.heightY;
-            }
-            case X -> {
-                pm.widthTiles = map3d.size.heightY;
-                pm.heightTiles = map3d.size.depthZ;
-            }
-            case Y -> {
-                pm.widthTiles = map3d.size.widthX;
-                pm.heightTiles = map3d.size.depthZ;
-            }
-        }
+        pm.widthTiles = Math.max(1, w);
+        pm.heightTiles = Math.max(1, h);
         return pm;
     }
 
     public void normalizeLayers() {
         if (layers.isEmpty()) layers.add(0);
-        // Ensure layer indices are dense [0..n-1]
         for (Placement p : placements) p.layer = Math.max(0, Math.min(p.layer, layers.size() - 1));
     }
 
@@ -66,7 +50,7 @@ public class Plane2DMap {
 
     public GateMeta ensureGateMeta(GateRef ref) {
         return findGateMeta(ref).orElseGet(() -> {
-            GateMeta m = new GateMeta(ref);
+            var m = new GateMeta(ref);
             gateMetas.add(m);
             return m;
         });
@@ -74,7 +58,7 @@ public class Plane2DMap {
 
     public enum Base {X, Y, Z}
 
-    // ------- gate metadata / links -------
+    // ---- gate metadata / links ----
         public record GateRef(String pid, int gateIndex) {
 
         @Override
@@ -105,6 +89,9 @@ public class Plane2DMap {
         public GateRef a, b;
         public String name = "";
 
+        public GateLink() {
+        }
+
         public GateLink(GateRef a, GateRef b, String name) {
             this.a = a;
             this.b = b;
@@ -116,22 +103,24 @@ public class Plane2DMap {
         }
     }
 
-    // ------- placement -------
+    // ---- placement ----
     public static final class Placement {
         public final String pid = UUID.randomUUID().toString();
 
         public String templateId;
-        public int regionIndex; // -1 full, -2 animated, >=0 region index
+        public int regionIndex; // -1 whole, -2 animated, >=0 region index
 
         public int gx, gy;     // top-left in tiles
         public int wTiles, hTiles; // base (unscaled) tiles
 
-        public int srcXpx, srcYpx, srcWpx, srcHpx; // source rect (first frame if animated)
-
+        public int srcXpx, srcYpx, srcWpx, srcHpx; // first frame / region source rect
         public int layer = 0;
         public double scale = 1.0;
 
-        public transient TemplateDef dataSnap; // snapshot for overlays
+        public transient TemplateDef dataSnap; // runtime only
+
+        public Placement() {
+        }
 
         public Placement(String templateId, int regionIndex, int gx, int gy, int wTiles, int hTiles, int srcXpx, int srcYpx, int srcWpx, int srcHpx, TemplateDef snap, int layer, double scale) {
             this.templateId = templateId;
@@ -147,6 +136,25 @@ public class Plane2DMap {
             this.dataSnap = snap;
             this.layer = Math.max(0, layer);
             this.scale = Math.max(0.01, scale);
+        }
+    }
+
+    public void rehydrateSnapshots(TemplateRepository repo) {
+        if (repo == null) return;
+        for (Placement p : placements) {
+            TemplateDef src = repo.findById(p.templateId);
+            if (src == null) { p.dataSnap = null; continue; }
+            // If regionIndex >=0 slice; else keep whole (animated or static)
+            if (p.regionIndex >= 0) {
+                p.dataSnap = TemplateSlice.copyRegion(src,
+                    Math.max(0, p.srcXpx / Math.max(1, src.tileWidthPx)),
+                    Math.max(0, p.srcYpx / Math.max(1, src.tileHeightPx)),
+                    Math.max(0, (p.srcXpx + p.srcWpx - 1) / Math.max(1, src.tileWidthPx)),
+                    Math.max(0, (p.srcYpx + p.srcHpx - 1) / Math.max(1, src.tileHeightPx))
+                );
+            } else {
+                p.dataSnap = TemplateSlice.copyWhole(src);
+            }
         }
     }
 }

@@ -1,32 +1,48 @@
 package com.gw.map.model;
 
-import com.google.gson.annotations.SerializedName;
+import java.util.*;
 
-
-/**
- * Authoring data for a 3D grid map. Fixed size in tiles.
- * Background may be defined by a template placed on the Z=0 (bottom) plane.
- */
 public class MapDef {
-    @SerializedName("schema")
-    public int schema = 1;
-    public String id;
-    public String name;
-    public Size3i size; // widthX, heightY, depthZ
-    // Camera state
+    public String id = "";
+    public String name = "";
+    public Size3i size = new Size3i(16, 8, 16);
+
+    public double cameraYawDeg = 35;
+    public double cameraPitchDeg = 45;
+    public double cameraRollDeg = 0;
     public double cameraPanX = 0;
     public double cameraPanY = 0;
     public double cameraZoom = 1.0;
-    public double cameraPitchDeg = 35.0; // initial in MVP
-    public double cameraYawDeg = 45.0; // right-drag adjusts yaw
-    public double cameraRollDeg = 0.0;   // optional; wired in renderer, not exposed in UI yet
 
+    /** Keyed by "X=k", "Y=k", or "Z=k". */
+    public Map<String, Plane2DMap> planes = new HashMap<>();
 
     public static MapDef createDefault() {
-        MapDef m = new MapDef();
-        m.id = "untitled";
-        m.name = "Untitled";
-        m.size = new Size3i(16, 16, 6);
-        return m;
+        return new MapDef();
+    }
+
+    public String planeKey(SelectionState.BasePlane base, int index) {
+        return switch (base) {
+            case X -> "X=" + index;
+            case Y -> "Y=" + index;
+            case Z -> "Z=" + index;
+        };
+    }
+
+    /** Get or create a plane (shared by 3D and plane editor). */
+    public Plane2DMap getOrCreatePlane(SelectionState.BasePlane base, int index) {
+        String key = planeKey(base, index);
+        return planes.computeIfAbsent(key, k -> Plane2DMap.fromSize(base, index,
+            switch (base) {
+                case Z -> size.widthX;
+                case X -> size.heightY;
+                case Y -> size.widthX;
+            },
+            switch (base) {
+                case Z -> size.heightY;
+                case X -> size.depthZ;
+                case Y -> size.depthZ;
+            }
+        ));
     }
 }

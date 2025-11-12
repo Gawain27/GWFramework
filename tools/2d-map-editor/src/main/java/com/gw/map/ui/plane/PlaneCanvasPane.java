@@ -4,6 +4,8 @@ import com.gw.editor.template.TemplateDef;
 import com.gw.editor.template.TemplateRepository;
 import com.gw.editor.ui.CollisionShapes;
 import com.gw.editor.util.TemplateSlice;
+import com.gw.map.io.DefaultTextureResolver;
+import com.gw.map.io.TextureResolver;
 import com.gw.map.model.Plane2DMap;
 import com.gw.map.ui.TemplateGalleryPane;
 import javafx.animation.AnimationTimer;
@@ -568,31 +570,10 @@ public class PlaneCanvasPane extends Region {
         }
     }
 
-    public interface TextureResolver {
-        String resolve(String logicalPath) throws Exception;
-    }
-
-    /* ---- Texture resolver (same strategy as gallery) ---- */
-
     /**
      * Preview container.
      */
     private record DropPreview(String templateId, int regionIndex, int gx, int gy, int wTiles, int hTiles, int tW,
                                int tH, int rpx, int rpy, int rpw, int rph, double scaleMul, Image texture) {
-    }
-
-    public static class DefaultTextureResolver implements TextureResolver {
-        @Override
-        public String resolve(String logicalPath) throws Exception {
-            Path p = Path.of(logicalPath);
-            if (!p.isAbsolute()) p = Path.of(".").resolve(logicalPath).normalize();
-            if (Files.exists(p)) return p.toUri().toString();
-            InputStream in = getClass().getClassLoader().getResourceAsStream(logicalPath.startsWith("/") ? logicalPath.substring(1) : logicalPath);
-            if (in != null) {
-                in.close();
-                return Objects.requireNonNull(getClass().getClassLoader().getResource(logicalPath.startsWith("/") ? logicalPath.substring(1) : logicalPath)).toExternalForm();
-            }
-            return null;
-        }
     }
 }

@@ -2,6 +2,8 @@ package com.gw.map.ui;
 
 import com.gw.editor.template.TemplateDef;
 import com.gw.editor.template.TemplateRepository;
+import com.gw.map.io.DefaultTextureResolver;
+import com.gw.map.io.TextureResolver;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.geometry.Insets;
@@ -28,15 +30,11 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.util.Duration;
 
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.function.Consumer;
 
 /**
@@ -175,10 +173,10 @@ public class TemplateGalleryPane extends VBox {
                 // Animated card: one per template; show looping thumbnail (using regions)
                 List<int[]> frames = safePixelRegions(t);
                 if (!frames.isEmpty()) {
-                    int[] first = frames.get(0);
+                    int[] first = frames.getFirst();
                     List<Image> thumbFrames = makeRegionThumbFrames(tex, frames, THUMB_FIT_W, THUMB_FIT_H);
 
-                    Card card = buildCard(t, t.id + " • (animated)", "Animated", thumbFrames.isEmpty() ? makePlaceholderThumb(THUMB_FIT_W, THUMB_FIT_H) : thumbFrames.get(0), tex != null);
+                    Card card = buildCard(t, t.id + " • (animated)", "Animated", thumbFrames.isEmpty() ? makePlaceholderThumb(THUMB_FIT_W, THUMB_FIT_H) : thumbFrames.getFirst(), tex != null);
 
                     // Animate: cycle frames
                     if (thumbFrames.size() > 1) {
@@ -362,37 +360,6 @@ public class TemplateGalleryPane extends VBox {
         }
     }
 
-    public interface TextureResolver {
-        /**
-         * Return a URL string suitable for new Image(url), or null if not resolvable.
-         * Implementations may do file-system lookup or classpath resource loading, etc.
-         */
-        String resolve(String logicalPath) throws Exception;
-    }
-
-    // -------- Texture resolving strategy --------
-
     private record Card(VBox root, ImageView imageView) {
-    }
-
-    /**
-     * Default: try as absolute/relative file path; if not found, try classpath resource.
-     */
-    public static class DefaultTextureResolver implements TextureResolver {
-        @Override
-        public String resolve(String logicalPath) throws Exception {
-            // 1) Absolute or relative filesystem path
-            Path p = Path.of(logicalPath);
-            if (!p.isAbsolute()) p = Path.of(".").resolve(logicalPath).normalize();
-            if (Files.exists(p)) return p.toUri().toString();
-
-            // 2) Classpath resource
-            InputStream in = getClass().getClassLoader().getResourceAsStream(logicalPath.startsWith("/") ? logicalPath.substring(1) : logicalPath);
-            if (in != null) {
-                in.close();
-                return Objects.requireNonNull(getClass().getClassLoader().getResource(logicalPath.startsWith("/") ? logicalPath.substring(1) : logicalPath)).toExternalForm();
-            }
-            return null;
-        }
     }
 }

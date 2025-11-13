@@ -116,6 +116,7 @@ public class Plane2DMap {
         public int srcXpx, srcYpx, srcWpx, srcHpx; // first frame / region source rect
         public int layer = 0;
         public double scale = 1.0;
+        public int rotQ = 0;
 
         public transient TemplateDef dataSnap; // runtime only
 

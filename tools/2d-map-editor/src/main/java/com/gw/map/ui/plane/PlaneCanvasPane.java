@@ -32,27 +32,19 @@ import javafx.scene.layout.Region;
 import javafx.scene.paint.Color;
 import javafx.scene.text.TextAlignment;
 
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Comparator;
-import java.util.Objects;
 import java.util.function.Consumer;
 
 /**
- * 2D plane editor canvas (ported from your MapCanvasPane and adapted).
- * - Supports drag/drop from TemplateGalleryPane (PAYLOAD_FORMAT)
- * - Selection, move, delete
+ * 2D plane editor canvas.
+ * - Drag/drop from TemplateGalleryPane (TemplateGalleryPane.PAYLOAD_FORMAT)
+ * - Selection, move, delete (Delete key)
  * - Zoom (Ctrl/Cmd + wheel)
- * - Animated placements (first-frame footprint)
- * - Gate/collision overlays
- * - Notifies PlaneSidebarPane via setOnSelectionChanged(...)
+ * - Animated templates (uses first-frame footprint)
+ * - Rotation in 90° steps via Placement.rotQ (0..3)
  */
 public class PlaneCanvasPane extends Region {
 
-    /**
-     * Matches the gallery payload format.
-     */
     public static final DataFormat PAYLOAD = TemplateGalleryPane.PAYLOAD_FORMAT;
 
     private final Canvas canvas = new Canvas();
@@ -68,6 +60,7 @@ public class PlaneCanvasPane extends Region {
 
     private final TemplateRepository templateRepo;
     private final TextureResolver textureResolver = new DefaultTextureResolver();
+
     private final StringProperty selectedPid = new SimpleStringProperty(null);
     private Plane2DMap map;
     private DropPreview preview = null;
@@ -85,7 +78,6 @@ public class PlaneCanvasPane extends Region {
         this.templateRepo = (repo != null ? repo : new TemplateRepository());
         getChildren().add(canvas);
 
-        // layout / paint
         widthProperty().addListener((o, a, b) -> redrawInternal());
         heightProperty().addListener((o, a, b) -> redrawInternal());
         tileW.addListener((o, a, b) -> layoutForMap());
@@ -93,7 +85,6 @@ public class PlaneCanvasPane extends Region {
         zoom.addListener((o, a, b) -> layoutForMap());
         currentLayer.addListener((o, a, b) -> requestLayout());
 
-        // DnD
         setOnDragOver(this::onDragOver);
         setOnDragExited(e -> {
             preview = null;
@@ -101,7 +92,6 @@ public class PlaneCanvasPane extends Region {
         });
         setOnDragDropped(this::onDragDropped);
 
-        // zoom
         setOnScroll(e -> {
             if (!e.isControlDown() && !e.isShortcutDown()) return;
             if (e.getDeltaY() > 0) zoomIn();
@@ -109,10 +99,10 @@ public class PlaneCanvasPane extends Region {
             e.consume();
         });
 
-        // selection / move / delete
         setOnMousePressed(this::onMousePressed);
         setOnMouseDragged(this::onMouseDragged);
         setOnMouseReleased(this::onMouseReleased);
+
         setOnKeyPressed(e -> {
             if (e.getCode() == KeyCode.DELETE) {
                 deleteSelectedWithConfirm();
@@ -120,11 +110,10 @@ public class PlaneCanvasPane extends Region {
             }
         });
         setFocusTraversable(true);
-
         animTimer.start();
     }
 
-    /* =================== Public API (PlaneSidebarPane links against these) =================== */
+    /* ---------------- API for sidebar ---------------- */
 
     private static int clamp(int v, int lo, int hi) {
         return Math.max(lo, Math.min(hi, v));
@@ -188,21 +177,28 @@ public class PlaneCanvasPane extends Region {
         zoom.set(Math.max(0.25, zoom.get() / 1.25));
     }
 
-    /* =================== Drag & Drop =================== */
-
     public void zoomReset() {
         zoom.set(1.0);
     }
+
+    /* ---------------- Drag & Drop ---------------- */
 
     public void redraw() {
         redrawInternal();
     }
 
-    /* =================== Selection & Moving =================== */
-
     public Plane2DMap.Placement getSelected() {
         if (map == null || selectedPid.get() == null) return null;
         return map.placements.stream().filter(p -> p.pid.equals(selectedPid.get())).findFirst().orElse(null);
+    }
+
+    /* ---------------- Selection & moving ---------------- */
+
+    public void selectPid(String pid) {
+        selectedPid.set(pid);
+        if (onSelectionChanged != null) onSelectionChanged.accept(getSelected());
+        redrawInternal();
+        requestFocus();
     }
 
     private void onDragOver(DragEvent e) {
@@ -222,10 +218,8 @@ public class PlaneCanvasPane extends Region {
         int rpH = parseInt(tok[7], 0);
         double scaleMul = parseDouble(tok[8], 1.0);
 
-        double localX = e.getX() / zoom.get();
-        double localY = e.getY() / zoom.get();
-        int gx = (int) Math.floor(localX / tileW.get());
-        int gy = (int) Math.floor(localY / tileH.get());
+        int gx = (int) Math.floor((e.getX() / zoom.get()) / tileW.get());
+        int gy = (int) Math.floor((e.getY() / zoom.get()) / tileH.get());
 
         int baseWTiles = Math.max(1, (int) Math.round(rpW / (double) Math.max(1, tW)));
         int baseHTiles = Math.max(1, (int) Math.round(rpH / (double) Math.max(1, tH)));
@@ -240,7 +234,6 @@ public class PlaneCanvasPane extends Region {
         Image texture = loadTemplateTexture(templateId);
 
         preview = new DropPreview(templateId, regionIndex, gx, gy, wTiles, hTiles, tW, tH, rpX, rpY, rpW, rpH, scaleMul, texture);
-
         e.acceptTransferModes(TransferMode.COPY);
         e.consume();
         redrawInternal();
@@ -265,7 +258,7 @@ public class PlaneCanvasPane extends Region {
         int layerIdx = clamp(currentLayer.get(), 0, Math.max(0, map.layers.size() - 1));
 
         Plane2DMap.Placement p = new Plane2DMap.Placement(preview.templateId, preview.regionIndex, gx, gy, baseWH[0], baseWH[1], preview.rpx, preview.rpy, preview.rpw, preview.rph, snap, layerIdx, scl);
-
+        // rotQ starts at 0
         map.placements.add(p);
         preview = null;
         selectPid(p.pid);
@@ -289,7 +282,7 @@ public class PlaneCanvasPane extends Region {
         e.consume();
     }
 
-    /* =================== Rendering =================== */
+    /* ---------------- Rendering ---------------- */
 
     private void onMouseDragged(MouseEvent e) {
         if (!draggingInstance || map == null) return;
@@ -299,7 +292,7 @@ public class PlaneCanvasPane extends Region {
         int gx = (int) Math.floor((e.getX() / zoom.get()) / tileW.get()) - dragOffsetGX;
         int gy = (int) Math.floor((e.getY() / zoom.get()) / tileH.get()) - dragOffsetGY;
 
-        int[] wh = baseFootprintTiles(sel.dataSnap);
+        int[] wh = rotatedFootprintTiles(sel); // respect rotation
         int wTiles = Math.max(1, (int) Math.ceil(wh[0] * sel.scale));
         int hTiles = Math.max(1, (int) Math.ceil(wh[1] * sel.scale));
 
@@ -319,13 +312,15 @@ public class PlaneCanvasPane extends Region {
         var ordered = map.placements.stream().sorted(Comparator.comparingInt((Plane2DMap.Placement p) -> p.layer).thenComparingInt(map.placements::indexOf)).toList();
         for (int i = ordered.size() - 1; i >= 0; i--) {
             Plane2DMap.Placement p = ordered.get(i);
-            int[] wh = baseFootprintTiles(p.dataSnap);
+            int[] wh = rotatedFootprintTiles(p); // respect rotation
             int wTiles = Math.max(1, (int) Math.ceil(wh[0] * p.scale));
             int hTiles = Math.max(1, (int) Math.ceil(wh[1] * p.scale));
             if (gx >= p.gx && gx < p.gx + wTiles && gy >= p.gy && gy < p.gy + hTiles) return p;
         }
         return null;
     }
+
+    /* ---------------- Draw one placement (rotation-aware) ---------------- */
 
     private void layoutForMap() {
         double pixelW = (map == null ? 64 : map.widthTiles) * tileW.get();
@@ -358,13 +353,13 @@ public class PlaneCanvasPane extends Region {
         g.setLineWidth(2);
         g.strokeRect(0, 0, mapPxW, mapPxH);
 
-        // placements (by layer)
+        // placements by layer
         if (map != null) {
             var ordered = map.placements.stream().sorted(Comparator.comparingInt((Plane2DMap.Placement p) -> p.layer).thenComparingInt(map.placements::indexOf)).toList();
             for (Plane2DMap.Placement p : ordered) drawPlacement(p);
         }
 
-        // live preview
+        // preview
         if (preview != null) drawPreview(preview);
 
         g.restore();
@@ -377,6 +372,8 @@ public class PlaneCanvasPane extends Region {
         g.fillText("placements: " + count + "   |   zoom: " + String.format("%.2f", zoom.get()) + "   |   layer: " + currentLayer.get(), 6, 6);
     }
 
+    /* ---------------- Utilities ---------------- */
+
     private boolean hasAnimatedPlacements() {
         if (preview != null) return false;
         if (map == null || map.placements.isEmpty()) return false;
@@ -387,28 +384,29 @@ public class PlaneCanvasPane extends Region {
         return false;
     }
 
-    /* =================== Helpers =================== */
-
     private void drawPlacement(Plane2DMap.Placement p) {
         TemplateDef snap = p.dataSnap;
         if (snap == null) return;
 
         Image tex = loadTextureByLogicalPath(snap.logicalPath);
-        if (tex == null) { // fallback from template id
+        if (tex == null) {
             TemplateDef td = templateRepo.findById(p.templateId);
             if (td != null) tex = loadTextureByLogicalPath(td.logicalPath);
         }
         if (tex == null) return;
 
+        // base footprint (first frame if animated)
         int[] baseWH = baseFootprintTiles(snap);
-        int drawWtiles = Math.max(1, (int) Math.ceil(baseWH[0] * p.scale));
-        int drawHtiles = Math.max(1, (int) Math.ceil(baseWH[1] * p.scale));
+        boolean swap = (p.rotQ & 1) == 1; // 90° or 270°
+        int drawWtiles = Math.max(1, (int) Math.ceil((swap ? baseWH[1] : baseWH[0]) * p.scale));
+        int drawHtiles = Math.max(1, (int) Math.ceil((swap ? baseWH[0] : baseWH[1]) * p.scale));
 
         double dx = p.gx * tileW.get();
         double dy = p.gy * tileH.get();
         double dw = drawWtiles * tileW.get();
         double dh = drawHtiles * tileH.get();
 
+        // source rect (first frame if animated)
         int sx = p.srcXpx, sy = p.srcYpx, sw = p.srcWpx, sh = p.srcHpx;
         if (isAnimated(snap)) {
             var frames = snap.pixelRegions();
@@ -420,70 +418,109 @@ public class PlaneCanvasPane extends Region {
             sh = r[3];
         }
 
-        // draw
-        g.drawImage(tex, sx, sy, sw, sh, dx, dy, dw, dh);
+        // Build affine for 0, 90, 180, 270 that maps source pixels directly onto the axis-aligned bbox (dx,dy,dw,dh)
+        g.save();
+        g.setImageSmoothing(false);
 
-        // selection rect
-        if (p.pid.equals(selectedPid.get())) {
-            g.setStroke(Color.color(0.95, 0.8, 0.2, 1));
-            g.setLineWidth(3);
-            g.strokeRect(dx + 0.5, dy + 0.5, dw - 1, dh - 1);
-        } else {
-            g.setStroke(Color.color(0, 0, 0, 0.6));
-            g.setLineWidth(1);
-            g.strokeRect(dx, dy, dw, dh);
+        double mxx, mxy, myx, myy, tx, ty;
+        switch (p.rotQ & 3) {
+            case 1 -> { // 90° CW
+                // x' = (0)*x + (dh/sw)*x? No → use axis mapping: ex=(0, dh/sw); ey=(-dw/sh, 0); origin at (dx+dw, dy)
+                mxx = 0;
+                mxy = dh / Math.max(1.0, sw);
+                myx = -dw / Math.max(1.0, sh);
+                myy = 0;
+                tx = dx + dw;
+                ty = dy;
+            }
+            case 2 -> { // 180°
+                mxx = -dw / Math.max(1.0, sw);
+                mxy = 0;
+                myx = 0;
+                myy = -dh / Math.max(1.0, sh);
+                tx = dx + dw;
+                ty = dy + dh;
+            }
+            case 3 -> { // 270° CW
+                mxx = 0;
+                mxy = -dh / Math.max(1.0, sw);
+                myx = dw / Math.max(1.0, sh);
+                myy = 0;
+                tx = dx;
+                ty = dy + dh;
+            }
+            default -> { // 0°
+                mxx = dw / Math.max(1.0, sw);
+                mxy = 0;
+                myx = 0;
+                myy = dh / Math.max(1.0, sh);
+                tx = dx;
+                ty = dy;
+            }
         }
+        javafx.scene.transform.Affine A = new javafx.scene.transform.Affine(mxx, mxy, tx, myx, myy, ty);
+        g.setTransform(A);
 
-        // overlays
-        double tw = tileW.get(), th = tileH.get();
-        double scaleX = dw / (baseWH[0] * tw);
-        double scaleY = dh / (baseWH[1] * th);
-        double cellW = tw * scaleX;
-        double cellH = th * scaleY;
+        // Draw texture into transformed space
+        g.drawImage(tex, sx, sy, sw, sh, 0, 0, sw, sh);
 
-        int tileOffsetX = 0, tileOffsetY = 0;
+        // Overlays (gates / collisions) in the same transformed space so they rotate perfectly
+        int tilePxW = Math.max(1, snap.tileWidthPx);
+        int tilePxH = Math.max(1, snap.tileHeightPx);
+        int baseCols = baseWH[0], baseRows = baseWH[1];
+
+        // tile offset for first frame (animated)
+        int tileOffX = 0, tileOffY = 0;
         if (isAnimated(snap)) {
-            int[] r = firstFrameRectPx(snap);
-            tileOffsetX = Math.max(0, r[0] / Math.max(1, snap.tileWidthPx));
-            tileOffsetY = Math.max(0, r[1] / Math.max(1, snap.tileHeightPx));
+            int[] fr = firstFrameRectPx(snap);
+            tileOffX = Math.max(0, fr[0] / tilePxW);
+            tileOffY = Math.max(0, fr[1] / tilePxH);
         }
-
-        int cols = baseWH[0], rows = baseWH[1];
 
         if (showGates.get()) {
             g.setFill(Color.color(0, 1, 0, 0.25));
             g.setStroke(Color.color(0, 1, 0, 0.9));
             g.setLineWidth(1.5);
-            for (int y = 0; y < rows; y++)
-                for (int x = 0; x < cols; x++) {
-                    TemplateDef.TileDef t = snap.tileAt(tileOffsetX + x, tileOffsetY + y);
+            for (int tyTile = 0; tyTile < baseRows; tyTile++) {
+                for (int txTile = 0; txTile < baseCols; txTile++) {
+                    TemplateDef.TileDef t = snap.tileAt(tileOffX + txTile, tileOffY + tyTile);
                     if (t != null && t.gate) {
-                        double rx = dx + x * cellW, ry = dy + y * cellH;
-                        g.fillRect(rx, ry, cellW, cellH);
-                        g.strokeRect(rx + 0.5, ry + 0.5, cellW - 1, cellH - 1);
+                        double rx = txTile * tilePxW;
+                        double ry = tyTile * tilePxH;
+                        g.fillRect(rx, ry, tilePxW, tilePxH);
+                        g.strokeRect(rx + 0.5, ry + 0.5, tilePxW - 1, tilePxH - 1);
                     }
                 }
+            }
         }
 
         if (showCollisions.get()) {
             g.setStroke(Color.color(1, 1, 0, 0.9));
             g.setLineWidth(2.0);
-            for (int y = 0; y < rows; y++)
-                for (int x = 0; x < cols; x++) {
-                    TemplateDef.TileDef t = snap.tileAt(tileOffsetX + x, tileOffsetY + y);
+            for (int tyTile = 0; tyTile < baseRows; tyTile++) {
+                for (int txTile = 0; txTile < baseCols; txTile++) {
+                    TemplateDef.TileDef t = snap.tileAt(tileOffX + txTile, tileOffY + tyTile);
                     if (t == null || !t.solid) continue;
-                    double rx = dx + x * cellW, ry = dy + y * cellH;
+                    double rx = txTile * tilePxW, ry = tyTile * tilePxH;
                     switch (t.shape) {
-                        case RECT_FULL -> g.strokeRect(rx, ry, cellW, cellH);
+                        case RECT_FULL -> g.strokeRect(rx, ry, tilePxW, tilePxH);
                         case HALF_RECT ->
-                            CollisionShapes.get(TemplateDef.ShapeType.HALF_RECT).draw(g, rx, ry, cellW, cellH, t.orientation);
+                            CollisionShapes.get(TemplateDef.ShapeType.HALF_RECT).draw(g, rx, ry, tilePxW, tilePxH, t.orientation);
                         case TRIANGLE ->
-                            CollisionShapes.get(TemplateDef.ShapeType.TRIANGLE).draw(g, rx, ry, cellW, cellH, t.orientation);
+                            CollisionShapes.get(TemplateDef.ShapeType.TRIANGLE).draw(g, rx, ry, tilePxW, tilePxH, t.orientation);
                         default -> {
                         }
                     }
                 }
+            }
         }
+
+        g.restore();
+
+        // selection/border (axis-aligned bbox after rotation)
+        g.setLineWidth(p.pid.equals(selectedPid.get()) ? 3 : 1);
+        g.setStroke(p.pid.equals(selectedPid.get()) ? Color.color(0.95, 0.8, 0.2, 1) : Color.color(0, 0, 0, 0.6));
+        g.strokeRect(dx + (p.pid.equals(selectedPid.get()) ? 0.5 : 0), dy + (p.pid.equals(selectedPid.get()) ? 0.5 : 0), dw - (p.pid.equals(selectedPid.get()) ? 1 : 0), dh - (p.pid.equals(selectedPid.get()) ? 1 : 0));
     }
 
     private void drawPreview(DropPreview pv) {
@@ -514,17 +551,9 @@ public class PlaneCanvasPane extends Region {
         String pid = sel.pid;
         map.gateLinks.removeIf(gl -> (gl.a != null && pid.equals(gl.a.pid())) || (gl.b != null && pid.equals(gl.b.pid())));
         map.gateMetas.removeIf(gm -> gm.ref != null && pid.equals(gm.ref.pid()));
-
         map.placements.removeIf(p -> p.pid.equals(pid));
         selectPid(null);
         redrawInternal();
-    }
-
-    private void selectPid(String pid) {
-        selectedPid.set(pid);
-        if (onSelectionChanged != null) onSelectionChanged.accept(getSelected());
-        redrawInternal();
-        requestFocus();
     }
 
     private int animatedFrameIndex(int frames) {
@@ -554,6 +583,15 @@ public class PlaneCanvasPane extends Region {
         return new int[]{Math.max(1, snap.imageWidthPx / Math.max(1, snap.tileWidthPx)), Math.max(1, snap.imageHeightPx / Math.max(1, snap.tileHeightPx))};
     }
 
+    /**
+     * Footprint in tiles after applying 90°-step rotation.
+     */
+    private int[] rotatedFootprintTiles(Plane2DMap.Placement p) {
+        int[] base = baseFootprintTiles(p.dataSnap);
+        if ((p.rotQ & 1) == 1) return new int[]{base[1], base[0]}; // swap for 90/270
+        return base;
+    }
+
     private Image loadTemplateTexture(String templateId) {
         TemplateDef td = templateRepo.findById(templateId);
         if (td == null || td.logicalPath == null) return null;
@@ -570,9 +608,6 @@ public class PlaneCanvasPane extends Region {
         }
     }
 
-    /**
-     * Preview container.
-     */
     private record DropPreview(String templateId, int regionIndex, int gx, int gy, int wTiles, int hTiles, int tW,
                                int tH, int rpx, int rpy, int rpw, int rph, double scaleMul, Image texture) {
     }

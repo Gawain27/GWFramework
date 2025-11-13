@@ -113,7 +113,7 @@ public class PlaneCanvasPane extends Region {
         animTimer.start();
     }
 
-    /* ---------------- API for sidebar ---------------- */
+    /* ============ Public API (used by sidebar) ============ */
 
     private static int clamp(int v, int lo, int hi) {
         return Math.max(lo, Math.min(hi, v));
@@ -181,7 +181,7 @@ public class PlaneCanvasPane extends Region {
         zoom.set(1.0);
     }
 
-    /* ---------------- Drag & Drop ---------------- */
+    /* ============ Drag & Drop ============ */
 
     public void redraw() {
         redrawInternal();
@@ -192,7 +192,7 @@ public class PlaneCanvasPane extends Region {
         return map.placements.stream().filter(p -> p.pid.equals(selectedPid.get())).findFirst().orElse(null);
     }
 
-    /* ---------------- Selection & moving ---------------- */
+    /* ============ Selection & Moving ============ */
 
     public void selectPid(String pid) {
         selectedPid.set(pid);
@@ -232,8 +232,8 @@ public class PlaneCanvasPane extends Region {
         }
 
         Image texture = loadTemplateTexture(templateId);
-
         preview = new DropPreview(templateId, regionIndex, gx, gy, wTiles, hTiles, tW, tH, rpX, rpY, rpW, rpH, scaleMul, texture);
+
         e.acceptTransferModes(TransferMode.COPY);
         e.consume();
         redrawInternal();
@@ -258,7 +258,7 @@ public class PlaneCanvasPane extends Region {
         int layerIdx = clamp(currentLayer.get(), 0, Math.max(0, map.layers.size() - 1));
 
         Plane2DMap.Placement p = new Plane2DMap.Placement(preview.templateId, preview.regionIndex, gx, gy, baseWH[0], baseWH[1], preview.rpx, preview.rpy, preview.rpw, preview.rph, snap, layerIdx, scl);
-        // rotQ starts at 0
+        // rotQ defaults to 0
         map.placements.add(p);
         preview = null;
         selectPid(p.pid);
@@ -282,7 +282,7 @@ public class PlaneCanvasPane extends Region {
         e.consume();
     }
 
-    /* ---------------- Rendering ---------------- */
+    /* ============ Layout & redraw ============ */
 
     private void onMouseDragged(MouseEvent e) {
         if (!draggingInstance || map == null) return;
@@ -292,7 +292,7 @@ public class PlaneCanvasPane extends Region {
         int gx = (int) Math.floor((e.getX() / zoom.get()) / tileW.get()) - dragOffsetGX;
         int gy = (int) Math.floor((e.getY() / zoom.get()) / tileH.get()) - dragOffsetGY;
 
-        int[] wh = rotatedFootprintTiles(sel); // respect rotation
+        int[] wh = rotatedFootprintTiles(sel);
         int wTiles = Math.max(1, (int) Math.ceil(wh[0] * sel.scale));
         int hTiles = Math.max(1, (int) Math.ceil(wh[1] * sel.scale));
 
@@ -312,7 +312,7 @@ public class PlaneCanvasPane extends Region {
         var ordered = map.placements.stream().sorted(Comparator.comparingInt((Plane2DMap.Placement p) -> p.layer).thenComparingInt(map.placements::indexOf)).toList();
         for (int i = ordered.size() - 1; i >= 0; i--) {
             Plane2DMap.Placement p = ordered.get(i);
-            int[] wh = rotatedFootprintTiles(p); // respect rotation
+            int[] wh = rotatedFootprintTiles(p);
             int wTiles = Math.max(1, (int) Math.ceil(wh[0] * p.scale));
             int hTiles = Math.max(1, (int) Math.ceil(wh[1] * p.scale));
             if (gx >= p.gx && gx < p.gx + wTiles && gy >= p.gy && gy < p.gy + hTiles) return p;
@@ -320,7 +320,7 @@ public class PlaneCanvasPane extends Region {
         return null;
     }
 
-    /* ---------------- Draw one placement (rotation-aware) ---------------- */
+    /* ============ Drawing a placement (rotation-fixed) ============ */
 
     private void layoutForMap() {
         double pixelW = (map == null ? 64 : map.widthTiles) * tileW.get();
@@ -353,7 +353,7 @@ public class PlaneCanvasPane extends Region {
         g.setLineWidth(2);
         g.strokeRect(0, 0, mapPxW, mapPxH);
 
-        // placements by layer
+        // placements
         if (map != null) {
             var ordered = map.placements.stream().sorted(Comparator.comparingInt((Plane2DMap.Placement p) -> p.layer).thenComparingInt(map.placements::indexOf)).toList();
             for (Plane2DMap.Placement p : ordered) drawPlacement(p);
@@ -372,7 +372,7 @@ public class PlaneCanvasPane extends Region {
         g.fillText("placements: " + count + "   |   zoom: " + String.format("%.2f", zoom.get()) + "   |   layer: " + currentLayer.get(), 6, 6);
     }
 
-    /* ---------------- Utilities ---------------- */
+    /* ============ Utilities ============ */
 
     private boolean hasAnimatedPlacements() {
         if (preview != null) return false;
@@ -395,9 +395,8 @@ public class PlaneCanvasPane extends Region {
         }
         if (tex == null) return;
 
-        // base footprint (first frame if animated)
         int[] baseWH = baseFootprintTiles(snap);
-        boolean swap = (p.rotQ & 1) == 1; // 90° or 270°
+        boolean swap = (p.rotQ & 1) == 1; // 90 or 270
         int drawWtiles = Math.max(1, (int) Math.ceil((swap ? baseWH[1] : baseWH[0]) * p.scale));
         int drawHtiles = Math.max(1, (int) Math.ceil((swap ? baseWH[0] : baseWH[1]) * p.scale));
 
@@ -406,7 +405,6 @@ public class PlaneCanvasPane extends Region {
         double dw = drawWtiles * tileW.get();
         double dh = drawHtiles * tileH.get();
 
-        // source rect (first frame if animated)
         int sx = p.srcXpx, sy = p.srcYpx, sw = p.srcWpx, sh = p.srcHpx;
         if (isAnimated(snap)) {
             var frames = snap.pixelRegions();
@@ -418,17 +416,17 @@ public class PlaneCanvasPane extends Region {
             sh = r[3];
         }
 
-        // Build affine for 0, 90, 180, 270 that maps source pixels directly onto the axis-aligned bbox (dx,dy,dw,dh)
         g.save();
         g.setImageSmoothing(false);
 
+        // Affines that keep the drawn texture inside [dx,dx+dw]×[dy,dy+dh]
         double mxx, mxy, myx, myy, tx, ty;
         switch (p.rotQ & 3) {
-            case 1 -> { // 90° CW
-                // x' = (0)*x + (dh/sw)*x? No → use axis mapping: ex=(0, dh/sw); ey=(-dw/sh, 0); origin at (dx+dw, dy)
+            case 1 -> { // 90° CW — FIXED
+                // (0,0)->(dx+dw,dy); (sw,0)->(dx+dw,dy+dh); (0,sh)->(dx,dy)
                 mxx = 0;
-                mxy = dh / Math.max(1.0, sw);
-                myx = -dw / Math.max(1.0, sh);
+                mxy = -dw / Math.max(1.0, sh);
+                myx = dh / Math.max(1.0, sw);
                 myy = 0;
                 tx = dx + dw;
                 ty = dy;
@@ -441,10 +439,11 @@ public class PlaneCanvasPane extends Region {
                 tx = dx + dw;
                 ty = dy + dh;
             }
-            case 3 -> { // 270° CW
+            case 3 -> { // 270° CW (90° CCW) — FIXED
+                // (0,0)->(dx,dy+dh); (sw,0)->(dx,dy); (0,sh)->(dx+dw,dy+dh)
                 mxx = 0;
-                mxy = -dh / Math.max(1.0, sw);
-                myx = dw / Math.max(1.0, sh);
+                mxy = dw / Math.max(1.0, sh);
+                myx = -dh / Math.max(1.0, sw);
                 myy = 0;
                 tx = dx;
                 ty = dy + dh;
@@ -458,18 +457,19 @@ public class PlaneCanvasPane extends Region {
                 ty = dy;
             }
         }
+
         javafx.scene.transform.Affine A = new javafx.scene.transform.Affine(mxx, mxy, tx, myx, myy, ty);
         g.setTransform(A);
 
-        // Draw texture into transformed space
+        // Draw source rect in its own pixel space
         g.drawImage(tex, sx, sy, sw, sh, 0, 0, sw, sh);
 
-        // Overlays (gates / collisions) in the same transformed space so they rotate perfectly
+        // Overlays in src-tile pixel coordinates (get rotated by A as well)
         int tilePxW = Math.max(1, snap.tileWidthPx);
         int tilePxH = Math.max(1, snap.tileHeightPx);
-        int baseCols = baseWH[0], baseRows = baseWH[1];
+        int baseCols = baseWH[0];
+        int baseRows = baseWH[1];
 
-        // tile offset for first frame (animated)
         int tileOffX = 0, tileOffY = 0;
         if (isAnimated(snap)) {
             int[] fr = firstFrameRectPx(snap);
@@ -517,10 +517,12 @@ public class PlaneCanvasPane extends Region {
 
         g.restore();
 
-        // selection/border (axis-aligned bbox after rotation)
+        // Axis-aligned selection rectangle in map space (placement bounds)
         g.setLineWidth(p.pid.equals(selectedPid.get()) ? 3 : 1);
         g.setStroke(p.pid.equals(selectedPid.get()) ? Color.color(0.95, 0.8, 0.2, 1) : Color.color(0, 0, 0, 0.6));
-        g.strokeRect(dx + (p.pid.equals(selectedPid.get()) ? 0.5 : 0), dy + (p.pid.equals(selectedPid.get()) ? 0.5 : 0), dw - (p.pid.equals(selectedPid.get()) ? 1 : 0), dh - (p.pid.equals(selectedPid.get()) ? 1 : 0));
+        double off = p.pid.equals(selectedPid.get()) ? 0.5 : 0.0;
+        double shrink = p.pid.equals(selectedPid.get()) ? 1.0 : 0.0;
+        g.strokeRect(dx + off, dy + off, dw - shrink, dh - shrink);
     }
 
     private void drawPreview(DropPreview pv) {
@@ -551,6 +553,7 @@ public class PlaneCanvasPane extends Region {
         String pid = sel.pid;
         map.gateLinks.removeIf(gl -> (gl.a != null && pid.equals(gl.a.pid())) || (gl.b != null && pid.equals(gl.b.pid())));
         map.gateMetas.removeIf(gm -> gm.ref != null && pid.equals(gm.ref.pid()));
+
         map.placements.removeIf(p -> p.pid.equals(pid));
         selectPid(null);
         redrawInternal();
@@ -584,11 +587,11 @@ public class PlaneCanvasPane extends Region {
     }
 
     /**
-     * Footprint in tiles after applying 90°-step rotation.
+     * Footprint in tiles after applying 90° step rotation.
      */
     private int[] rotatedFootprintTiles(Plane2DMap.Placement p) {
         int[] base = baseFootprintTiles(p.dataSnap);
-        if ((p.rotQ & 1) == 1) return new int[]{base[1], base[0]}; // swap for 90/270
+        if ((p.rotQ & 1) == 1) return new int[]{base[1], base[0]};
         return base;
     }
 

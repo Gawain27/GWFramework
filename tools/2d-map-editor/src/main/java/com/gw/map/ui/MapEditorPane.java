@@ -51,6 +51,7 @@ public class MapEditorPane extends BorderPane {
 
     // Selection for 3D view
     private final SelectionState sel = new SelectionState();
+    private boolean showGrid = true;
 
     // 3D canvas & renderer
     private final Canvas canvas = new Canvas(1000, 820);
@@ -152,6 +153,7 @@ public class MapEditorPane extends BorderPane {
         renderer.setMap(this.map);
         renderer.setTemplateRepository(new TemplateRepository());
         renderer.setTextureResolver(new DefaultTextureResolver());
+        renderer.setShowGrid(showGrid);
 
         // Rehydrate plane snapshots
         TemplateRepository tr = new TemplateRepository();
@@ -299,6 +301,12 @@ public class MapEditorPane extends BorderPane {
         });
         mapSidebar.setOnZoomOut(() -> {
             map.cameraZoom = Math.max(0.25, map.cameraZoom / 1.15);
+            redraw();
+        });
+
+        mapSidebar.setOnShowGridChanged(show -> {
+            this.showGrid = show;
+            renderer.setShowGrid(show);
             redraw();
         });
 

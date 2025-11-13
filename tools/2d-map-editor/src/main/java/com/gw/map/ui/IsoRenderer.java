@@ -575,12 +575,13 @@ public class IsoRenderer {
         return t != null && t.complex && t.animated && t.regions != null && !t.regions.isEmpty();
     }
 
+    private static final long FRAME_MS = 120;  // match TemplateGallery
+
     private int animatedFrameIndex(int frames) {
         if (frames <= 0) return 0;
-        long now = System.nanoTime();
-        long slot = (now / (1_000_000_000L / 60)) % 60;
-        if (frames >= 60) return (int) Math.floor(slot * (frames / 60.0));
-        return (int) (slot % frames);
+        long nowMs = System.nanoTime() / 1_000_000L;
+        long idx = (nowMs / FRAME_MS) % frames;
+        return (int) idx;
     }
 
     private Image loadTextureByLogicalPath(String logicalPath) {

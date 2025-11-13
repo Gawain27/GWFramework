@@ -14,24 +14,14 @@ import com.gw.map.ui.plane.PlaneCanvasPane;
 import com.gw.map.ui.sidebar.MapSidebarPane;
 import com.gw.map.ui.sidebar.MapSidebarPane.UiBasePlane;
 import com.gw.map.ui.sidebar.PlaneSidebarPane;
+import javafx.animation.AnimationTimer;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.scene.Cursor;
 import javafx.scene.Node;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
-import javafx.scene.control.Alert;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.RadioButton;
-import javafx.scene.control.ScrollPane;
-import javafx.scene.control.Separator;
-import javafx.scene.control.SplitPane;
-import javafx.scene.control.Tab;
-import javafx.scene.control.TabPane;
-import javafx.scene.control.ToggleButton;
-import javafx.scene.control.ToggleGroup;
-import javafx.scene.control.ToolBar;
+import javafx.scene.control.*;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
@@ -48,6 +38,7 @@ import java.util.Optional;
  * - Left/right are collapsible (toolbar toggles) and resizable by mouse-drag.
  * - Right sidebar swaps content: MapSidebarPane for 3D tab, PlaneSidebarPane for plane tabs.
  * - Base-plane combobox syncs with plane picked by clicking in the 3D view.
+ * - Continuous AnimationTimer keeps 3D map animations running even when idle.
  */
 public class MapEditorPane extends BorderPane {
 
@@ -73,24 +64,31 @@ public class MapEditorPane extends BorderPane {
     private final MapSidebarPane mapSidebar = new MapSidebarPane();
     private final PlaneSidebarPane planeSidebar = new PlaneSidebarPane(new TemplateRepository());
     private final Map<Tab, PlaneTabCtx> planeTabs = new HashMap<>();
+
     // Three-way SplitPane (left gallery | center | right sidebar)
     private final SplitPane split = new SplitPane();
-    private final VBox leftContainer = new VBox();        // holds gallery when set via setLeftGallery
+    private final VBox leftContainer = new VBox();          // holds gallery when set via setLeftGallery
     private final StackPane centerContainer = new StackPane(); // hosts centerTabs
-    private final StackPane rightContainer = new StackPane(); // swaps mapSidebar / planeSidebar
+    private final StackPane rightContainer = new StackPane();  // swaps mapSidebar / planeSidebar
+
     // State
     private Node leftGallery = null;
     private boolean leftVisible = true;
     private boolean rightVisible = true;
     private MapDef map = MapDef.createDefault();
+
     // Drag ghost (3D)
     private boolean showingGhost = false;
     private String ghostTemplateId = null;
+
     // Mouse (3D)
     private double lastX, lastY;
     private boolean rightDragging = false;
-    private double lastLeftWidthFrac = 0.22; // remember user size
+    private double lastLeftWidthFrac = 0.22;  // remember user size
     private double lastRightWidthFrac = 0.22;
+
+    // Continuous animation timer for the 3D view
+    private final AnimationTimer animTimer;
 
     public MapEditorPane(MapRepository repo) {
         this.repo = repo;
@@ -109,13 +107,24 @@ public class MapEditorPane extends BorderPane {
         centerContainer.getChildren().setAll(centerTabs);
 
         // Active tab listener → swap right sidebar content
-        centerTabs.getSelectionModel().selectedItemProperty().addListener((o, oldT, newT) -> updateRightSidebarForActiveTab());
+        centerTabs.getSelectionModel().selectedItemProperty().addListener(
+            (o, oldT, newT) -> updateRightSidebarForActiveTab()
+        );
 
         setupDnD();
         wireMapSidebar();
 
         // Initial right = map sidebar
         rightContainer.getChildren().setAll(mapSidebar);
+
+        // Animation timer: keep 3D view animating even when idle
+        animTimer = new AnimationTimer() {
+            @Override
+            public void handle(long now) {
+                redraw();
+            }
+        };
+        animTimer.start();
     }
 
     private static double clamp(double v, double lo, double hi) {
@@ -130,11 +139,11 @@ public class MapEditorPane extends BorderPane {
         leftContainer.getChildren().setAll(gallery);
         gallery.setManaged(true);
         gallery.setVisible(true);
-        // Keep divider around ~22% by default if first time; otherwise preserve user-sized divider
+        // default divider positions if first time
         if (split.getItems().size() == 3 && split.getDividerPositions().length > 0) {
-            // leave as is (user might have resized already)
+            // keep user configuration
         } else {
-            split.setDividerPositions(0.22, 0.78); // [left|center|right] initial
+            split.setDividerPositions(0.22, 0.78); // [left|center|right]
         }
     }
 
@@ -144,7 +153,7 @@ public class MapEditorPane extends BorderPane {
         renderer.setTemplateRepository(new TemplateRepository());
         renderer.setTextureResolver(new DefaultTextureResolver());
 
-        // Rehydrate every plane’s transient snapshots
+        // Rehydrate plane snapshots
         TemplateRepository tr = new TemplateRepository();
         if (map.planes != null) map.planes.values().forEach(p -> p.rehydrateSnapshots(tr));
 
@@ -153,7 +162,6 @@ public class MapEditorPane extends BorderPane {
         updateMapSidebarLabels();
         syncUiBasePlaneComboFromSel();
     }
-
 
     /* ------------------------- Layout helpers ------------------------- */
 
@@ -164,7 +172,6 @@ public class MapEditorPane extends BorderPane {
         centerContainer.setMinWidth(300);
 
         split.getItems().addAll(leftContainer, centerContainer, rightContainer);
-        // initial: left 22%, right 22%
         split.setDividerPositions(0.22, 0.78);
 
         // Track divider changes so we can restore later
@@ -175,7 +182,6 @@ public class MapEditorPane extends BorderPane {
         });
         split.getDividers().get(1).positionProperty().addListener((o, ov, nv) -> {
             if (rightContainer.isVisible() && rightContainer.isManaged()) {
-                // right fractional width = 1 - nv
                 lastRightWidthFrac = Math.max(0.15, Math.min(1.0 - nv.doubleValue(), 0.45));
             }
         });
@@ -200,7 +206,7 @@ public class MapEditorPane extends BorderPane {
         Button btnLoad = new Button("Load");
         btnLoad.setOnAction(e -> doLoad());
 
-        // Collapse toggles (left & right)
+        // Collapse toggles
         ToggleButton tLeft = new ToggleButton("Toggle Gallery");
         tLeft.setSelected(true);
         tLeft.setOnAction(e -> toggleLeft(tLeft.isSelected()));
@@ -214,7 +220,13 @@ public class MapEditorPane extends BorderPane {
         planeMode.setSelected(true);
         modeGroup.selectedToggleProperty().addListener((obs, o, n) -> onModeChanged());
 
-        return new ToolBar(btnNew, btnSave, btnLoad, new Separator(Orientation.VERTICAL), tLeft, tRight, new Separator(Orientation.VERTICAL), new Label("Mode:"), planeMode, tileMode);
+        return new ToolBar(
+            btnNew, btnSave, btnLoad,
+            new Separator(Orientation.VERTICAL),
+            tLeft, tRight,
+            new Separator(Orientation.VERTICAL),
+            new Label("Mode:"), planeMode, tileMode
+        );
     }
 
     private void toggleLeft(boolean show) {
@@ -224,12 +236,10 @@ public class MapEditorPane extends BorderPane {
         leftContainer.setVisible(true);
         double[] d = split.getDividerPositions();
         if (show) {
-            // restore previous left fraction and keep right as is
             double leftFrac = lastLeftWidthFrac <= 0 ? 0.18 : lastLeftWidthFrac;
             double rightFrac = (d.length >= 2) ? (1.0 - d[1]) : lastRightWidthFrac;
             split.setDividerPositions(leftFrac, 1.0 - rightFrac);
         } else {
-            // collapse left to 0 -> first divider to 0.0; keep right width
             double rightFrac = (d.length >= 2) ? (1.0 - d[1]) : lastRightWidthFrac;
             split.setDividerPositions(0.0, 1.0 - rightFrac);
         }
@@ -246,14 +256,14 @@ public class MapEditorPane extends BorderPane {
             split.setDividerPositions(leftFrac, 1.0 - rightFrac);
         } else {
             double leftFrac = (d.length >= 1) ? d[0] : (lastLeftWidthFrac > 0 ? lastLeftWidthFrac : 0.18);
-            split.setDividerPositions(leftFrac, 1.0); // second divider to 1 → right width = 0
+            split.setDividerPositions(leftFrac, 1.0);
         }
     }
 
     /* ------------------------- Map sidebar wiring (3D) ------------------------- */
 
     private void wireMapSidebar() {
-        // Base plane combobox maps directly: X=x=k, Y=y=k, Z=z=k
+        // X=x=k, Y=y=k, Z=z=k
         mapSidebar.setOnBasePlaneChanged((UiBasePlane ui) -> {
             sel.base = switch (ui) {
                 case X -> SelectionState.BasePlane.X;
@@ -292,7 +302,7 @@ public class MapEditorPane extends BorderPane {
             redraw();
         });
 
-        // Edit current plane → open a canvas-only plane tab; right sidebar will switch to planeSidebar bound to it
+        // Edit current plane → open plane editor tab
         mapSidebar.setOnEditCurrentPlane(this::openCurrentPlaneEditor);
 
         updateMapSidebarLabels();
@@ -349,8 +359,9 @@ public class MapEditorPane extends BorderPane {
                 return;
             }
         }
+
         Plane2DMap plane = map.getOrCreatePlane(sel.base, sel.index);
-        // ensure sizes correct if map dimensions changed
+        // ensure sizes synced with map
         plane.widthTiles = switch (sel.base) {
             case Z -> map.size.widthX;
             case X -> map.size.heightY;
@@ -381,9 +392,7 @@ public class MapEditorPane extends BorderPane {
     private void updateRightSidebarForActiveTab() {
         Tab active = centerTabs.getSelectionModel().getSelectedItem();
         if (active == tab3D || active == null) {
-            // 3D view → show MapSidebarPane
             rightContainer.getChildren().setAll(mapSidebar);
-            // Respect current collapsed state
             rightContainer.setManaged(rightVisible);
             rightContainer.setVisible(rightVisible);
             return;
@@ -452,7 +461,6 @@ public class MapEditorPane extends BorderPane {
                     sel.base = hit.base;
                     sel.index = hit.index;
                     sel.clearTiles();
-                    // Sync UI combobox when plane is set by click:
                     syncUiBasePlaneComboFromSel();
                     updateMapSidebarLabels();
                     redraw();
@@ -482,6 +490,8 @@ public class MapEditorPane extends BorderPane {
         redraw(e.getX(), e.getY());
     }
 
+    /* ------------------------- Commands ------------------------- */
+
     private void doNew() {
         NewMapDialog dlg = new NewMapDialog();
         Optional<NewMapDialog.Result> res = dlg.showAndWait();
@@ -494,8 +504,6 @@ public class MapEditorPane extends BorderPane {
         });
     }
 
-    /* ------------------------- Commands ------------------------- */
-
     private void doSave() {
         repo.save(map);
         new Alert(Alert.AlertType.INFORMATION, "Saved.").showAndWait();
@@ -506,15 +514,22 @@ public class MapEditorPane extends BorderPane {
         dlg.showAndWait().ifPresent(this::setMap);
     }
 
+    /* ------------------------- Rendering ------------------------- */
+
     private void redraw() {
         redraw(Double.NaN, Double.NaN);
     }
 
-    /* ------------------------- Rendering ------------------------- */
-
     private void redraw(double ghostX, double ghostY) {
         GraphicsContext g = canvas.getGraphicsContext2D();
-        renderer.render(g, map, sel, isTileMode(), showingGhost ? ghostTemplateId : null, (!Double.isNaN(ghostX) && !Double.isNaN(ghostY)) ? new double[]{ghostX, ghostY} : null);
+        renderer.render(
+            g,
+            map,
+            sel,
+            isTileMode(),
+            showingGhost ? ghostTemplateId : null,
+            (!Double.isNaN(ghostX) && !Double.isNaN(ghostY)) ? new double[]{ghostX, ghostY} : null
+        );
     }
 
     // Track open plane tabs → model/canvas so we can bind the sidebar when active

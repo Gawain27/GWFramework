@@ -138,9 +138,19 @@ public class Plane2DMap {
         public int rotQ = 0;   // 0..3 -> 0°, 90°, 180°, 270°
 
         /**
-         * NEW: if true, this placement is drawn tilted 45° "forward" in 3D.
+         * Tilt mode:
+         * 0 = none
+         * 1 = forward (around U axis)
+         * 2 = sideways (around V axis)
+         * 3 = oblique 1 (around U+V)
+         * 4 = oblique 2 (around U-V)
          */
-        public boolean tiltForward45 = false;
+        public int tiltMode = 0;
+
+        /**
+         * Tilt angle in degrees (0..360).
+         */
+        public double tiltDegrees = 0.0;
 
         public transient TemplateDef dataSnap; // runtime only
 
@@ -162,7 +172,8 @@ public class Plane2DMap {
             this.layer = Math.max(0, layer);
             this.scale = Math.max(0.01, scale);
             this.rotQ = 0;
-            this.tiltForward45 = false;
+            this.tiltMode = 0;
+            this.tiltDegrees = 0.0;
         }
     }
 }

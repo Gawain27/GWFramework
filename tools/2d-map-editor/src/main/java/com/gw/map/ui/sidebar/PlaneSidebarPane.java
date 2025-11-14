@@ -15,6 +15,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Spinner;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
 import javafx.scene.layout.GridPane;
@@ -27,7 +28,7 @@ import java.util.stream.Collectors;
 
 /**
  * Plane tab (scrollable): instance info, rendering layer select, layer management,
- * gates & links, rotation buttons for the selected placement, and tilt toggle.
+ * gates & links, rotation buttons for the selected placement, and tilt controls.
  */
 public class PlaneSidebarPane extends ScrollPane {
 
@@ -41,10 +42,12 @@ public class PlaneSidebarPane extends ScrollPane {
     private final ComboBox<Integer> layerCombo = new ComboBox<>();
     private final Button rotCwBtn = new Button("Rotate +90°");
     private final Button rotCcwBtn = new Button("Rotate -90°");
-    /**
-     * NEW: per-placement tilt toggle.
-     */
-    private final CheckBox tiltCheck = new CheckBox("Tilt 45° forward");
+    // NEW: tilt mode + angle
+    private final CheckBox tiltForwardBox = new CheckBox("Forward");
+    private final CheckBox tiltSideBox = new CheckBox("Sideways");
+    private final CheckBox tiltObl1Box = new CheckBox("Oblique 1");
+    private final CheckBox tiltObl2Box = new CheckBox("Oblique 2");
+    private final Spinner<Integer> tiltDegSpinner = new Spinner<>(0, 360, 0, 5);
     // Layer management (for the plane)
     private final ListView<Integer> layerList = new ListView<>();
     private final Button addLayerBtn = new Button("Add Layer");
@@ -106,12 +109,25 @@ public class PlaneSidebarPane extends ScrollPane {
             refresh(sel);
         });
 
-        // NEW: tilt toggle
-        tiltCheck.setOnAction(e -> {
+        // Tilt mode: 4 checkboxes, but at most one active at a time
+        tiltForwardBox.setOnAction(e -> handleTiltModeToggle(1, tiltForwardBox.isSelected()));
+        tiltSideBox.setOnAction(e -> handleTiltModeToggle(2, tiltSideBox.isSelected()));
+        tiltObl1Box.setOnAction(e -> handleTiltModeToggle(3, tiltObl1Box.isSelected()));
+        tiltObl2Box.setOnAction(e -> handleTiltModeToggle(4, tiltObl2Box.isSelected()));
+
+        tiltDegSpinner.setEditable(true);
+        tiltDegSpinner.valueProperty().addListener((obs, ov, nv) -> {
             if (sel == null) return;
-            sel.tiltForward45 = tiltCheck.isSelected();
-            onRequestRedraw.run();
-            // no need to re-bind, but keep header label in sync
+            int v = (nv == null ? 0 : nv);
+            if (v < 0) v = 0;
+            if (v > 360) v = 360;
+            sel.tiltDegrees = v;
+            if (sel.tiltMode != 0 && v != 0) {
+                onRequestRedraw.run();
+            } else if (sel.tiltMode != 0 && v == 0) {
+                // angle 0 ⇒ visually no tilt
+                onRequestRedraw.run();
+            }
             refresh(sel);
         });
 
@@ -157,7 +173,7 @@ public class PlaneSidebarPane extends ScrollPane {
         refresh(null);
     }
 
-    /* ---------------- UI builders ---------------- */
+    /* ---------------- Tilt helpers ---------------- */
 
     public void refresh(Plane2DMap.Placement selected) {
         this.sel = selected;
@@ -178,24 +194,56 @@ public class PlaneSidebarPane extends ScrollPane {
             saveLinkNameBtn.setDisable(true);
             rotCwBtn.setDisable(true);
             rotCcwBtn.setDisable(true);
-            tiltCheck.setDisable(true);
-            tiltCheck.setSelected(false);
+
+            tiltForwardBox.setDisable(true);
+            tiltSideBox.setDisable(true);
+            tiltObl1Box.setDisable(true);
+            tiltObl2Box.setDisable(true);
+            tiltForwardBox.setSelected(false);
+            tiltSideBox.setSelected(false);
+            tiltObl1Box.setSelected(false);
+            tiltObl2Box.setSelected(false);
+            tiltDegSpinner.setDisable(true);
+            tiltDegSpinner.getValueFactory().setValue(0);
+
             return;
         }
 
         rotCwBtn.setDisable(false);
         rotCcwBtn.setDisable(false);
-        tiltCheck.setDisable(false);
+
+        tiltForwardBox.setDisable(false);
+        tiltSideBox.setDisable(false);
+        tiltObl1Box.setDisable(false);
+        tiltObl2Box.setDisable(false);
+        tiltDegSpinner.setDisable(false);
 
         lblTid.setText(sel.templateId);
         lblRegion.setText(sel.regionIndex < 0 ? "(whole)" : ("region " + sel.regionIndex));
-        lblPos.setText("(" + sel.gx + "," + sel.gy + ") • " + sel.wTiles + "×" + sel.hTiles + " tiles  •  rot " + (sel.rotQ * 90) + "°" + (sel.tiltForward45 ? " • tilted 45°" : ""));
+
+        String tiltDesc;
+        tiltDesc = switch (sel.tiltMode) {
+            case 1 -> " • tilt forward " + (int) sel.tiltDegrees + "°";
+            case 2 -> " • tilt sideways " + (int) sel.tiltDegrees + "°";
+            case 3 -> " • tilt oblique1 " + (int) sel.tiltDegrees + "°";
+            case 4 -> " • tilt oblique2 " + (int) sel.tiltDegrees + "°";
+            default -> "";
+        };
+
+        lblPos.setText("(" + sel.gx + "," + sel.gy + ") • " + sel.wTiles + "×" + sel.hTiles + " tiles  •  rot " + (sel.rotQ * 90) + "°" + tiltDesc);
 
         layerCombo.getItems().setAll(map.layers);
         layerCombo.getSelectionModel().select(Math.max(0, Math.min(sel.layer, map.layers.size() - 1)));
 
-        // NEW: sync tilt checkbox with model
-        tiltCheck.setSelected(sel.tiltForward45);
+        // sync tilt UI
+        tiltForwardBox.setSelected(sel.tiltMode == 1);
+        tiltSideBox.setSelected(sel.tiltMode == 2);
+        tiltObl1Box.setSelected(sel.tiltMode == 3);
+        tiltObl2Box.setSelected(sel.tiltMode == 4);
+        int ang = (int) Math.round(sel.tiltDegrees);
+        if (ang < 0) ang = 0;
+        if (ang > 360) ang = 360;
+        tiltDegSpinner.getValueFactory().setValue(ang);
 
         TemplateDef snap = sel.dataSnap;
         cachedIslands = TemplateGateUtils.computeGateIslands(snap);
@@ -222,6 +270,39 @@ public class PlaneSidebarPane extends ScrollPane {
         });
     }
 
+    /* ---------------- UI builders ---------------- */
+
+    private void handleTiltModeToggle(int mode, boolean selected) {
+        if (sel == null) return;
+
+        if (!selected) {
+            // unchecking the active one → no tilt
+            if (sel.tiltMode == mode) {
+                sel.tiltMode = 0;
+                onRequestRedraw.run();
+                refresh(sel);
+            }
+            return;
+        }
+
+        // Turn this one ON and all others OFF
+        tiltForwardBox.setSelected(mode == 1);
+        tiltSideBox.setSelected(mode == 2);
+        tiltObl1Box.setSelected(mode == 3);
+        tiltObl2Box.setSelected(mode == 4);
+
+        sel.tiltMode = mode;
+
+        // If angle is 0, default to 45° as a nice starting point
+        if (sel.tiltDegrees == 0.0) {
+            sel.tiltDegrees = 45.0;
+            tiltDegSpinner.getValueFactory().setValue(45);
+        }
+
+        onRequestRedraw.run();
+        refresh(sel);
+    }
+
     private Node buildHeader() {
         GridPane gp = new GridPane();
         gp.setHgap(8);
@@ -240,10 +321,17 @@ public class PlaneSidebarPane extends ScrollPane {
 
     private Node buildInstanceRow() {
         VBox box = new VBox(6);
+
         HBox row1 = new HBox(8, new Label("Layer:"), layerCombo);
         HBox row2 = new HBox(8, rotCwBtn, rotCcwBtn);
-        HBox row3 = new HBox(8, tiltCheck);
-        TitledPane tp = new TitledPane("Rendering & Transform", new VBox(6, row1, row2, row3));
+
+        HBox tiltRow1 = new HBox(8, new Label("Tilt:"), tiltForwardBox, tiltSideBox);
+        HBox tiltRow2 = new HBox(8, tiltObl1Box, tiltObl2Box);
+        HBox tiltRow3 = new HBox(8, new Label("Angle:"), tiltDegSpinner, new Label("°"));
+
+        VBox tiltBox = new VBox(4, tiltRow1, tiltRow2, tiltRow3);
+
+        TitledPane tp = new TitledPane("Rendering & Transform", new VBox(6, row1, row2, tiltBox));
         tp.setCollapsible(false);
         return tp;
     }
@@ -266,8 +354,7 @@ public class PlaneSidebarPane extends ScrollPane {
         return tp;
     }
 
-    /* ---------------- Layer management, gates & links ---------------- */
-    // (unchanged below here; same as your current PlaneSidebarPane)
+    /* ---------------- Layer management & gates/links (unchanged) ---------------- */
 
     private Node buildLinks() {
         HBox addRow = new HBox(6, new Label("Connect to:"), gateSearch, addLinkBtn);

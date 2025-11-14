@@ -28,10 +28,12 @@ import java.util.List;
  * - Camera uses yaw/pitch/roll; orthographic projection.
  * - Depth-sorted quads for planes/tiles.
  * - Plane placements:
- * - Use Plane2DMap.Placement (including rotQ, scale, tiltMode, tiltDegrees).
+ * - Use Plane2DMap.Placement (including rotQ, scale, tiltMode, tiltDegrees, invertLayerOffset).
  * - Animated templates: frames are advanced by time (like PlaneCanvasPane).
  * - Placements are stuck to their plane tiles in world space.
  * - Within each plane, placements are sorted by camera-space depth and drawn back-to-front.
+ * - Each placement is shifted in screen-space along the plane's fixed axis
+ * by (layerIndex * 1px), sign-flipped if invertLayerOffset is true.
  * - In Tile Selection mode:
  * - Only the selected plane is rendered.
  * - Only placements on that plane are rendered.
@@ -132,6 +134,21 @@ public class IsoRenderer {
         };
     }
 
+    /**
+     * Fixed axis for this plane:
+     * - Z plane:   fixed Z → (0,0,1)
+     * - X plane:   fixed X → (1,0,0)
+     * - Y plane:   fixed Y → (0,1,0)
+     * Used for layer-dependent pixel offset in screen space.
+     */
+    private static double[] planeFixedAxis(Plane2DMap plane) {
+        return switch (plane.base) {
+            case Z -> new double[]{0, 0, 1};
+            case X -> new double[]{1, 0, 0};
+            case Y -> new double[]{0, 1, 0};
+        };
+    }
+
     /* Rotate a point around an axis (through origin) by angle (radians). */
     private static double[] rotateAroundAxis(double[] v, double[] n, double cosA, double sinA) {
         // v' = v*cosθ + (n × v)*sinθ + n*(n·v)*(1 - cosθ)
@@ -187,16 +204,12 @@ public class IsoRenderer {
         if (r != null) this.textureResolver = r;
     }
 
-    /* ============================================================
-     *  Public render entry
-     * ============================================================ */
-
     public void setTemplateRepository(TemplateRepository repo) {
         if (repo != null) this.templateRepo = repo;
     }
 
     /* ============================================================
-     *  Axes
+     *  Public render entry
      * ============================================================ */
 
     public void render(GraphicsContext g, MapDef map, SelectionState sel, boolean tileMode, String ghostTemplateId, double[] ghostScreenPos) {
@@ -267,7 +280,7 @@ public class IsoRenderer {
     }
 
     /* ============================================================
-     *  Plane / placement drawing (with rotation + tilt + animation)
+     *  Plane / placement drawing (with rotation + tilt + layer offset + animation)
      * ============================================================ */
 
     private void drawAxes(GraphicsContext g, double[][] R, double scale, double ox, double oy, MapDef map) {
@@ -311,11 +324,9 @@ public class IsoRenderer {
                 if (!isSameBase(base, sel.base) || plane.planeIndex != sel.index) continue;
             }
 
-            // ---- NEW: sort placements by camera-space depth (back-to-front) ----
+            // sort placements by camera-space depth (back-to-front)
             List<Plane2DMap.Placement> ordered = new ArrayList<>(plane.placements);
             ordered.sort(Comparator.comparingDouble(p -> placementDepthCamera(plane, p, R)));
-            // We want farthest first, nearest last (painter's algorithm).
-            // If you find it inverted, just flip to reversed order.
             for (Plane2DMap.Placement p : ordered) {
                 drawPlanePlacement(g, plane, p, R, scale, ox, oy);
             }
@@ -349,13 +360,12 @@ public class IsoRenderer {
         double[] world = planeToWorld(plane, uCenter, vCenter);
         double x = world[0], y = world[1], z = world[2];
 
-        // rotated Z component (depth along camera's "out of screen" axis)
         double zr = R[2][0] * x + R[2][1] * y + R[2][2] * z;
         return zr;
     }
 
     /* ============================================================
-     *  Picking helpers
+     *  Placement draw (with rotation + tilt + layer pixel offset)
      * ============================================================ */
 
     private void drawPlanePlacement(GraphicsContext g, Plane2DMap plane, Plane2DMap.Placement p, double[][] R, double scale, double ox, double oy) {
@@ -452,6 +462,7 @@ public class IsoRenderer {
         double[] edge02 = new double[]{P2w[0] - P0w[0], P2w[1] - P0w[1], P2w[2] - P0w[2]};
         double[] P3w = new double[]{P0w[0] + edge01[0] + edge02[0], P0w[1] + edge01[1] + edge02[1], P0w[2] + edge01[2] + edge02[2]};
 
+        // Tilt around an axis if requested
         int mode = p.tiltMode;
         double ang = p.tiltDegrees;
         double angNorm = ((ang % 360.0) + 360.0) % 360.0;
@@ -491,9 +502,40 @@ public class IsoRenderer {
             P2w[2] += cz;
         }
 
+        // Project three corners
         double[] S0 = project(R, scale, ox, oy, P0w[0], P0w[1], P0w[2]);
         double[] S1 = project(R, scale, ox, oy, P1w[0], P1w[1], P1w[2]);
         double[] S2 = project(R, scale, ox, oy, P2w[0], P2w[1], P2w[2]);
+
+        // -------- Layer-based pixel offset along plane's fixed axis --------
+        int layerIndex = Math.max(0, p.layer);
+        if (layerIndex > 0) {
+            double pixels = layerIndex; // 1px per layer * layerIndex
+            double sign = (p.invertLayerOffset ? -1.0 : 1.0);
+
+            double[] axis = planeFixedAxis(plane);
+
+            // Use origin-centered projection to get ***direction*** in screen space.
+            double[] originS = project(R, scale, 0.0, 0.0, 0.0, 0.0, 0.0);
+            double[] axisS = project(R, scale, 0.0, 0.0, axis[0], axis[1], axis[2]);
+
+            double vx = axisS[0] - originS[0];
+            double vy = axisS[1] - originS[1];
+            double len = Math.hypot(vx, vy);
+
+            if (len > 1e-6) {
+                double f = sign * pixels / len;
+                double dxScreen = vx * f;
+                double dyScreen = vy * f;
+
+                S0[0] += dxScreen;
+                S1[0] += dxScreen;
+                S2[0] += dxScreen;
+                S0[1] += dyScreen;
+                S1[1] += dyScreen;
+                S2[1] += dyScreen;
+            }
+        }
 
         double tx = S0[0];
         double ty = S0[1];
@@ -509,6 +551,10 @@ public class IsoRenderer {
         g.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
         g.restore();
     }
+
+    /* ============================================================
+     *  Picking helpers
+     * ============================================================ */
 
     public PlaneHit hitTestPlane(double sx, double sy) {
         if (map == null) return null;

@@ -42,25 +42,30 @@ import java.util.function.Consumer;
  * - Zoom (Ctrl/Cmd + wheel)
  * - Animated templates (uses first-frame footprint)
  * - Rotation in 90° steps via Placement.rotQ (0..3)
+ * - Active layer (integer, default 0) acts as selection filter.
  */
 public class PlaneCanvasPane extends Region {
 
     public static final DataFormat PAYLOAD = TemplateGalleryPane.PAYLOAD_FORMAT;
-
+    private static final long FRAME_MS = 120;  // match TemplateGallery
     private final Canvas canvas = new Canvas();
     private final GraphicsContext g = canvas.getGraphicsContext2D();
-
     private final IntegerProperty tileW = new SimpleIntegerProperty(16);
     private final IntegerProperty tileH = new SimpleIntegerProperty(16);
     private final DoubleProperty zoom = new SimpleDoubleProperty(1.0);
-
     private final BooleanProperty showCollisions = new SimpleBooleanProperty(true);
     private final BooleanProperty showGates = new SimpleBooleanProperty(true);
+    /**
+     * Layer used when dropping new placements (and reflected in HUD).
+     */
     private final IntegerProperty currentLayer = new SimpleIntegerProperty(0);
-
+    /**
+     * Active layer filter for selection (and HUD).
+     * Always >= 0. Default = 0. Only this layer is selectable.
+     */
+    private final IntegerProperty activeLayerFilter = new SimpleIntegerProperty(0);
     private final TemplateRepository templateRepo;
     private final TextureResolver textureResolver = new DefaultTextureResolver();
-
     private final StringProperty selectedPid = new SimpleStringProperty(null);
     private Plane2DMap map;
     private DropPreview preview = null;
@@ -74,6 +79,8 @@ public class PlaneCanvasPane extends Region {
     private int dragOffsetGX = 0, dragOffsetGY = 0;
     private Consumer<Plane2DMap.Placement> onSelectionChanged;
 
+    /* ============ Public API (used by sidebar) ============ */
+
     public PlaneCanvasPane(TemplateRepository repo) {
         this.templateRepo = (repo != null ? repo : new TemplateRepository());
         getChildren().add(canvas);
@@ -84,6 +91,18 @@ public class PlaneCanvasPane extends Region {
         tileH.addListener((o, a, b) -> layoutForMap());
         zoom.addListener((o, a, b) -> layoutForMap());
         currentLayer.addListener((o, a, b) -> requestLayout());
+
+        // If active layer changes and the selected placement is not on that layer, clear selection.
+        activeLayerFilter.addListener((o, oldVal, newVal) -> {
+            Plane2DMap.Placement sel = getSelected();
+            int filter = (newVal == null ? 0 : Math.max(0, newVal.intValue()));
+            activeLayerFilter.set(filter); // ensure non-negative
+            if (sel != null && sel.layer != filter) {
+                selectPid(null);
+            } else {
+                redrawInternal();
+            }
+        });
 
         setOnDragOver(this::onDragOver);
         setOnDragExited(e -> {
@@ -112,8 +131,6 @@ public class PlaneCanvasPane extends Region {
         setFocusTraversable(true);
         animTimer.start();
     }
-
-    /* ============ Public API (used by sidebar) ============ */
 
     private static int clamp(int v, int lo, int hi) {
         return Math.max(lo, Math.min(hi, v));
@@ -165,8 +182,18 @@ public class PlaneCanvasPane extends Region {
         return showGates;
     }
 
+    /**
+     * Layer used when dropping new placements.
+     */
     public IntegerProperty currentLayerProperty() {
         return currentLayer;
+    }
+
+    /**
+     * Active selection layer; only this layer is selectable.
+     */
+    public IntegerProperty activeLayerFilterProperty() {
+        return activeLayerFilter;
     }
 
     public void zoomIn() {
@@ -181,22 +208,29 @@ public class PlaneCanvasPane extends Region {
         zoom.set(1.0);
     }
 
-    /* ============ Drag & Drop ============ */
-
     public void redraw() {
         redrawInternal();
     }
+
+    /* ============ Selection & Moving ============ */
 
     public Plane2DMap.Placement getSelected() {
         if (map == null || selectedPid.get() == null) return null;
         return map.placements.stream().filter(p -> p.pid.equals(selectedPid.get())).findFirst().orElse(null);
     }
 
-    /* ============ Selection & Moving ============ */
-
     public void selectPid(String pid) {
-        selectedPid.set(pid);
-        if (onSelectionChanged != null) onSelectionChanged.accept(getSelected());
+        this.selectedPid.set(pid);
+        Plane2DMap.Placement sel = getSelected();
+
+        // When selecting a placement, we also update active layer + currentLayer to match it.
+        if (sel != null) {
+            int layer = Math.max(0, sel.layer);
+            activeLayerFilter.set(layer);
+            currentLayer.set(layer);
+        }
+
+        if (onSelectionChanged != null) onSelectionChanged.accept(sel);
         redrawInternal();
         requestFocus();
     }
@@ -255,10 +289,11 @@ public class PlaneCanvasPane extends Region {
 
         int gx = clamp(preview.gx, 0, map.widthTiles - wTiles);
         int gy = clamp(preview.gy, 0, map.heightTiles - hTiles);
+
+        // drop uses currentLayer (which we also keep synced to active layer)
         int layerIdx = clamp(currentLayer.get(), 0, Math.max(0, map.layers.size() - 1));
 
         Plane2DMap.Placement p = new Plane2DMap.Placement(preview.templateId, preview.regionIndex, gx, gy, baseWH[0], baseWH[1], preview.rpx, preview.rpy, preview.rpw, preview.rph, snap, layerIdx, scl);
-        // rotQ defaults to 0
         map.placements.add(p);
         preview = null;
         selectPid(p.pid);
@@ -281,8 +316,6 @@ public class PlaneCanvasPane extends Region {
         }
         e.consume();
     }
-
-    /* ============ Layout & redraw ============ */
 
     private void onMouseDragged(MouseEvent e) {
         if (!draggingInstance || map == null) return;
@@ -307,20 +340,26 @@ public class PlaneCanvasPane extends Region {
         e.consume();
     }
 
+    /* ============ Layout & redraw ============ */
+
+    /**
+     * Hit test top-most placement, respecting active layer filter.
+     */
     private Plane2DMap.Placement hitTestTopMost(int gx, int gy) {
         if (map == null) return null;
-        var ordered = map.placements.stream().sorted(Comparator.comparingInt((Plane2DMap.Placement p) -> p.layer).thenComparingInt(map.placements::indexOf)).toList();
+        int filter = Math.max(0, activeLayerFilter.get());
+        var ordered = map.placements.stream().filter(p -> p.layer == filter).sorted(Comparator.comparingInt((Plane2DMap.Placement p) -> p.layer).thenComparingInt(map.placements::indexOf)).toList();
         for (int i = ordered.size() - 1; i >= 0; i--) {
             Plane2DMap.Placement p = ordered.get(i);
             int[] wh = rotatedFootprintTiles(p);
             int wTiles = Math.max(1, (int) Math.ceil(wh[0] * p.scale));
             int hTiles = Math.max(1, (int) Math.ceil(wh[1] * p.scale));
-            if (gx >= p.gx && gx < p.gx + wTiles && gy >= p.gy && gy < p.gy + hTiles) return p;
+            if (gx >= p.gx && gx < p.gx + wTiles && gy >= p.gy && gy < p.gy + hTiles) {
+                return p;
+            }
         }
         return null;
     }
-
-    /* ============ Drawing a placement (rotation-fixed) ============ */
 
     private void layoutForMap() {
         double pixelW = (map == null ? 64 : map.widthTiles) * tileW.get();
@@ -329,6 +368,8 @@ public class PlaneCanvasPane extends Region {
         canvas.setHeight(Math.max(32, pixelH * zoom.get()));
         redrawInternal();
     }
+
+    /* ============ Utilities ============ */
 
     private void redrawInternal() {
         double W = canvas.getWidth(), H = canvas.getHeight();
@@ -369,10 +410,9 @@ public class PlaneCanvasPane extends Region {
         g.setTextAlign(TextAlignment.LEFT);
         g.setTextBaseline(VPos.TOP);
         int count = map == null ? 0 : map.placements.size();
-        g.fillText("placements: " + count + "   |   zoom: " + String.format("%.2f", zoom.get()) + "   |   layer: " + currentLayer.get(), 6, 6);
+        int filter = Math.max(0, activeLayerFilter.get());
+        g.fillText("placements: " + count + "   |   zoom: " + String.format("%.2f", zoom.get()) + "   |   drop layer: " + currentLayer.get() + "   |   active layer: " + filter, 6, 6);
     }
-
-    /* ============ Utilities ============ */
 
     private boolean hasAnimatedPlacements() {
         if (preview != null) return false;
@@ -419,11 +459,9 @@ public class PlaneCanvasPane extends Region {
         g.save();
         g.setImageSmoothing(false);
 
-        // Affines that keep the drawn texture inside [dx,dx+dw]×[dy,dy+dh]
         double mxx, mxy, myx, myy, tx, ty;
         switch (p.rotQ & 3) {
-            case 1 -> { // 90° CW — FIXED
-                // (0,0)->(dx+dw,dy); (sw,0)->(dx+dw,dy+dh); (0,sh)->(dx,dy)
+            case 1 -> { // 90° CW
                 mxx = 0;
                 mxy = -dw / Math.max(1.0, sh);
                 myx = dh / Math.max(1.0, sw);
@@ -439,8 +477,7 @@ public class PlaneCanvasPane extends Region {
                 tx = dx + dw;
                 ty = dy + dh;
             }
-            case 3 -> { // 270° CW (90° CCW) — FIXED
-                // (0,0)->(dx,dy+dh); (sw,0)->(dx,dy); (0,sh)->(dx+dw,dy+dh)
+            case 3 -> { // 270° CW
                 mxx = 0;
                 mxy = dw / Math.max(1.0, sh);
                 myx = -dh / Math.max(1.0, sw);
@@ -461,10 +498,8 @@ public class PlaneCanvasPane extends Region {
         javafx.scene.transform.Affine A = new javafx.scene.transform.Affine(mxx, mxy, tx, myx, myy, ty);
         g.setTransform(A);
 
-        // Draw source rect in its own pixel space
         g.drawImage(tex, sx, sy, sw, sh, 0, 0, sw, sh);
 
-        // Overlays in src-tile pixel coordinates (get rotated by A as well)
         int tilePxW = Math.max(1, snap.tileWidthPx);
         int tilePxH = Math.max(1, snap.tileHeightPx);
         int baseCols = baseWH[0];
@@ -517,7 +552,6 @@ public class PlaneCanvasPane extends Region {
 
         g.restore();
 
-        // Axis-aligned selection rectangle in map space (placement bounds)
         g.setLineWidth(p.pid.equals(selectedPid.get()) ? 3 : 1);
         g.setStroke(p.pid.equals(selectedPid.get()) ? Color.color(0.95, 0.8, 0.2, 1) : Color.color(0, 0, 0, 0.6));
         double off = p.pid.equals(selectedPid.get()) ? 0.5 : 0.0;
@@ -558,8 +592,6 @@ public class PlaneCanvasPane extends Region {
         selectPid(null);
         redrawInternal();
     }
-
-    private static final long FRAME_MS = 120;  // match TemplateGallery
 
     private int animatedFrameIndex(int frames) {
         if (frames <= 0) return 0;

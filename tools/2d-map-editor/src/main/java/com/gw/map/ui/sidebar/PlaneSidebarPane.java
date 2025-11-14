@@ -4,6 +4,7 @@ import com.gw.editor.template.TemplateDef;
 import com.gw.editor.template.TemplateRepository;
 import com.gw.editor.util.TemplateGateUtils;
 import com.gw.map.model.Plane2DMap;
+import com.gw.map.ui.plane.PlaneCanvasPane;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -47,9 +48,11 @@ public class PlaneSidebarPane extends ScrollPane {
     private final CheckBox tiltSideBox = new CheckBox("Sideways");
     private final CheckBox tiltObl1Box = new CheckBox("Oblique 1");
     private final CheckBox tiltObl2Box = new CheckBox("Oblique 2");
+    private final CheckBox invertLayerOffsetBox = new CheckBox("Invert layer offset (backwards)");
     private final Spinner<Integer> tiltDegSpinner = new Spinner<>(0, 360, 0, 5);
     // Layer management (for the plane)
     private final ListView<Integer> layerList = new ListView<>();
+    private final ComboBox<String> layerFilterCombo = new ComboBox<>();
     private final Button addLayerBtn = new Button("Add Layer");
     private final Button removeLayerBtn = new Button("Remove Selected Layer");
     // Gates
@@ -66,6 +69,7 @@ public class PlaneSidebarPane extends ScrollPane {
     private final List<Plane2DMap.GateLink> linkVm = new ArrayList<>();
     private Plane2DMap map;
     private Plane2DMap.Placement sel;
+    private PlaneCanvasPane canvas;
     private List<List<int[]>> cachedIslands = List.of();
     private Runnable onRequestRedraw = () -> {
     };
@@ -86,6 +90,46 @@ public class PlaneSidebarPane extends ScrollPane {
         root.getChildren().add(buildLinks());
 
         gateSearch.setEditable(true);
+
+        // NEW: active layer filter behaviour
+        layerFilterCombo.setEditable(false);
+        layerFilterCombo.setOnAction(e -> {
+            if (canvas == null || map == null) return;
+
+            // Only usable when NO placement is selected
+            if (sel != null) {
+                syncLayerFilterComboFromCanvas();
+                return;
+            }
+
+            String val = layerFilterCombo.getValue();
+            if (val == null || val.isBlank()) {
+                syncLayerFilterComboFromCanvas();
+                return;
+            }
+
+            int layer;
+            try {
+                layer = Integer.parseInt(val.trim());
+            } catch (NumberFormatException ex) {
+                syncLayerFilterComboFromCanvas();
+                return;
+            }
+
+            // Clamp layer to [0 .. maxLayerUsed]
+            int maxLayer = map.placements.stream()
+                .mapToInt(p -> p.layer)
+                .max()
+                .orElse(0);
+            if (layer < 0 || layer > maxLayer) {
+                syncLayerFilterComboFromCanvas();
+                return;
+            }
+
+            canvas.activeLayerFilterProperty().set(layer);
+            canvas.currentLayerProperty().set(layer);
+            syncLayerFilterComboFromCanvas();
+        });
 
         layerCombo.setOnAction(e -> {
             if (map == null || sel == null) return;
@@ -114,6 +158,13 @@ public class PlaneSidebarPane extends ScrollPane {
         tiltSideBox.setOnAction(e -> handleTiltModeToggle(2, tiltSideBox.isSelected()));
         tiltObl1Box.setOnAction(e -> handleTiltModeToggle(3, tiltObl1Box.isSelected()));
         tiltObl2Box.setOnAction(e -> handleTiltModeToggle(4, tiltObl2Box.isSelected()));
+
+        // NEW: invert flag
+        invertLayerOffsetBox.setOnAction(e -> {
+            if (sel == null) return;
+            sel.invertLayerOffset = invertLayerOffsetBox.isSelected();
+            onRequestRedraw.run(); // 2D view won't change, but keeps things in sync.
+        });
 
         tiltDegSpinner.setEditable(true);
         tiltDegSpinner.valueProperty().addListener((obs, ov, nv) -> {
@@ -158,6 +209,42 @@ public class PlaneSidebarPane extends ScrollPane {
         });
     }
 
+    private void rebuildLayerFilterOptions() {
+        layerFilterCombo.getItems().clear();
+        if (map == null) {
+            layerFilterCombo.setDisable(true);
+            return;
+        }
+
+        // Max layer actually used by placements (spec requirement)
+        int maxLayer = map.placements.stream()
+            .mapToInt(p -> p.layer)
+            .max()
+            .orElse(0);
+
+        for (int i = 0; i <= maxLayer; i++) {
+            layerFilterCombo.getItems().add(Integer.toString(i));
+        }
+
+        layerFilterCombo.setDisable(false);
+        syncLayerFilterComboFromCanvas();
+    }
+
+    private void syncLayerFilterComboFromCanvas() {
+        if (canvas == null || map == null) {
+            layerFilterCombo.getSelectionModel().clearSelection();
+            return;
+        }
+        int filter = Math.max(0, canvas.activeLayerFilterProperty().get());
+
+        // Ensure option exists
+        String val = Integer.toString(filter);
+        if (!layerFilterCombo.getItems().contains(val)) {
+            layerFilterCombo.getItems().add(val);
+        }
+        layerFilterCombo.getSelectionModel().select(val);
+    }
+
     private static String norm(String s) {
         return s == null ? "" : s.trim();
     }
@@ -169,8 +256,17 @@ public class PlaneSidebarPane extends ScrollPane {
 
     public void bindMap(Plane2DMap map) {
         this.map = map;
-        layerList.setItems(FXCollections.observableArrayList(map == null ? FXCollections.observableArrayList() : map.layers));
+        layerList.setItems(FXCollections.observableArrayList(
+            map == null ? FXCollections.<Integer>observableArrayList() : map.layers
+        ));
+        rebuildLayerFilterOptions();
         refresh(null);
+    }
+
+
+    public void bindCanvas(PlaneCanvasPane canvas) {
+        this.canvas = canvas;
+        rebuildLayerFilterOptions();
     }
 
     /* ---------------- Tilt helpers ---------------- */
@@ -178,7 +274,12 @@ public class PlaneSidebarPane extends ScrollPane {
     public void refresh(Plane2DMap.Placement selected) {
         this.sel = selected;
 
-        if (map == null || sel == null) {
+        if (map != null) {
+            rebuildLayerFilterOptions();
+        }
+
+        if (map == null) {
+            // disable everything
             lblTid.setText("-");
             lblRegion.setText("-");
             lblPos.setText("-");
@@ -188,6 +289,7 @@ public class PlaneSidebarPane extends ScrollPane {
             gateNameField.clear();
             gateSearch.getItems().setAll();
             linkNameField.clear();
+
             addLinkBtn.setDisable(true);
             removeLinkBtn.setDisable(true);
             saveGateNameBtn.setDisable(true);
@@ -206,9 +308,52 @@ public class PlaneSidebarPane extends ScrollPane {
             tiltDegSpinner.setDisable(true);
             tiltDegSpinner.getValueFactory().setValue(0);
 
+            invertLayerOffsetBox.setDisable(true);
+            invertLayerOffsetBox.setSelected(false);
+
+            layerFilterCombo.setDisable(true);
             return;
         }
 
+        // MAP != null, but NO selection → layer filter is usable
+        if (sel == null) {
+            lblTid.setText("-");
+            lblRegion.setText("-");
+            lblPos.setText("-");
+            layerCombo.getItems().setAll();
+            gateList.getItems().setAll();
+            linkList.getItems().setAll();
+            gateNameField.clear();
+            gateSearch.getItems().setAll();
+            linkNameField.clear();
+
+            addLinkBtn.setDisable(true);
+            removeLinkBtn.setDisable(true);
+            saveGateNameBtn.setDisable(true);
+            saveLinkNameBtn.setDisable(true);
+            rotCwBtn.setDisable(true);
+            rotCcwBtn.setDisable(true);
+
+            tiltForwardBox.setDisable(true);
+            tiltSideBox.setDisable(true);
+            tiltObl1Box.setDisable(true);
+            tiltObl2Box.setDisable(true);
+            tiltForwardBox.setSelected(false);
+            tiltSideBox.setSelected(false);
+            tiltObl1Box.setSelected(false);
+            tiltObl2Box.setSelected(false);
+            tiltDegSpinner.setDisable(true);
+            tiltDegSpinner.getValueFactory().setValue(0);
+
+            invertLayerOffsetBox.setDisable(true);
+            invertLayerOffsetBox.setSelected(false);
+
+            layerFilterCombo.setDisable(false);
+            syncLayerFilterComboFromCanvas();
+            return;
+        }
+
+        // MAP != null, selection present
         rotCwBtn.setDisable(false);
         rotCcwBtn.setDisable(false);
 
@@ -218,11 +363,17 @@ public class PlaneSidebarPane extends ScrollPane {
         tiltObl2Box.setDisable(false);
         tiltDegSpinner.setDisable(false);
 
+        invertLayerOffsetBox.setDisable(false);
+        invertLayerOffsetBox.setSelected(sel.invertLayerOffset);
+
+        // Filter shows active layer but cannot be changed while a placement is selected
+        layerFilterCombo.setDisable(true);
+        syncLayerFilterComboFromCanvas();
+
         lblTid.setText(sel.templateId);
         lblRegion.setText(sel.regionIndex < 0 ? "(whole)" : ("region " + sel.regionIndex));
 
-        String tiltDesc;
-        tiltDesc = switch (sel.tiltMode) {
+        String tiltDesc = switch (sel.tiltMode) {
             case 1 -> " • tilt forward " + (int) sel.tiltDegrees + "°";
             case 2 -> " • tilt sideways " + (int) sel.tiltDegrees + "°";
             case 3 -> " • tilt oblique1 " + (int) sel.tiltDegrees + "°";
@@ -230,12 +381,17 @@ public class PlaneSidebarPane extends ScrollPane {
             default -> "";
         };
 
-        lblPos.setText("(" + sel.gx + "," + sel.gy + ") • " + sel.wTiles + "×" + sel.hTiles + " tiles  •  rot " + (sel.rotQ * 90) + "°" + tiltDesc);
+        lblPos.setText("(" + sel.gx + "," + sel.gy + ") • "
+            + sel.wTiles + "×" + sel.hTiles + " tiles  •  rot "
+            + (sel.rotQ * 90) + "°" + tiltDesc);
 
+        // Layer combo always shows the selected placement's layer
         layerCombo.getItems().setAll(map.layers);
-        layerCombo.getSelectionModel().select(Math.max(0, Math.min(sel.layer, map.layers.size() - 1)));
+        layerCombo.getSelectionModel().select(
+            Math.max(0, Math.min(sel.layer, map.layers.size() - 1))
+        );
 
-        // sync tilt UI
+        // Tilt UI
         tiltForwardBox.setSelected(sel.tiltMode == 1);
         tiltSideBox.setSelected(sel.tiltMode == 2);
         tiltObl1Box.setSelected(sel.tiltMode == 3);
@@ -245,13 +401,17 @@ public class PlaneSidebarPane extends ScrollPane {
         if (ang > 360) ang = 360;
         tiltDegSpinner.getValueFactory().setValue(ang);
 
+        // Gates & links as you already had...
         TemplateDef snap = sel.dataSnap;
         cachedIslands = TemplateGateUtils.computeGateIslands(snap);
 
         refreshGateList();
         refreshLinkList();
 
-        var others = enumerateAllGateRefsExcept(sel.pid).stream().map(this::displayForGateRef).sorted().collect(Collectors.toList());
+        var others = enumerateAllGateRefsExcept(sel.pid).stream()
+            .map(this::displayForGateRef)
+            .sorted()
+            .collect(Collectors.toList());
         gateSearch.getItems().setAll(others);
 
         addLinkBtn.setDisable(false);
@@ -331,7 +491,14 @@ public class PlaneSidebarPane extends ScrollPane {
 
         VBox tiltBox = new VBox(4, tiltRow1, tiltRow2, tiltRow3);
 
-        TitledPane tp = new TitledPane("Rendering & Transform", new VBox(6, row1, row2, tiltBox));
+        VBox content = new VBox(6,
+            row1,
+            row2,
+            tiltBox,
+            invertLayerOffsetBox  // NEW
+        );
+
+        TitledPane tp = new TitledPane("Rendering & Transform", content);
         tp.setCollapsible(false);
         return tp;
     }
@@ -339,7 +506,9 @@ public class PlaneSidebarPane extends ScrollPane {
     private Node buildLayerManager() {
         layerList.setPrefHeight(120);
         HBox buttons = new HBox(8, addLayerBtn, removeLayerBtn);
-        VBox box = new VBox(6, layerList, buttons);
+        HBox filterRow = new HBox(8, new Label("Active layer:"), layerFilterCombo);
+
+        VBox box = new VBox(6, filterRow, layerList, buttons);
         TitledPane tp = new TitledPane("Layers (Plane)", box);
         tp.setCollapsible(false);
         return tp;

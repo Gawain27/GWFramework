@@ -409,6 +409,7 @@ public class MapEditorPane extends BorderPane {
         if (ctx != null) {
             planeSidebar.bindMap(ctx.plane);
             planeSidebar.setOnRequestRedraw(ctx.canvas::redraw);
+            planeSidebar.bindCanvas(ctx.canvas);
             ctx.canvas.setOnSelectionChanged(planeSidebar::refresh);
             rightContainer.getChildren().setAll(planeSidebar);
             rightContainer.setManaged(rightVisible);

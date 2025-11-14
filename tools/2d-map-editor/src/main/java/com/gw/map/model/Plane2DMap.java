@@ -152,6 +152,9 @@ public class Plane2DMap {
          */
         public double tiltDegrees = 0.0;
 
+        /** If true, the per-layer extra offset on the fixed axis is inverted (goes “backwards”). */
+        public boolean invertLayerOffset = false;
+
         public transient TemplateDef dataSnap; // runtime only
 
         public Placement() {

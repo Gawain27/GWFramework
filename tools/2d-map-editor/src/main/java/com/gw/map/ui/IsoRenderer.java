@@ -22,6 +22,21 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
+/**
+ * True 3D-ish renderer:
+ * - Every tile is a quad in world space.
+ * - Camera uses yaw/pitch/roll; orthographic projection.
+ * - Depth-sorted quads for planes/tiles.
+ * - Plane placements:
+ * - Use Plane2DMap.Placement (including rotQ, scale, tiltMode, tiltDegrees).
+ * - Animated templates: frames are advanced by time (like PlaneCanvasPane).
+ * - Placements are stuck to their plane tiles in world space.
+ * - Within each plane, placements are sorted by camera-space depth and drawn back-to-front.
+ * - In Tile Selection mode:
+ * - Only the selected plane is rendered.
+ * - Only placements on that plane are rendered.
+ * - Single selected tile is highlighted.
+ */
 public class IsoRenderer {
 
     private static final long FRAME_MS = 120;  // match TemplateGallery & PlaneCanvas
@@ -296,7 +311,12 @@ public class IsoRenderer {
                 if (!isSameBase(base, sel.base) || plane.planeIndex != sel.index) continue;
             }
 
-            for (Plane2DMap.Placement p : plane.placements) {
+            // ---- NEW: sort placements by camera-space depth (back-to-front) ----
+            List<Plane2DMap.Placement> ordered = new ArrayList<>(plane.placements);
+            ordered.sort(Comparator.comparingDouble(p -> placementDepthCamera(plane, p, R)));
+            // We want farthest first, nearest last (painter's algorithm).
+            // If you find it inverted, just flip to reversed order.
+            for (Plane2DMap.Placement p : ordered) {
                 drawPlanePlacement(g, plane, p, R, scale, ox, oy);
             }
         }
@@ -309,6 +329,29 @@ public class IsoRenderer {
             case Y -> b == Plane2DMap.Base.Y;
             case Z -> b == Plane2DMap.Base.Z;
         };
+    }
+
+    /**
+     * Approximate depth of a placement from the camera, based on the
+     * camera rotation matrix R. We use the placement's center in plane
+     * coordinates -> world -> rotated Z component.
+     */
+    private double placementDepthCamera(Plane2DMap plane, Plane2DMap.Placement p, double[][] R) {
+        int baseW = Math.max(1, p.wTiles);
+        int baseH = Math.max(1, p.hTiles);
+        boolean swap = (p.rotQ & 1) == 1;
+        double wTiles = Math.max(1, Math.ceil((swap ? baseH : baseW) * p.scale));
+        double hTiles = Math.max(1, Math.ceil((swap ? baseW : baseH) * p.scale));
+
+        double uCenter = p.gx + wTiles * 0.5;
+        double vCenter = p.gy + hTiles * 0.5;
+
+        double[] world = planeToWorld(plane, uCenter, vCenter);
+        double x = world[0], y = world[1], z = world[2];
+
+        // rotated Z component (depth along camera's "out of screen" axis)
+        double zr = R[2][0] * x + R[2][1] * y + R[2][2] * z;
+        return zr;
     }
 
     /* ============================================================
@@ -401,7 +444,6 @@ public class IsoRenderer {
             }
         }
 
-        // World-space corners
         double[] P0w = planeToWorld(plane, P0u, P0v);
         double[] P1w = planeToWorld(plane, P1u, P1v);
         double[] P2w = planeToWorld(plane, P2u, P2v);
@@ -410,7 +452,6 @@ public class IsoRenderer {
         double[] edge02 = new double[]{P2w[0] - P0w[0], P2w[1] - P0w[1], P2w[2] - P0w[2]};
         double[] P3w = new double[]{P0w[0] + edge01[0] + edge02[0], P0w[1] + edge01[1] + edge02[1], P0w[2] + edge01[2] + edge02[2]};
 
-        // Apply tilt if needed
         int mode = p.tiltMode;
         double ang = p.tiltDegrees;
         double angNorm = ((ang % 360.0) + 360.0) % 360.0;
@@ -419,10 +460,10 @@ public class IsoRenderer {
             double[] vDir = planeVDir(plane);
             double[] axis;
             switch (mode) {
-                case 1 -> axis = uDir;                                   // forward
-                case 2 -> axis = vDir;                                   // sideways
-                case 3 -> axis = new double[]{uDir[0] + vDir[0], uDir[1] + vDir[1], uDir[2] + vDir[2]}; // oblique1
-                case 4 -> axis = new double[]{uDir[0] - vDir[0], uDir[1] - vDir[1], uDir[2] - vDir[2]}; // oblique2
+                case 1 -> axis = uDir; // forward
+                case 2 -> axis = vDir; // sideways
+                case 3 -> axis = new double[]{uDir[0] + vDir[0], uDir[1] + vDir[1], uDir[2] + vDir[2]}; // oblique 1
+                case 4 -> axis = new double[]{uDir[0] - vDir[0], uDir[1] - vDir[1], uDir[2] - vDir[2]}; // oblique 2
                 default -> axis = new double[]{0, 0, 1};
             }
             axis = normVec(axis);

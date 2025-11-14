@@ -345,19 +345,55 @@ public class PlaneCanvasPane extends Region {
     /**
      * Hit test top-most placement, respecting active layer filter.
      */
+    /**
+     * Hit test top-most placement at (gx, gy).
+     *
+     * Behaviour:
+     * 1. Try to hit-test only placements on the active layer.
+     * 2. If none are hit, fall back to any layer (top-most overall).
+     *    In that case, selecting it will auto-switch the active layer.
+     */
     private Plane2DMap.Placement hitTestTopMost(int gx, int gy) {
         if (map == null) return null;
+
         int filter = Math.max(0, activeLayerFilter.get());
-        var ordered = map.placements.stream().filter(p -> p.layer == filter).sorted(Comparator.comparingInt((Plane2DMap.Placement p) -> p.layer).thenComparingInt(map.placements::indexOf)).toList();
+
+        // Common ordered list (all placements, back-to-front)
+        var ordered = map.placements.stream()
+            .sorted(Comparator
+                .comparingInt((Plane2DMap.Placement p) -> p.layer)
+                .thenComparingInt(map.placements::indexOf))
+            .toList();
+
+        // 1) Try active-layer placements first
         for (int i = ordered.size() - 1; i >= 0; i--) {
             Plane2DMap.Placement p = ordered.get(i);
+            if (p.layer != filter) continue;
+
             int[] wh = rotatedFootprintTiles(p);
             int wTiles = Math.max(1, (int) Math.ceil(wh[0] * p.scale));
             int hTiles = Math.max(1, (int) Math.ceil(wh[1] * p.scale));
-            if (gx >= p.gx && gx < p.gx + wTiles && gy >= p.gy && gy < p.gy + hTiles) {
+
+            if (gx >= p.gx && gx < p.gx + wTiles &&
+                gy >= p.gy && gy < p.gy + hTiles) {
                 return p;
             }
         }
+
+        // 2) Nothing on active layer at that spot → allow jumping to another layer
+        for (int i = ordered.size() - 1; i >= 0; i--) {
+            Plane2DMap.Placement p = ordered.get(i);
+
+            int[] wh = rotatedFootprintTiles(p);
+            int wTiles = Math.max(1, (int) Math.ceil(wh[0] * p.scale));
+            int hTiles = Math.max(1, (int) Math.ceil(wh[1] * p.scale));
+
+            if (gx >= p.gx && gx < p.gx + wTiles &&
+                gy >= p.gy && gy < p.gy + hTiles) {
+                return p;
+            }
+        }
+
         return null;
     }
 

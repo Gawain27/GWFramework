@@ -41,7 +41,9 @@ public class Plane2DMap {
 
     public void normalizeLayers() {
         if (layers.isEmpty()) layers.add(0);
-        for (Placement p : placements) p.layer = Math.max(0, Math.min(p.layer, layers.size() - 1));
+        for (Placement p : placements) {
+            p.layer = Math.max(0, Math.min(p.layer, layers.size() - 1));
+        }
     }
 
     public Optional<GateMeta> findGateMeta(GateRef ref) {
@@ -56,23 +58,40 @@ public class Plane2DMap {
         });
     }
 
+    public void rehydrateSnapshots(TemplateRepository repo) {
+        if (repo == null) return;
+        for (Placement p : placements) {
+            TemplateDef src = repo.findById(p.templateId);
+            if (src == null) {
+                p.dataSnap = null;
+                continue;
+            }
+            // If regionIndex >=0 slice; else keep whole (animated or static)
+            if (p.regionIndex >= 0) {
+                p.dataSnap = TemplateSlice.copyRegion(src, Math.max(0, p.srcXpx / Math.max(1, src.tileWidthPx)), Math.max(0, p.srcYpx / Math.max(1, src.tileHeightPx)), Math.max(0, (p.srcXpx + p.srcWpx - 1) / Math.max(1, src.tileWidthPx)), Math.max(0, (p.srcYpx + p.srcHpx - 1) / Math.max(1, src.tileHeightPx)));
+            } else {
+                p.dataSnap = TemplateSlice.copyWhole(src);
+            }
+        }
+    }
+
     public enum Base {X, Y, Z}
 
     // ---- gate metadata / links ----
-        public record GateRef(String pid, int gateIndex) {
+    public record GateRef(String pid, int gateIndex) {
 
         @Override
-            public boolean equals(Object o) {
-                if (this == o) return true;
-                if (!(o instanceof GateRef r)) return false;
-                return gateIndex == r.gateIndex && Objects.equals(pid, r.pid);
-            }
-
-        @Override
-            public String toString() {
-                return pid + "#gate" + gateIndex;
-            }
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof GateRef(String pid1, int index))) return false;
+            return gateIndex == index && Objects.equals(pid, pid1);
         }
+
+        @Override
+        public String toString() {
+            return pid + "#gate" + gateIndex;
+        }
+    }
 
     public static final class GateMeta {
         public final GateRef ref;
@@ -116,7 +135,12 @@ public class Plane2DMap {
         public int srcXpx, srcYpx, srcWpx, srcHpx; // first frame / region source rect
         public int layer = 0;
         public double scale = 1.0;
-        public int rotQ = 0;
+        public int rotQ = 0;   // 0..3 -> 0°, 90°, 180°, 270°
+
+        /**
+         * NEW: if true, this placement is drawn tilted 45° "forward" in 3D.
+         */
+        public boolean tiltForward45 = false;
 
         public transient TemplateDef dataSnap; // runtime only
 
@@ -137,25 +161,8 @@ public class Plane2DMap {
             this.dataSnap = snap;
             this.layer = Math.max(0, layer);
             this.scale = Math.max(0.01, scale);
-        }
-    }
-
-    public void rehydrateSnapshots(TemplateRepository repo) {
-        if (repo == null) return;
-        for (Placement p : placements) {
-            TemplateDef src = repo.findById(p.templateId);
-            if (src == null) { p.dataSnap = null; continue; }
-            // If regionIndex >=0 slice; else keep whole (animated or static)
-            if (p.regionIndex >= 0) {
-                p.dataSnap = TemplateSlice.copyRegion(src,
-                    Math.max(0, p.srcXpx / Math.max(1, src.tileWidthPx)),
-                    Math.max(0, p.srcYpx / Math.max(1, src.tileHeightPx)),
-                    Math.max(0, (p.srcXpx + p.srcWpx - 1) / Math.max(1, src.tileWidthPx)),
-                    Math.max(0, (p.srcYpx + p.srcHpx - 1) / Math.max(1, src.tileHeightPx))
-                );
-            } else {
-                p.dataSnap = TemplateSlice.copyWhole(src);
-            }
+            this.rotQ = 0;
+            this.tiltForward45 = false;
         }
     }
 }

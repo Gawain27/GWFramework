@@ -8,45 +8,51 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
-import javafx.scene.control.*;
-import javafx.scene.layout.*;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.control.TextField;
+import javafx.scene.control.TitledPane;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Plane tab (scrollable): instance info, rendering layer select, layer management, gates & links,
- * and rotation buttons for the selected placement (±90° step).
+ * Plane tab (scrollable): instance info, rendering layer select, layer management,
+ * gates & links, rotation buttons for the selected placement, and tilt toggle.
  */
 public class PlaneSidebarPane extends ScrollPane {
 
     private final TemplateRepository repo;
-    private Plane2DMap map;
-    private Plane2DMap.Placement sel;
-
     private final VBox root = new VBox(8);
-
     // Instance header
     private final Label lblTid = new Label("-");
     private final Label lblRegion = new Label("-");
     private final Label lblPos = new Label("-");
-
     // Instance rendering
     private final ComboBox<Integer> layerCombo = new ComboBox<>();
-    private final Button rotCwBtn  = new Button("Rotate +90°");
+    private final Button rotCwBtn = new Button("Rotate +90°");
     private final Button rotCcwBtn = new Button("Rotate -90°");
-
+    /**
+     * NEW: per-placement tilt toggle.
+     */
+    private final CheckBox tiltCheck = new CheckBox("Tilt 45° forward");
     // Layer management (for the plane)
     private final ListView<Integer> layerList = new ListView<>();
-    private final Button addLayerBtn    = new Button("Add Layer");
+    private final Button addLayerBtn = new Button("Add Layer");
     private final Button removeLayerBtn = new Button("Remove Selected Layer");
-
     // Gates
     private final ListView<String> gateList = new ListView<>();
     private final TextField gateNameField = new TextField();
     private final Button saveGateNameBtn = new Button("Save Gate Name");
-
     // Links
     private final ListView<String> linkList = new ListView<>();
     private final TextField linkNameField = new TextField();
@@ -54,10 +60,12 @@ public class PlaneSidebarPane extends ScrollPane {
     private final Button addLinkBtn = new Button("Add Link");
     private final Button removeLinkBtn = new Button("Remove Selected Link");
     private final Button saveLinkNameBtn = new Button("Save Link Name");
-
     private final List<Plane2DMap.GateLink> linkVm = new ArrayList<>();
+    private Plane2DMap map;
+    private Plane2DMap.Placement sel;
     private List<List<int[]>> cachedIslands = List.of();
-    private Runnable onRequestRedraw = () -> {};
+    private Runnable onRequestRedraw = () -> {
+    };
 
     public PlaneSidebarPane(TemplateRepository repo) {
         this.repo = (repo != null ? repo : new TemplateRepository());
@@ -98,6 +106,15 @@ public class PlaneSidebarPane extends ScrollPane {
             refresh(sel);
         });
 
+        // NEW: tilt toggle
+        tiltCheck.setOnAction(e -> {
+            if (sel == null) return;
+            sel.tiltForward45 = tiltCheck.isSelected();
+            onRequestRedraw.run();
+            // no need to re-bind, but keep header label in sync
+            refresh(sel);
+        });
+
         addLayerBtn.setOnAction(e -> addLayer());
         removeLayerBtn.setOnAction(e -> removeSelectedLayer());
 
@@ -125,37 +142,60 @@ public class PlaneSidebarPane extends ScrollPane {
         });
     }
 
-    public void setOnRequestRedraw(Runnable r) { this.onRequestRedraw = (r != null ? r : () -> {}); }
+    private static String norm(String s) {
+        return s == null ? "" : s.trim();
+    }
+
+    public void setOnRequestRedraw(Runnable r) {
+        this.onRequestRedraw = (r != null ? r : () -> {
+        });
+    }
+
     public void bindMap(Plane2DMap map) {
         this.map = map;
-        // Seed layer UI
-        layerList.setItems(FXCollections.observableArrayList(map == null ? FXCollections.<Integer>observableArrayList() : map.layers));
+        layerList.setItems(FXCollections.observableArrayList(map == null ? FXCollections.observableArrayList() : map.layers));
         refresh(null);
     }
+
+    /* ---------------- UI builders ---------------- */
+
     public void refresh(Plane2DMap.Placement selected) {
         this.sel = selected;
 
         if (map == null || sel == null) {
-            lblTid.setText("-"); lblRegion.setText("-"); lblPos.setText("-");
+            lblTid.setText("-");
+            lblRegion.setText("-");
+            lblPos.setText("-");
             layerCombo.getItems().setAll();
-            gateList.getItems().setAll(); linkList.getItems().setAll();
-            gateNameField.clear(); gateSearch.getItems().setAll(); linkNameField.clear();
-            addLinkBtn.setDisable(true); removeLinkBtn.setDisable(true);
-            saveGateNameBtn.setDisable(true); saveLinkNameBtn.setDisable(true);
-            rotCwBtn.setDisable(true); rotCcwBtn.setDisable(true);
+            gateList.getItems().setAll();
+            linkList.getItems().setAll();
+            gateNameField.clear();
+            gateSearch.getItems().setAll();
+            linkNameField.clear();
+            addLinkBtn.setDisable(true);
+            removeLinkBtn.setDisable(true);
+            saveGateNameBtn.setDisable(true);
+            saveLinkNameBtn.setDisable(true);
+            rotCwBtn.setDisable(true);
+            rotCcwBtn.setDisable(true);
+            tiltCheck.setDisable(true);
+            tiltCheck.setSelected(false);
             return;
         }
 
         rotCwBtn.setDisable(false);
         rotCcwBtn.setDisable(false);
+        tiltCheck.setDisable(false);
 
         lblTid.setText(sel.templateId);
         lblRegion.setText(sel.regionIndex < 0 ? "(whole)" : ("region " + sel.regionIndex));
-        lblPos.setText("(" + sel.gx + "," + sel.gy + ") • " + sel.wTiles + "×" + sel.hTiles + " tiles  •  rot " + (sel.rotQ*90) + "°");
+        lblPos.setText("(" + sel.gx + "," + sel.gy + ") • " + sel.wTiles + "×" + sel.hTiles + " tiles  •  rot " + (sel.rotQ * 90) + "°" + (sel.tiltForward45 ? " • tilted 45°" : ""));
 
-        // Per-instance layer selector
         layerCombo.getItems().setAll(map.layers);
-        layerCombo.getSelectionModel().select(Math.max(0, Math.min(sel.layer, map.layers.size()-1)));
+        layerCombo.getSelectionModel().select(Math.max(0, Math.min(sel.layer, map.layers.size() - 1)));
+
+        // NEW: sync tilt checkbox with model
+        tiltCheck.setSelected(sel.tiltForward45);
 
         TemplateDef snap = sel.dataSnap;
         cachedIslands = TemplateGateUtils.computeGateIslands(snap);
@@ -163,41 +203,47 @@ public class PlaneSidebarPane extends ScrollPane {
         refreshGateList();
         refreshLinkList();
 
-        // choices = all other gates across map
-        var others = enumerateAllGateRefsExcept(sel.pid).stream()
-            .map(this::displayForGateRef)
-            .sorted().collect(Collectors.toList());
+        var others = enumerateAllGateRefsExcept(sel.pid).stream().map(this::displayForGateRef).sorted().collect(Collectors.toList());
         gateSearch.getItems().setAll(others);
 
-        addLinkBtn.setDisable(false); removeLinkBtn.setDisable(false);
-        saveGateNameBtn.setDisable(false); saveLinkNameBtn.setDisable(false);
+        addLinkBtn.setDisable(false);
+        removeLinkBtn.setDisable(false);
+        saveGateNameBtn.setDisable(false);
+        saveLinkNameBtn.setDisable(false);
 
-        gateList.getSelectionModel().selectedIndexProperty().addListener((o,ov,nv)->{
-            if (nv == null || nv.intValue() < 0) { gateNameField.clear(); return; }
+        gateList.getSelectionModel().selectedIndexProperty().addListener((o, ov, nv) -> {
+            if (nv == null || nv.intValue() < 0) {
+                gateNameField.clear();
+                return;
+            }
             var ref = new Plane2DMap.GateRef(sel.pid, nv.intValue());
             var meta = map.findGateMeta(ref).orElse(null);
             gateNameField.setText(meta == null ? "" : meta.name);
         });
     }
 
-    /* ---------------- UI builders ---------------- */
-
     private Node buildHeader() {
-        GridPane gp = new GridPane(); gp.setHgap(8); gp.setVgap(4);
-        int r=0;
-        gp.add(new Label("Template Id:"),0,r); gp.add(lblTid,1,r++);
-        gp.add(new Label("Region:"),0,r);      gp.add(lblRegion,1,r++);
-        gp.add(new Label("Placement:"),0,r);   gp.add(lblPos,1,r++);
-        TitledPane tp = new TitledPane("Instance", gp); tp.setCollapsible(false);
+        GridPane gp = new GridPane();
+        gp.setHgap(8);
+        gp.setVgap(4);
+        int r = 0;
+        gp.add(new Label("Template Id:"), 0, r);
+        gp.add(lblTid, 1, r++);
+        gp.add(new Label("Region:"), 0, r);
+        gp.add(lblRegion, 1, r++);
+        gp.add(new Label("Placement:"), 0, r);
+        gp.add(lblPos, 1, r++);
+        TitledPane tp = new TitledPane("Instance", gp);
+        tp.setCollapsible(false);
         return tp;
     }
 
     private Node buildInstanceRow() {
-        // line 1: layer combo; line 2: rotate buttons
         VBox box = new VBox(6);
         HBox row1 = new HBox(8, new Label("Layer:"), layerCombo);
         HBox row2 = new HBox(8, rotCwBtn, rotCcwBtn);
-        TitledPane tp = new TitledPane("Rendering & Transform", new VBox(6, row1, row2));
+        HBox row3 = new HBox(8, tiltCheck);
+        TitledPane tp = new TitledPane("Rendering & Transform", new VBox(6, row1, row2, row3));
         tp.setCollapsible(false);
         return tp;
     }
@@ -220,6 +266,9 @@ public class PlaneSidebarPane extends ScrollPane {
         return tp;
     }
 
+    /* ---------------- Layer management, gates & links ---------------- */
+    // (unchanged below here; same as your current PlaneSidebarPane)
+
     private Node buildLinks() {
         HBox addRow = new HBox(6, new Label("Connect to:"), gateSearch, addLinkBtn);
         HBox nameRow = new HBox(6, new Label("Link name:"), linkNameField, saveLinkNameBtn);
@@ -230,17 +279,13 @@ public class PlaneSidebarPane extends ScrollPane {
         return tp;
     }
 
-    /* ---------------- Layer management ---------------- */
-
     private void addLayer() {
         if (map == null) return;
-        int next = map.layers.size();         // use consecutive indices
+        int next = map.layers.size();
         map.layers.add(next);
         layerList.getItems().add(next);
         layerList.getSelectionModel().select(next);
-        // No need to remap placement layers; new layer is at the end
         onRequestRedraw.run();
-        // refresh instance combo items
         if (sel != null) refresh(sel);
     }
 
@@ -248,35 +293,33 @@ public class PlaneSidebarPane extends ScrollPane {
         if (map == null) return;
         Integer selIdx = layerList.getSelectionModel().getSelectedItem();
         if (selIdx == null) return;
-        if (map.layers.size() <= 1) return; // keep at least one layer
+        if (map.layers.size() <= 1) return;
 
-        // Remove the layer index and reindex tail
         int removed = selIdx;
         map.layers.removeIf(i -> i == removed);
 
-        // Shift all layers > removed down by 1, and clamp items that matched removed to 0
         for (Plane2DMap.Placement p : new ArrayList<>(map.placements)) {
             if (p.layer == removed) p.layer = 0;
             else if (p.layer > removed) p.layer -= 1;
         }
-        // Rebuild layer numbering [0..n-1]
         for (int i = 0; i < map.layers.size(); i++) map.layers.set(i, i);
 
         layerList.setItems(FXCollections.observableArrayList(map.layers));
-        layerList.getSelectionModel().select(Math.min(removed, map.layers.size()-1));
+        layerList.getSelectionModel().select(Math.min(removed, map.layers.size() - 1));
         onRequestRedraw.run();
         if (sel != null) refresh(sel);
     }
 
-    /* ---------------- Gates & links helpers ---------------- */
-
     private void refreshGateList() {
-        if (map == null || sel == null) { gateList.getItems().setAll(); return; }
+        if (map == null || sel == null) {
+            gateList.getItems().setAll();
+            return;
+        }
         ObservableList<String> items = FXCollections.observableArrayList();
-        for (int i=0; i<cachedIslands.size(); i++) {
+        for (int i = 0; i < cachedIslands.size(); i++) {
             var ref = new Plane2DMap.GateRef(sel.pid, i);
             var meta = map.findGateMeta(ref).orElse(null);
-            String disp = (meta != null && !norm(meta.name).isBlank()) ? meta.name : ("gate #"+i);
+            String disp = (meta != null && !norm(meta.name).isBlank()) ? meta.name : ("gate #" + i);
             items.add(disp + "  (" + cachedIslands.get(i).size() + " tiles)");
         }
         gateList.setItems(items);
@@ -284,14 +327,21 @@ public class PlaneSidebarPane extends ScrollPane {
 
     private void refreshLinkList() {
         linkVm.clear();
-        if (map == null || sel == null) { linkList.getItems().setAll(); return; }
+        if (map == null || sel == null) {
+            linkList.getItems().setAll();
+            return;
+        }
 
         List<Plane2DMap.GateRef> myRefs = new ArrayList<>();
-        for (int gi=0; gi<cachedIslands.size(); gi++) myRefs.add(new Plane2DMap.GateRef(sel.pid, gi));
+        for (int gi = 0; gi < cachedIslands.size(); gi++)
+            myRefs.add(new Plane2DMap.GateRef(sel.pid, gi));
 
         for (Plane2DMap.GateLink gl : map.gateLinks) {
             for (Plane2DMap.GateRef r : myRefs) {
-                if (gl.involves(r)) { linkVm.add(gl); break; }
+                if (gl.involves(r)) {
+                    linkVm.add(gl);
+                    break;
+                }
             }
         }
 
@@ -302,7 +352,7 @@ public class PlaneSidebarPane extends ScrollPane {
             Plane2DMap.GateRef other = aIsMe ? gl.b : gl.a;
 
             String name = (gl.name == null || gl.name.isBlank()) ? "(unnamed)" : gl.name;
-            String row = "["+name+"]  " + displayForGateRef(me) + "  ⇄  " + displayForGateRef(other) + "  {" + gl.id + "}";
+            String row = "[" + name + "]  " + displayForGateRef(me) + "  ⇄  " + displayForGateRef(other) + "  {" + gl.id + "}";
             items.add(row);
         }
         linkList.setItems(items);
@@ -311,9 +361,7 @@ public class PlaneSidebarPane extends ScrollPane {
     private String displayForGateRef(Plane2DMap.GateRef r) {
         if (map == null) return r.toString();
         var m = map.findGateMeta(r).orElse(null);
-        return (m != null && m.name != null && !m.name.isBlank())
-            ? m.name
-            : (r.pid() + "#gate" + r.gateIndex());
+        return (m != null && m.name != null && !m.name.isBlank()) ? m.name : (r.pid() + "#gate" + r.gateIndex());
     }
 
     private List<Plane2DMap.GateRef> enumerateAllGateRefsExcept(String excludePid) {
@@ -322,7 +370,7 @@ public class PlaneSidebarPane extends ScrollPane {
         for (Plane2DMap.Placement p : map.placements) {
             if (p.pid.equals(excludePid)) continue;
             var islands = TemplateGateUtils.computeGateIslands(p.dataSnap);
-            for (int gi=0; gi<islands.size(); gi++) {
+            for (int gi = 0; gi < islands.size(); gi++) {
                 var ref = new Plane2DMap.GateRef(p.pid, gi);
                 map.ensureGateMeta(ref);
                 out.add(ref);
@@ -334,27 +382,27 @@ public class PlaneSidebarPane extends ScrollPane {
     private void addLinkFromSearch() {
         if (map == null || sel == null) return;
         int myGate = gateList.getSelectionModel().getSelectedIndex();
-        if (myGate < 0) { info("Select one of this instance's gates (left list) first."); return; }
-
+        if (myGate < 0) {
+            info("Select one of this instance's gates (left list) first.");
+            return;
+        }
         String target = norm(gateSearch.getEditor().getText());
         if (target.isBlank()) return;
 
-        Plane2DMap.GateRef other = map.gateMetas.stream()
-            .filter(m -> target.equals(m.name))
-            .map(m -> m.ref)
-            .findFirst()
-            .orElseGet(() -> {
-                if (!target.contains("#gate")) return null;
-                String[] parts = target.split("#gate");
-                try { return new Plane2DMap.GateRef(parts[0], Integer.parseInt(parts[1])); }
-                catch (Exception ignored) { return null; }
-            });
+        Plane2DMap.GateRef other = map.gateMetas.stream().filter(m -> target.equals(m.name)).map(m -> m.ref).findFirst().orElseGet(() -> {
+            if (!target.contains("#gate")) return null;
+            String[] parts = target.split("#gate");
+            try {
+                return new Plane2DMap.GateRef(parts[0], Integer.parseInt(parts[1]));
+            } catch (Exception ignored) {
+                return null;
+            }
+        });
 
         if (other == null) return;
 
         Plane2DMap.GateRef me = new Plane2DMap.GateRef(sel.pid, myGate);
-        boolean exists = map.gateLinks.stream().anyMatch(gl ->
-            (gl.a.equals(me) && gl.b.equals(other)) || (gl.a.equals(other) && gl.b.equals(me)));
+        boolean exists = map.gateLinks.stream().anyMatch(gl -> (gl.a.equals(me) && gl.b.equals(other)) || (gl.a.equals(other) && gl.b.equals(me)));
         if (!exists) {
             String nm = norm(linkNameField.getText());
             map.gateLinks.add(new Plane2DMap.GateLink(me, other, nm));
@@ -395,8 +443,8 @@ public class PlaneSidebarPane extends ScrollPane {
     }
 
     private void info(String msg) {
-        Alert a = new Alert(Alert.AlertType.INFORMATION, msg); a.setHeaderText(null); a.showAndWait();
+        Alert a = new Alert(Alert.AlertType.INFORMATION, msg);
+        a.setHeaderText(null);
+        a.showAndWait();
     }
-
-    private static String norm(String s){ return s==null ? "" : s.trim(); }
 }

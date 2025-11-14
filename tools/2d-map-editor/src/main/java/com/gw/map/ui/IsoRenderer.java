@@ -55,6 +55,7 @@ public class IsoRenderer {
     public void setShowGrid(boolean showGrid) {
         this.showGrid = showGrid;
     }
+
     // R = Rz(roll) * Rx(pitch) * Ry(yaw)
     private static double[][] rotationMatrix(double yawDeg, double pitchDeg, double rollDeg) {
         double cy = Math.cos(Math.toRadians(yawDeg));
@@ -64,11 +65,8 @@ public class IsoRenderer {
         double cz = Math.cos(Math.toRadians(rollDeg));
         double sz = Math.sin(Math.toRadians(rollDeg));
 
-        // Ry
         double[][] Ry = new double[][]{{cy, 0, sy}, {0, 1, 0}, {-sy, 0, cy}};
-        // Rx
         double[][] Rx = new double[][]{{1, 0, 0}, {0, cx, -sx}, {0, sx, cx}};
-        // Rz
         double[][] Rz = new double[][]{{cz, -sz, 0}, {sz, cz, 0}, {0, 0, 1}};
         return mul(Rz, mul(Rx, Ry));
     }
@@ -82,7 +80,8 @@ public class IsoRenderer {
     }
 
     // Orthographic projection after rotation; screen y goes down, so invert y
-    private static double[] project(double[][] R, double scale, double ox, double oy, double x, double y, double z) {
+    private static double[] project(double[][] R, double scale, double ox, double oy,
+                                    double x, double y, double z) {
         double xr = R[0][0] * x + R[0][1] * y + R[0][2] * z;
         double yr = R[1][0] * x + R[1][1] * y + R[1][2] * z;
         double zr = R[2][0] * x + R[2][1] * y + R[2][2] * z;
@@ -114,7 +113,8 @@ public class IsoRenderer {
      *  Camera math
      * ============================================================ */
 
-    private static boolean pointInQuad(double sx, double sy, double[] a, double[] b, double[] c, double[] d) {
+    private static boolean pointInQuad(double sx, double sy,
+                                       double[] a, double[] b, double[] c, double[] d) {
         return pointInTri(sx, sy, a, b, c) || pointInTri(sx, sy, a, c, d);
     }
 
@@ -140,10 +140,14 @@ public class IsoRenderer {
      * @param ghostTemplateId (reserved for future ghost overlay)
      * @param ghostScreenPos  (reserved for future ghost overlay)
      */
-    public void render(GraphicsContext g, MapDef map, SelectionState sel, boolean tileMode, String ghostTemplateId, double[] ghostScreenPos) {
+    public void render(GraphicsContext g,
+                       MapDef map,
+                       SelectionState sel,
+                       boolean tileMode,
+                       String ghostTemplateId,
+                       double[] ghostScreenPos) {
 
         this.map = map;
-        // clear
         g.setFill(Color.WHITE);
         g.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
         if (map == null) return;
@@ -154,15 +158,11 @@ public class IsoRenderer {
 
         double[][] R = rotationMatrix(map.cameraYawDeg, map.cameraPitchDeg, map.cameraRollDeg);
 
-        // Axes always shown (independent of grid toggle)
         drawAxes(g, R, scale, ox, oy, map);
-
-        // Placements are independent of grid toggle
         drawPlanePlacements(g, map, sel, tileMode, R, scale, ox, oy);
 
-        // ------- GRID (planes & tile lines) guarded by showGrid -------
         if (showGrid) {
-            java.util.List<Quad> quads = new java.util.ArrayList<>();
+            List<Quad> quads = new ArrayList<>();
 
             if (tileMode) {
                 switch (sel.base) {
@@ -176,7 +176,7 @@ public class IsoRenderer {
                 for (int k = 0; k < map.size.heightY; k++) addPlaneY(quads, k, true);
             }
 
-            quads.sort(java.util.Comparator.comparingDouble(q -> -q.avgZ));
+            quads.sort(Comparator.comparingDouble(q -> -q.avgZ));
 
             for (Quad q : quads) {
                 boolean highlightPlane =
@@ -216,7 +216,6 @@ public class IsoRenderer {
             }
         }
 
-        // Tile highlight still drawn even if grid hidden
         if (tileMode && !sel.selectedTiles.isEmpty()) {
             var tk = sel.selectedTiles.iterator().next();
             switch (sel.base) {
@@ -231,7 +230,8 @@ public class IsoRenderer {
      *  Axes
      * ============================================================ */
 
-    private void drawAxes(GraphicsContext g, double[][] R, double scale, double ox, double oy, MapDef map) {
+    private void drawAxes(GraphicsContext g, double[][] R, double scale,
+                          double ox, double oy, MapDef map) {
         double lx = Math.max(1, map.size.widthX);
         double ly = Math.max(1, map.size.heightY);
         double lz = Math.max(1, map.size.depthZ);
@@ -243,19 +243,16 @@ public class IsoRenderer {
 
         g.setLineWidth(2.0);
 
-        // X axis (red)
         g.setStroke(Color.rgb(220, 40, 40, 0.9));
         g.strokeLine(O[0], O[1], Xp[0], Xp[1]);
         g.setFill(Color.rgb(220, 40, 40, 0.95));
         g.fillText("X", Xp[0] + 6, Xp[1] - 6);
 
-        // Y axis (green)
         g.setStroke(Color.rgb(40, 180, 60, 0.9));
         g.strokeLine(O[0], O[1], Yp[0], Yp[1]);
         g.setFill(Color.rgb(40, 180, 60, 0.95));
         g.fillText("Y", Yp[0] + 6, Yp[1] - 6);
 
-        // Z axis (blue)
         g.setStroke(Color.rgb(40, 100, 220, 0.9));
         g.strokeLine(O[0], O[1], Zp[0], Zp[1]);
         g.setFill(Color.rgb(40, 100, 220, 0.95));
@@ -266,7 +263,11 @@ public class IsoRenderer {
      *  Plane / placement drawing (with rotation + animation)
      * ============================================================ */
 
-    private void drawPlanePlacements(GraphicsContext g, MapDef map, SelectionState sel, boolean tileMode, double[][] R, double scale, double ox, double oy) {
+    private void drawPlanePlacements(GraphicsContext g,
+                                     MapDef map,
+                                     SelectionState sel,
+                                     boolean tileMode,
+                                     double[][] R, double scale, double ox, double oy) {
         if (map.planes == null || map.planes.isEmpty()) return;
 
         g.save();
@@ -274,7 +275,6 @@ public class IsoRenderer {
             Plane2DMap plane = map.planes.get(key);
             if (plane == null || plane.placements.isEmpty()) continue;
 
-            // In tile-mode: only selected plane
             if (tileMode) {
                 Plane2DMap.Base base = plane.base;
                 if (!isSameBase(base, sel.base) || plane.planeIndex != sel.index) continue;
@@ -295,21 +295,47 @@ public class IsoRenderer {
         };
     }
 
+    /* Rotate a point around an axis (through origin) by angle (radians). */
+    private static double[] rotateAroundAxis(double[] v, double[] n, double cosA, double sinA) {
+        // v' = v*cosθ + (n × v)*sinθ + n*(n·v)*(1 - cosθ)
+        double nx = n[0], ny = n[1], nz = n[2];
+        double vx = v[0], vy = v[1], vz = v[2];
+
+        double dot = nx * vx + ny * vy + nz * vz;
+        double cx = ny * vz - nz * vy;
+        double cy = nz * vx - nx * vz;
+        double cz = nx * vy - ny * vx;
+
+        double vx2 = vx * cosA + cx * sinA + nx * dot * (1 - cosA);
+        double vy2 = vy * cosA + cy * sinA + ny * dot * (1 - cosA);
+        double vz2 = vz * cosA + cz * sinA + nz * dot * (1 - cosA);
+
+        return new double[]{vx2, vy2, vz2};
+    }
+
     /**
      * Draw a single placement on its plane, using:
      * - p.rotQ (0,1,2,3) for rotation
      * - p.scale for scale in tile units
      * - animated frame if template is animated
      */
-    private void drawPlanePlacement(GraphicsContext g, Plane2DMap plane, Plane2DMap.Placement p, double[][] R, double scale, double ox, double oy) {
+    private void drawPlanePlacement(GraphicsContext g,
+                                    Plane2DMap plane,
+                                    Plane2DMap.Placement p,
+                                    double[][] R, double scale, double ox, double oy) {
 
-        // Ensure snapshot
         TemplateDef snap = p.dataSnap;
         if (snap == null) {
             TemplateDef src = templateRepo.findById(p.templateId);
             if (src == null) return;
             if (p.regionIndex >= 0) {
-                snap = TemplateSlice.copyRegion(src, Math.max(0, p.srcXpx / Math.max(1, src.tileWidthPx)), Math.max(0, p.srcYpx / Math.max(1, src.tileHeightPx)), Math.max(0, (p.srcXpx + p.srcWpx - 1) / Math.max(1, src.tileWidthPx)), Math.max(0, (p.srcYpx + p.srcHpx - 1) / Math.max(1, src.tileHeightPx)));
+                snap = TemplateSlice.copyRegion(
+                    src,
+                    Math.max(0, p.srcXpx / Math.max(1, src.tileWidthPx)),
+                    Math.max(0, p.srcYpx / Math.max(1, src.tileHeightPx)),
+                    Math.max(0, (p.srcXpx + p.srcWpx - 1) / Math.max(1, src.tileWidthPx)),
+                    Math.max(0, (p.srcYpx + p.srcHpx - 1) / Math.max(1, src.tileHeightPx))
+                );
             } else {
                 snap = TemplateSlice.copyWhole(src);
             }
@@ -317,7 +343,6 @@ public class IsoRenderer {
         }
         if (snap == null) return;
 
-        // Texture
         Image img = loadTextureByLogicalPath(snap.logicalPath);
         if (img == null) {
             TemplateDef src = templateRepo.findById(p.templateId);
@@ -325,7 +350,6 @@ public class IsoRenderer {
         }
         if (img == null) return;
 
-        // Source rect (animated frame or static)
         int sx = p.srcXpx, sy = p.srcYpx, sw = p.srcWpx, sh = p.srcHpx;
         if (isAnimated(snap)) {
             var frames = snap.pixelRegions();
@@ -337,10 +361,8 @@ public class IsoRenderer {
             sh = r[3];
         }
 
-        // Base footprint in tiles from placement (unscaled)
         int baseW = Math.max(1, p.wTiles);
         int baseH = Math.max(1, p.hTiles);
-        // Rotated footprint
         boolean swap = (p.rotQ & 1) == 1;
         int rotBaseW = swap ? baseH : baseW;
         int rotBaseH = swap ? baseW : baseH;
@@ -348,65 +370,97 @@ public class IsoRenderer {
         double wTiles = Math.max(1, Math.ceil(rotBaseW * p.scale));
         double hTiles = Math.max(1, Math.ceil(rotBaseH * p.scale));
 
-        // Plane-local tile origin of placement (top-left of its bounding rect)
         double u0 = p.gx;
         double v0 = p.gy;
 
-        // Corners of the axis-aligned bounding box in plane coordinates
         double TLu = u0, TLv = v0;
         double TRu = u0 + wTiles, TRv = v0;
         double BLu = u0, BLv = v0 + hTiles;
         double BRu = u0 + wTiles, BRv = v0 + hTiles;
 
-        // Map src corners to plane corners depending on rotQ
         double P0u, P0v, P1u, P1v, P2u, P2v;
         switch (p.rotQ & 3) {
             case 1 -> { // 90° CW
                 P0u = TRu;
-                P0v = TRv;   // (0,0) -> TR
+                P0v = TRv;
                 P1u = BRu;
-                P1v = BRv;   // (sw,0) -> BR
+                P1v = BRv;
                 P2u = TLu;
-                P2v = TLv;   // (0,sh) -> TL
+                P2v = TLv;
             }
-            case 2 -> { // 180°
+            case 2 -> {
                 P0u = BRu;
-                P0v = BRv;   // (0,0) -> BR
+                P0v = BRv;
                 P1u = BLu;
-                P1v = BLv;   // (sw,0) -> BL
+                P1v = BLv;
                 P2u = TRu;
-                P2v = TRv;   // (0,sh) -> TR
+                P2v = TRv;
             }
-            case 3 -> { // 270° CW (90° CCW)
+            case 3 -> {
                 P0u = BLu;
-                P0v = BLv;   // (0,0) -> BL
+                P0v = BLv;
                 P1u = TLu;
-                P1v = TLv;   // (sw,0) -> TL
+                P1v = TLv;
                 P2u = BRu;
-                P2v = BRv;   // (0,sh) -> BR
+                P2v = BRv;
             }
-            default -> { // 0°
+            default -> {
                 P0u = TLu;
-                P0v = TLv;   // (0,0) -> TL
+                P0v = TLv;
                 P1u = TRu;
-                P1v = TRv;   // (sw,0) -> TR
+                P1v = TRv;
                 P2u = BLu;
-                P2v = BLv;   // (0,sh) -> BL
+                P2v = BLv;
             }
         }
 
-        // Convert plane coords -> world -> screen for those three corners
-        double[] S0p = planePointToScreen(plane, P0u, P0v, R, scale, ox, oy);
-        double[] S1p = planePointToScreen(plane, P1u, P1v, R, scale, ox, oy);
-        double[] S2p = planePointToScreen(plane, P2u, P2v, R, scale, ox, oy);
+        // World corners for three reference points
+        double[] P0w = planeToWorld(plane, P0u, P0v);
+        double[] P1w = planeToWorld(plane, P1u, P1v);
+        double[] P2w = planeToWorld(plane, P2u, P2v);
 
-        // Build affine mapping src (x,y) -> screen
-        double tx = S0p[0];
-        double ty = S0p[1];
-        double mxx = (S1p[0] - S0p[0]) / Math.max(1.0, sw);
-        double myx = (S1p[1] - S0p[1]) / Math.max(1.0, sw);
-        double mxy = (S2p[0] - S0p[0]) / Math.max(1.0, sh);
-        double myy = (S2p[1] - S0p[1]) / Math.max(1.0, sh);
+        // Compute 4th corner for center
+        double[] edge01 = new double[]{P1w[0] - P0w[0], P1w[1] - P0w[1], P1w[2] - P0w[2]};
+        double[] edge02 = new double[]{P2w[0] - P0w[0], P2w[1] - P0w[1], P2w[2] - P0w[2]};
+        double[] P3w = new double[]{
+            P0w[0] + edge01[0] + edge02[0],
+            P0w[1] + edge01[1] + edge02[1],
+            P0w[2] + edge01[2] + edge02[2]
+        };
+
+        if (p.tiltForward45) {
+            // Rotate the quad 45° around axis along edge (P0->P1) through the quad center.
+            double cx = (P0w[0] + P1w[0] + P2w[0] + P3w[0]) * 0.25;
+            double cy = (P0w[1] + P1w[1] + P2w[1] + P3w[1]) * 0.25;
+            double cz = (P0w[2] + P1w[2] + P2w[2] + P3w[2]) * 0.25;
+
+            double[] axis = normVec(edge01); // along "u" direction
+            double angleRad = Math.toRadians(45.0);
+            double cosA = Math.cos(angleRad);
+            double sinA = Math.sin(angleRad);
+
+            P0w = rotateAroundAxis(
+                new double[]{P0w[0] - cx, P0w[1] - cy, P0w[2] - cz}, axis, cosA, sinA);
+            P1w = rotateAroundAxis(
+                new double[]{P1w[0] - cx, P1w[1] - cy, P1w[2] - cz}, axis, cosA, sinA);
+            P2w = rotateAroundAxis(
+                new double[]{P2w[0] - cx, P2w[1] - cy, P2w[2] - cz}, axis, cosA, sinA);
+
+            P0w[0] += cx; P0w[1] += cy; P0w[2] += cz;
+            P1w[0] += cx; P1w[1] += cy; P1w[2] += cz;
+            P2w[0] += cx; P2w[1] += cy; P2w[2] += cz;
+        }
+
+        double[] S0 = project(R, scale, ox, oy, P0w[0], P0w[1], P0w[2]);
+        double[] S1 = project(R, scale, ox, oy, P1w[0], P1w[1], P1w[2]);
+        double[] S2 = project(R, scale, ox, oy, P2w[0], P2w[1], P2w[2]);
+
+        double tx = S0[0];
+        double ty = S0[1];
+        double mxx = (S1[0] - S0[0]) / Math.max(1.0, sw);
+        double myx = (S1[1] - S0[1]) / Math.max(1.0, sw);
+        double mxy = (S2[0] - S0[0]) / Math.max(1.0, sh);
+        double myy = (S2[1] - S0[1]) / Math.max(1.0, sh);
 
         g.save();
         Affine A = new Affine(mxx, mxy, tx, myx, myy, ty);
@@ -476,7 +530,35 @@ public class IsoRenderer {
         return null;
     }
 
-    public int[] screenToPlaneTile(SelectionState.BasePlane base, int index, double sx, double sy) {
+    private static double[] planeToWorld(Plane2DMap plane, double u, double v) {
+        double x, y, z;
+        switch (plane.base) {
+            case Z -> { // z = k, u->x, v->y
+                x = u;
+                y = v;
+                z = plane.planeIndex;
+            }
+            case X -> { // x = k, u->y, v->z
+                x = plane.planeIndex;
+                y = u;
+                z = v;
+            }
+            case Y -> { // y = k, u->x, v->z
+                x = u;
+                y = plane.planeIndex;
+                z = v;
+            }
+            default -> {
+                x = u;
+                y = v;
+                z = 0;
+            }
+        }
+        return new double[]{x, y, z};
+    }
+
+    public int[] screenToPlaneTile(SelectionState.BasePlane base, int index,
+                                   double sx, double sy) {
         if (map == null) return null;
         double scale = baseScale * map.cameraZoom;
         double ox = canvas.getWidth() * 0.5 + map.cameraPanX;
@@ -610,5 +692,11 @@ public class IsoRenderer {
         } catch (Throwable ignored) {
             return null;
         }
+    }
+
+    private static double[] normVec(double[] v) {
+        double len = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+        if (len < 1e-6) return new double[]{0, 0, 1};
+        return new double[]{v[0] / len, v[1] / len, v[2] / len};
     }
 }

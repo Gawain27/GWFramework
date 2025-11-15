@@ -11,7 +11,18 @@
 
 <table>
     <tr><th style="width:110px">Version</th><th style="width:160px">Date</th><th>Highlights</th></tr>
-    <!-- ---------- 0.0.14M -------------------------------------------------- -->
+    <!-- ---------- 0.0.15N -------------------------------------------------- -->
+<tr>
+    <td>
+        <span class="tag" style="color:var(--v1)">0.0.15&nbsp;N</span>
+    </td>
+    <td>15&nbsp;November&nbsp;2025</td>
+    <td>
+        Plane&nbsp;editor layer-aware selection &amp; tilt, 3D&nbsp;renderer layer offsets with inversion,
+        configSet-scoped map/template repositories, dynamic gallery thumbs, and grid-less plane highlighting.
+    </td>
+</tr>
+<!-- ---------- 0.0.14M -------------------------------------------------- -->
 <tr>
     <td>
         <span class="tag" style="color:var(--v7)">0.0.14&nbsp;M</span>
@@ -111,6 +122,95 @@
     <td>First public “starter” release.</td></tr>      <!--  🡐 Gradle drops rows here -->
 </table>
 
+<!-- ---------- 0.0.15N -------------------------------------------------- -->
+<details>
+    <summary style="color:var(--v1)">
+        <span class="tag" style="color:var(--v1)">0.0.15&nbsp;N</span>
+        <em style="flex:1">“Planes, Layers &amp;&nbsp;Config&nbsp;Sets” – released&nbsp;15&nbsp;November&nbsp;2025</em>
+    </summary>
+    <div class="entry-body">
+
+        <h3>🧱 Plane Editor: Layers, Selection &amp; Tilt</h3>
+        <ul>
+            <li><strong>Layer-aware selection</strong> in <code>PlaneCanvasPane</code>:
+                current layer is always initialised to <code>0</code>, and selecting a placement
+                updates the active layer in both the canvas and <code>PlaneSidebarPane</code>.</li>
+            <li><strong>Active-layer filter</strong>: when a layer is chosen, hit-testing only selects
+                placements on that layer, preventing accidental edits across layers.</li>
+            <li><strong>Smart hit-test override</strong>: if you click a placement on a different layer,
+                it is still selected and the active layer automatically switches to that placement’s layer.</li>
+            <li><strong>Tilt controls per placement</strong> in the sidebar:
+                four mutually exclusive modes (Forward, Sideways, Oblique&nbsp;1, Oblique&nbsp;2) with a
+                degree spinner (0–360°). Tilt state is reflected in the instance header line.</li>
+            <li><code>tiltMode</code> and <code>tiltDegrees</code> are fully wired to the plane view and
+                3D renderer, with safe clamping and UI sync when changing selection.</li>
+        </ul>
+
+        <h3>🧭 3D Iso Renderer: Tilt &amp; Layer Pixel Offsets</h3>
+        <ul>
+            <li><strong>True 3D-ish placement drawing</strong> in <code>IsoRenderer</code>:
+                each plane placement is mapped to world-space quads with orthographic yaw/pitch/roll camera.</li>
+            <li><strong>Tilted placements</strong>:
+                <code>tiltMode</code> uses plane-relative axes (u, v, and two obliques) and rotates the
+                placement quad around its center via an axis-angle transform.</li>
+            <li><strong>Layer-based screen offset</strong>:
+                each placement is shifted in <em>screen space</em> along the plane’s fixed axis projection
+                (Z→(0,0,1), X→(1,0,0), Y→(0,1,0)) by <code>layerIndex × 1px</code>, letting higher layers
+                visually “float” above lower ones.</li>
+            <li><strong>Invertible offsets</strong>:
+                <code>invertLayerOffset</code> on <code>Plane2DMap.Placement</code> flips the direction of the
+                per-layer offset, allowing “backwards” stacking for negative parallax effects.</li>
+            <li><strong>Depth-stable drawing</strong>:
+                placements are sorted back-to-front using camera-space depth computed from the rotated Z row
+                of the view matrix, ensuring correct overdraw when planes intersect visually.</li>
+        </ul>
+
+        <h3>🧩 Plane Visibility &amp; Grid Toggle</h3>
+        <ul>
+            <li><strong>Grid toggle refinement</strong>:
+                disabling the grid no longer hides the current plane; instead, the selected plane is always
+                rendered as a single highlighted quad.</li>
+            <li>With grid <strong>on</strong>, behaviour is unchanged: per-tile quads for all planes (or just the
+                selected plane in tile mode) with plane highlighting.</li>
+            <li>With grid <strong>off</strong>, only the selected plane is drawn, still highlighted, giving a clean
+                view of placements without losing spatial orientation.</li>
+        </ul>
+
+        <h3>🖼️ Template Gallery: Smarter Thumbnails</h3>
+        <ul>
+            <li><strong>Adaptive card thumbnails</strong> in <code>TemplateGalleryPane</code>:
+                <code>buildCard()</code> no longer assumes a fixed thumbnail height.</li>
+            <li>Thumbnail <code>ImageView</code> fits to the configured width while preserving aspect ratio,
+                respecting the <em>actual template height</em> to avoid cards that are half empty for short assets.</li>
+            <li>Animated templates still show looping thumbs with per-frame snapshots, but sizing is now
+                visually consistent across simple, complex and animated templates.</li>
+        </ul>
+
+        <h3>📁 Config-Set–Scoped Map &amp; Template Repositories</h3>
+        <ul>
+            <li><strong>MapRepository</strong> and <strong>TemplateRepository</strong> have been reworked to
+                respect the root <code>configSet</code> selected in <code>build.gradle</code>.</li>
+            <li>Both repositories now store JSON under
+                <code>model/maps/{configSet}</code> and <code>model/templates/{configSet}</code> respectively,
+                keeping assets neatly partitioned per game/config environment.</li>
+            <li>Gradle launcher tasks (<code>MapEditor</code> and <code>TemplateEditor</code>) run the JavaFX
+                tools with the correct working directory so their repositories resolve to the configSet-specific
+                paths automatically.</li>
+            <li>Existing JSON loading and listing logic is preserved, but now scoped to the active configuration,
+                avoiding accidental cross-game contamination.</li>
+        </ul>
+
+        <h3>✅ Outcome</h3>
+        <ul>
+            <li>Plane editing is <strong>layer-aware</strong> and <strong>tilt-capable</strong>, with intuitive selection rules.</li>
+            <li>The 3D renderer aligns with plane semantics, supporting tilt, layer depth offsets and inversion
+                in a stable, depth-sorted view.</li>
+            <li>Template gallery cards make better use of space thanks to height-aware thumbnails.</li>
+            <li>Maps and templates are cleanly isolated per <code>configSet</code>, matching the Gradle configuration model.</li>
+        </ul>
+
+    </div>
+</details>
 <!-- ---------- 0.0.14M -------------------------------------------------- -->
 <details>
     <summary style="color:var(--v7)">

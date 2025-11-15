@@ -228,9 +228,10 @@ public class IsoRenderer {
         drawAxes(g, R, scale, ox, oy, map);
         drawPlanePlacements(g, map, sel, tileMode, R, scale, ox, oy);
 
+        // ---- planes / grid / selected plane ----
+        List<Quad> quads = new ArrayList<>();
         if (showGrid) {
-            List<Quad> quads = new ArrayList<>();
-
+            // existing behaviour: per-tile grid on planes
             if (tileMode) {
                 switch (sel.base) {
                     case Z -> addPlaneZ(quads, sel.index, false);
@@ -242,31 +243,59 @@ public class IsoRenderer {
                 for (int k = 0; k < map.size.widthX; k++) addPlaneX(quads, k, true);
                 for (int k = 0; k < map.size.heightY; k++) addPlaneY(quads, k, true);
             }
+        } else {
+            // grid disabled: still draw the currently selected plane as a single quad
+            Quad selQuad = switch (sel.base) {
+                case Z -> planeZOutline(sel.index);
+                case X -> planeXOutline(sel.index);
+                case Y -> planeYOutline(sel.index);
+            };
+            quads.add(selQuad);
+        }
 
-            quads.sort(Comparator.comparingDouble(q -> -q.avgZ));
+        quads.sort(Comparator.comparingDouble(q -> -q.avgZ));
 
-            for (Quad q : quads) {
-                boolean highlightPlane = (!tileMode) && ((q.kind == Kind.Z && q.index == (sel.base == SelectionState.BasePlane.Z ? sel.index : -1)) || (q.kind == Kind.X && q.index == (sel.base == SelectionState.BasePlane.X ? sel.index : -1)) || (q.kind == Kind.Y && q.index == (sel.base == SelectionState.BasePlane.Y ? sel.index : -1)));
-
-                Color line = highlightPlane ? Color.rgb(0, 128, 255, 0.9) : Color.rgb(0, 0, 0, 0.12);
-
-                Color fill = switch (q.kind) {
-                    case Z -> Color.rgb(0, 0, 0, tileMode ? 0.05 : 0.03);
-                    case X -> Color.rgb(0, 0, 0, tileMode ? 0.06 : 0.02);
-                    case Y -> Color.rgb(0, 0, 0, tileMode ? 0.06 : 0.02);
-                };
-
-                double[] s0 = project(R, scale, ox, oy, q.x0, q.y0, q.z0);
-                double[] s1 = project(R, scale, ox, oy, q.x1, q.y1, q.z1);
-                double[] s2 = project(R, scale, ox, oy, q.x2, q.y2, q.z2);
-                double[] s3 = project(R, scale, ox, oy, q.x3, q.y3, q.z3);
-
-                g.setFill(fill);
-                g.fillPolygon(new double[]{s0[0], s1[0], s2[0], s3[0]}, new double[]{s0[1], s1[1], s2[1], s3[1]}, 4);
-                g.setStroke(line);
-                g.setLineWidth(highlightPlane ? 2.0 : 1.0);
-                g.strokePolygon(new double[]{s0[0], s1[0], s2[0], s3[0]}, new double[]{s0[1], s1[1], s2[1], s3[1]}, 4);
+        for (Quad q : quads) {
+            boolean highlightPlane;
+            if (!showGrid) {
+                // grid off → the only plane we draw is the selected one, always highlighted
+                highlightPlane = true;
+            } else {
+                // original highlight logic
+                highlightPlane = (!tileMode) &&
+                    ((q.kind == Kind.Z && q.index == (sel.base == SelectionState.BasePlane.Z ? sel.index : -1)) ||
+                        (q.kind == Kind.X && q.index == (sel.base == SelectionState.BasePlane.X ? sel.index : -1)) ||
+                        (q.kind == Kind.Y && q.index == (sel.base == SelectionState.BasePlane.Y ? sel.index : -1)));
             }
+
+            Color line = highlightPlane
+                ? Color.rgb(0, 128, 255, 0.9)
+                : Color.rgb(0, 0, 0, 0.12);
+
+            Color fill = switch (q.kind) {
+                case Z -> Color.rgb(0, 0, 0, showGrid ? (tileMode ? 0.05 : 0.03) : 0.05);
+                case X -> Color.rgb(0, 0, 0, showGrid ? (tileMode ? 0.06 : 0.02) : 0.05);
+                case Y -> Color.rgb(0, 0, 0, showGrid ? (tileMode ? 0.06 : 0.02) : 0.05);
+            };
+
+            double[] s0 = project(R, scale, ox, oy, q.x0, q.y0, q.z0);
+            double[] s1 = project(R, scale, ox, oy, q.x1, q.y1, q.z1);
+            double[] s2 = project(R, scale, ox, oy, q.x2, q.y2, q.z2);
+            double[] s3 = project(R, scale, ox, oy, q.x3, q.y3, q.z3);
+
+            g.setFill(fill);
+            g.fillPolygon(
+                new double[]{s0[0], s1[0], s2[0], s3[0]},
+                new double[]{s0[1], s1[1], s2[1], s3[1]},
+                4
+            );
+            g.setStroke(line);
+            g.setLineWidth(highlightPlane ? 2.0 : 1.0);
+            g.strokePolygon(
+                new double[]{s0[0], s1[0], s2[0], s3[0]},
+                new double[]{s0[1], s1[1], s2[1], s3[1]},
+                4
+            );
         }
 
         if (tileMode && !sel.selectedTiles.isEmpty()) {

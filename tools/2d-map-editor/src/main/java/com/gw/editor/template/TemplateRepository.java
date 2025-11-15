@@ -18,7 +18,22 @@ public class TemplateRepository {
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
     public TemplateRepository() {
-        this.templatesDir = Paths.get(".").toAbsolutePath().normalize().resolve("templates");
+        // Root dir of the repo, passed from Gradle; fallback to CWD
+        String rootDirProp = System.getProperty("gw.rootDir");
+        Path rootDir = (rootDirProp != null && !rootDirProp.isBlank())
+            ? Paths.get(rootDirProp).toAbsolutePath().normalize()
+            : Paths.get(".").toAbsolutePath().normalize();
+
+        // configSet passed from Gradle
+        String cfg = System.getProperty("configSet");
+
+        if (cfg != null && !cfg.isBlank()) {
+            // model/templates/{configSet}
+            this.templatesDir = rootDir.resolve("model").resolve("templates").resolve(cfg);
+        } else {
+            // fallback for other use cases
+            this.templatesDir = rootDir.resolve("templates");
+        }
     }
 
     public List<Path> listJsonFiles() {

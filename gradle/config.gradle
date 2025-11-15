@@ -37,3 +37,14 @@ ext.projectLevels         = [:]
 String rawLocales = rootProject.findProperty('supportedLocales') ?: 'en_US'
 ext.supportedLocales = rawLocales.split(',')*.trim() as List<String>
 println "🌐 Supported locales: ${supportedLocales}"
+
+project(':tools:2d-map-editor') {
+
+  // configure root for map tools
+  tasks.matching { it.name in ['run', 'runMap'] }.configureEach { t ->
+    if (t instanceof JavaExec) {
+      t.systemProperty 'configSet', rootProject.configSet
+      t.systemProperty 'gw.rootDir', rootProject.projectDir.absolutePath
+    }
+  }
+}

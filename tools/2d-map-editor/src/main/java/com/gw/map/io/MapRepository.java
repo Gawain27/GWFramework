@@ -20,9 +20,24 @@ public class MapRepository {
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
     public MapRepository() {
-        this.mapsDir =
-            Paths.get(".").toAbsolutePath().normalize().resolve("maps");
+        // Root dir of the repo, passed from Gradle; fallback to CWD
+        String rootDirProp = System.getProperty("gw.rootDir");
+        Path rootDir = (rootDirProp != null && !rootDirProp.isBlank())
+            ? Paths.get(rootDirProp).toAbsolutePath().normalize()
+            : Paths.get(".").toAbsolutePath().normalize();
+
+        // configSet passed from Gradle (-PconfigSet=... -> JavaExec systemProperty)
+        String cfg = System.getProperty("configSet");
+
+        if (cfg != null && !cfg.isBlank()) {
+            // model/maps/{configSet}
+            this.mapsDir = rootDir.resolve("model").resolve("maps").resolve(cfg);
+        } else {
+            // fallback for other tooling / tests
+            this.mapsDir = rootDir.resolve("maps");
+        }
     }
+
 
     public List<Path> listJsonFiles() {
         List<Path> out = new ArrayList<>();

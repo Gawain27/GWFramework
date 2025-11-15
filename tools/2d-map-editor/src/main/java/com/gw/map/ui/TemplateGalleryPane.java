@@ -233,11 +233,21 @@ public class TemplateGalleryPane extends VBox {
         card.setPadding(new Insets(6));
         card.setAlignment(Pos.TOP_CENTER);
         card.setPrefWidth(CARD_WIDTH);
-        card.setStyle("-fx-border-color: -fx-box-border; -fx-background-color: -fx-control-inner-background;");
+        card.setStyle(
+            "-fx-border-color: -fx-box-border; " +
+                "-fx-background-color: -fx-control-inner-background;"
+        );
 
         ImageView iv = new ImageView(thumb);
         iv.setPreserveRatio(true);
-        iv.setFitWidth(THUMB_FIT_W);
+
+        // Do NOT fix the height; only clamp width if needed
+        double w = thumb.getWidth();
+        if (w > THUMB_FIT_W) {
+            iv.setFitWidth(THUMB_FIT_W);
+        }
+        // otherwise, keep the natural size (no fitHeight at all)
+
         if (clickable) {
             iv.setCursor(Cursor.HAND);
             iv.setOnMouseClicked(e -> {
@@ -250,7 +260,11 @@ public class TemplateGalleryPane extends VBox {
         name.setMaxWidth(THUMB_FIT_W);
 
         Label subt = new Label(type);
-        subt.setTextFill("Animated".equals(type) ? Color.DARKBLUE : "Region".equals(type) ? Color.DARKRED : Color.DARKGREEN);
+        subt.setTextFill(
+            "Animated".equals(type) ? Color.DARKBLUE :
+                "Region".equals(type)   ? Color.DARKRED  :
+                    Color.DARKGREEN
+        );
 
         card.getChildren().addAll(iv, name, subt);
         return new Card(card, iv);
@@ -312,22 +326,17 @@ public class TemplateGalleryPane extends VBox {
             PixelReader pr = tex.getPixelReader();
             int maxX = (int) tex.getWidth();
             int maxY = (int) tex.getHeight();
+
             int cx = clamp(sx, 0, Math.max(0, maxX - 1));
             int cy = clamp(sy, 0, Math.max(0, maxY - 1));
             int cw = clamp(sw, 1, maxX - cx);
             int ch = clamp(sh, 1, maxY - cy);
+
+            // Just crop; no fixed height, no forced scaling.
             WritableImage cropped = new WritableImage(pr, cx, cy, cw, ch);
-
-            // Fit into target box while preserving ratio
-            ImageView iv = new ImageView(cropped);
-            iv.setPreserveRatio(true);
-            iv.setFitWidth(fitW);
-            iv.setFitHeight(fitH);
-
-            SnapshotParameters sp = new SnapshotParameters();
-            sp.setFill(Color.TRANSPARENT);
-            return iv.snapshot(sp, null);
+            return cropped;
         } catch (Throwable t) {
+            // Fallback placeholder if something goes wrong
             return makePlaceholderThumb(fitW, fitH);
         }
     }

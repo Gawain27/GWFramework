@@ -35,6 +35,11 @@ tasks.register('MapEditor') {
   dependsOn ':tools:2d-map-editor:runMap'
 }
 
+tasks.register('WorldEditor') {
+  group = 'gdx'
+  description = 'Run the desktop World Editor (JavaFX)'
+  dependsOn ':tools:2d-map-editor:runWorld'
+}
 
 /* -------------------------------------------------------------------- */
 tasks.register('viewFrameworkChangelog') {

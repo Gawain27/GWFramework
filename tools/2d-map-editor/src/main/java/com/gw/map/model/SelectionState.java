@@ -6,10 +6,6 @@ import java.util.Set;
 
 
 /**
- * Tracks selected base plane (one of X=0, Y=0, Z=0) and per-tile selections when in TILE_SELECTION mode.
- */
-
-/**
  * Tracks selected base plane, its index (k), and tiles when in
  * TILE_SELECTION.
  */

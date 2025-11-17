@@ -1,8 +1,12 @@
 package com.gw.world.ui;
 
 import com.gw.editor.template.TemplateRepository;
+import com.gw.map.io.DefaultTextureResolver;
 import com.gw.map.io.MapRepository;
+import com.gw.map.io.TextureResolver;
 import com.gw.map.model.MapDef;
+import com.gw.map.model.Plane2DMap;
+import com.gw.map.model.SelectionState;
 import com.gw.world.io.WorldRepository;
 import com.gw.world.model.WorldDef;
 import com.gw.world.model.WorldDef.SectionPlacement;
@@ -41,8 +45,13 @@ public class WorldEditorPane extends BorderPane {
     private static final DataFormat MAP_SECTION_FORMAT = new DataFormat("gw.map.section.id");
 
     private final WorldRepository worldRepo;
+    private final TextureResolver textureResolver = new DefaultTextureResolver();
     private final MapRepository mapRepo;
     private final TemplateRepository templateRepo;
+
+    private boolean ctrlDown = false;
+    private boolean shiftDown = false;
+
     // Rendering
     private final Canvas canvas = new Canvas(900, 620);
     private final WorldIsoRenderer renderer = new WorldIsoRenderer(canvas);
@@ -83,9 +92,13 @@ public class WorldEditorPane extends BorderPane {
 
         renderer.setWorld(world);
         renderer.setTemplateRepository(this.templateRepo);
+        renderer.setTextureResolver(textureResolver);
 
         setLeft(buildLeftSidebar());
         setCenter(buildCenterCanvas());
+
+        setFocusTraversable(true);
+        setupKeyTracking();
 
         hookWorldListBehaviour();
         hookMapListBehaviour();
@@ -105,6 +118,22 @@ public class WorldEditorPane extends BorderPane {
         reloadWorldList();
         reloadMapList();
         reloadSectionList();
+    }
+
+    private void setupKeyTracking() {
+        setOnKeyPressed(e -> {
+            switch (e.getCode()) {
+                case CONTROL -> ctrlDown = true;
+                case SHIFT -> shiftDown = true;
+            }
+        });
+
+        setOnKeyReleased(e -> {
+            switch (e.getCode()) {
+                case CONTROL -> ctrlDown = false;
+                case SHIFT -> shiftDown = false;
+            }
+        });
     }
 
     /* ============================================================
@@ -324,8 +353,25 @@ public class WorldEditorPane extends BorderPane {
 
     private MapDef loadMapById(String id) {
         if (id == null || id.isBlank()) return null;
-        return mapRepo.listJsonFiles().stream().filter(p -> p.getFileName().toString().equals(id + ".json")).findFirst().map(mapRepo::load).orElse(null);
+
+        return mapRepo.listJsonFiles().stream()
+            .filter(p -> p.getFileName().toString().equals(id + ".json"))
+            .findFirst()
+            .map(path -> {
+                MapDef map = mapRepo.load(path);
+                if (map != null && map.planes != null) {
+                    // IMPORTANT: rehydrate placements so they know their TemplateDef
+                    for (Plane2DMap plane : map.planes.values()) {
+                        if (plane != null) {
+                            plane.rehydrateSnapshots(templateRepo);
+                        }
+                    }
+                }
+                return map;
+            })
+            .orElse(null);
     }
+
 
     private void hookMapListBehaviour() {
         mapList.setCellFactory(list -> {
@@ -544,10 +590,12 @@ public class WorldEditorPane extends BorderPane {
         canvas.setOnScroll(e -> {
             double delta = e.getDeltaY();
             if (delta > 0) {
-                world.cameraZoom = Math.min(4.0, world.cameraZoom * 1.15);
+                world.cameraZoom *= 1.15;
             } else if (delta < 0) {
-                world.cameraZoom = Math.max(0.25, world.cameraZoom / 1.15);
+                world.cameraZoom /= 1.15;
             }
+            // prevent zero/negative zoom; allow arbitrarily tiny
+            world.cameraZoom = Math.max(1e-4, world.cameraZoom);
             redraw();
         });
 
@@ -585,7 +633,13 @@ public class WorldEditorPane extends BorderPane {
 
                 String mapId = (String) db.getContent(MAP_SECTION_FORMAT);
                 if (mapId != null && !mapId.isBlank()) {
-                    updateGhostFromScreen(mapId, e.getX(), e.getY());
+                    updateGhostFromScreen(
+                        mapId,
+                        e.getX(),
+                        e.getY(),
+                        ctrlDown,
+                        shiftDown
+                    );
                 }
 
                 e.consume();
@@ -604,7 +658,13 @@ public class WorldEditorPane extends BorderPane {
                 String mapId = (String) db.getContent(MAP_SECTION_FORMAT);
                 MapDef mapDef = loadMapById(mapId);
                 if (mapDef != null) {
-                    updateGhostFromScreen(mapId, e.getX(), e.getY());
+                    updateGhostFromScreen(
+                        mapId,
+                        e.getX(),
+                        e.getY(),
+                        ctrlDown,
+                        shiftDown
+                    );
                     GhostSection ghost = renderer.getGhostSection();
                     if (ghost != null && ghost.map != null) {
                         SectionPlacement sp = world.addSection(ghost.map, ghost.wx, ghost.wy, ghost.wz);
@@ -633,20 +693,67 @@ public class WorldEditorPane extends BorderPane {
         });
     }
 
-    private void updateGhostFromScreen(String mapId, double sx, double sy) {
+    private void updateGhostFromScreen(String mapId, double sx, double sy,
+                                       boolean ctrlDown, boolean shiftDown) {
         MapDef mapDef = loadMapById(mapId);
         if (mapDef == null) {
             renderer.clearGhostSection();
             return;
         }
 
-        int[] tile = renderer.screenToWorldTileOnZPlane(0, sx, sy);
-        int wx = 0, wy = 0, wz = 0;
-        if (tile != null) {
-            wx = tile[0];
-            wy = tile[1];
+        // Base ghost position (keep existing if present)
+        WorldIsoRenderer.GhostSection currentGhost = renderer.getGhostSection();
+        int baseWx = 0, baseWy = 0, baseWz = 0;
+        if (currentGhost != null) {
+            baseWx = currentGhost.wx;
+            baseWy = currentGhost.wy;
+            baseWz = currentGhost.wz;
         }
 
+        // Decide which plane we are dragging on
+        SelectionState.BasePlane base;
+        int planeIndex;
+        if (ctrlDown && !shiftDown) {
+            // Ctrl → X=constant → move along Y/Z
+            base = SelectionState.BasePlane.X;
+            planeIndex = baseWx;
+        } else if (shiftDown && !ctrlDown) {
+            // Shift → Y=constant → move along X/Z
+            base = SelectionState.BasePlane.Y;
+            planeIndex = baseWy;
+        } else {
+            // No modifiers (or both) → Z=constant → move along X/Y
+            base = SelectionState.BasePlane.Z;
+            planeIndex = baseWz;
+        }
+
+        int[] tile = renderer.screenToWorldTileOnPlane(base, planeIndex, sx, sy);
+
+        int wx = baseWx;
+        int wy = baseWy;
+        int wz = baseWz;
+
+        if (tile != null) {
+            switch (base) {
+                case Z -> {
+                    wx = tile[0];
+                    wy = tile[1];
+                    wz = planeIndex;
+                }
+                case X -> {
+                    wx = planeIndex;
+                    wy = tile[0];
+                    wz = tile[1];
+                }
+                case Y -> {
+                    wx = tile[0];
+                    wy = planeIndex;
+                    wz = tile[1];
+                }
+            }
+        }
+
+        // Clamp to world and store as ghost
         SectionPlacement tmp = new SectionPlacement(mapDef.id, wx, wy, wz);
         tmp.map = mapDef;
         world.clampSectionToWorld(tmp);

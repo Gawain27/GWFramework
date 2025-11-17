@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class TransformingURLClassLoader extends URLClassLoader {
     private static final FileLogger LOG = FileLogger.get(LogFiles.SYSTEM);
@@ -19,7 +20,7 @@ public class TransformingURLClassLoader extends URLClassLoader {
     private final ClosestWeaver weaver = new ClosestWeaver();
 
     // tiny cache to avoid re-reading the same class bytes
-    private final java.util.concurrent.ConcurrentHashMap<String, Boolean> closestCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Boolean> closestCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     public TransformingURLClassLoader(String name, URL[] urls, ClassLoader parent, IClassLoader gw) {
         super(name, urls, parent);

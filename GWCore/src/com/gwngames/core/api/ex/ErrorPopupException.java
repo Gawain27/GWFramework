@@ -21,7 +21,10 @@ import java.util.Locale;
 public class ErrorPopupException extends BaseException {
 
     public ErrorPopupException(ITranslatable message, String ...params) {
-        super(message, ExceptionCode.SYSTEM_FAULT, params);
+        super();
+        this.errorCode = ExceptionCode.SYSTEM_FAULT;
+        this.errorKey = message;
+        this.params = params;
         showErrorDialog(getMessage());
     }
 

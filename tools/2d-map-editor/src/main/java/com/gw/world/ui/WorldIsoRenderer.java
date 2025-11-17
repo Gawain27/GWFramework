@@ -7,11 +7,13 @@ import com.gw.map.io.DefaultTextureResolver;
 import com.gw.map.io.TextureResolver;
 import com.gw.map.model.MapDef;
 import com.gw.map.model.Plane2DMap;
+import com.gw.map.model.SelectionState;
 import com.gw.world.model.Quad;
 import com.gw.world.model.SectionQuad;
 import com.gw.world.model.TileQuad;
 import com.gw.world.model.WorldDef;
 import com.gw.world.model.WorldDef.SectionPlacement;
+import com.gwngames.core.base.log.FileLogger;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.image.Image;
@@ -534,23 +536,47 @@ public class WorldIsoRenderer {
         }
     }
 
-    private void drawGhostSection(GraphicsContext g, double[][] R, double scale, double ox, double oy, WorldDef world, GhostSection ghost) {
+    private void drawGhostSection(GraphicsContext g,
+                                  double[][] R, double scale, double ox, double oy,
+                                  WorldDef world, GhostSection ghost) {
 
-        var map = ghost.map;
-        int gx = ghost.wx;
-        int gy = ghost.wy;
-        int gz = ghost.wz;
+        MapDef map = ghost.map;
+        if (map == null || map.planes == null) return;
 
+        // Synthetic SectionPlacement just for rendering
+        SectionPlacement sp = new SectionPlacement(map.id, ghost.wx, ghost.wy, ghost.wz);
+        sp.map = map;
+
+        // 1) Draw the actual section content at ghost position (semi-transparent)
+        List<DrawItem> items = new ArrayList<>();
+        for (Plane2DMap plane : map.planes.values()) {
+            if (plane == null || plane.placements == null || plane.placements.isEmpty()) continue;
+
+            for (Plane2DMap.Placement p : plane.placements) {
+                double depth = placementDepthCamera(sp, plane, p, R);
+                items.add(new DrawItem(sp, plane, p, depth));
+            }
+        }
+        items.sort(Comparator.comparingDouble(di -> -di.depthZ));
+
+        g.save();
+        g.setGlobalAlpha(0.65); // ghost content slightly transparent
+        for (DrawItem di : items) {
+            drawPlacement(g, di.section, di.plane, di.p, R, scale, ox, oy);
+        }
+        g.restore();
+
+        // 2) Draw translucent bounding box around the ghost section
         int sx = Math.max(1, map.size.widthX);
         int sy = Math.max(1, map.size.heightY);
         int sz = Math.max(1, map.size.depthZ);
 
-        double x0 = gx;
-        double y0 = gy;
-        double z0 = gz;
-        double x1 = gx + sx;
-        double y1 = gy + sy;
-        double z1 = gz + sz;
+        double x0 = ghost.wx;
+        double y0 = ghost.wy;
+        double z0 = ghost.wz;
+        double x1 = ghost.wx + sx;
+        double y1 = ghost.wy + sy;
+        double z1 = ghost.wz + sz;
 
         List<Quad> faces = new ArrayList<>();
 
@@ -569,12 +595,20 @@ public class WorldIsoRenderer {
             double[] s2 = project(R, scale, ox, oy, q.x2, q.y2, q.z2);
             double[] s3 = project(R, scale, ox, oy, q.x3, q.y3, q.z3);
 
-            g.setFill(Color.rgb(0, 160, 255, 0.15));
-            g.fillPolygon(new double[]{s0[0], s1[0], s2[0], s3[0]}, new double[]{s0[1], s1[1], s2[1], s3[1]}, 4);
+            g.setFill(Color.rgb(0, 160, 255, 0.12));
+            g.fillPolygon(
+                new double[]{s0[0], s1[0], s2[0], s3[0]},
+                new double[]{s0[1], s1[1], s2[1], s3[1]},
+                4
+            );
 
             g.setStroke(Color.rgb(0, 180, 255, 0.9));
             g.setLineWidth(2.0);
-            g.strokePolygon(new double[]{s0[0], s1[0], s2[0], s3[0]}, new double[]{s0[1], s1[1], s2[1], s3[1]}, 4);
+            g.strokePolygon(
+                new double[]{s0[0], s1[0], s2[0], s3[0]},
+                new double[]{s0[1], s1[1], s2[1], s3[1]},
+                4
+            );
         }
     }
 
@@ -590,7 +624,45 @@ public class WorldIsoRenderer {
         return new TileQuad(x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3, x, y);
     }
 
+    private TileQuad tileX(int x, int y, int z) {
+        double x0 = x, y0 = y,     z0 = z;
+        double x1 = x, y1 = y + 1, z1 = z;
+        double x2 = x, y2 = y + 1, z2 = z + 1;
+        double x3 = x, y3 = y,     z3 = z + 1;
+
+        // tile indices: (y,z)
+        return new TileQuad(
+            x0, y0, z0,
+            x1, y1, z1,
+            x2, y2, z2,
+            x3, y3, z3,
+            y,  z
+        );
+    }
+
+    private TileQuad tileY(int x, int y, int z) {
+        double x0 = x,     y0 = y, z0 = z;
+        double x1 = x + 1, y1 = y, z1 = z;
+        double x2 = x + 1, y2 = y, z2 = z + 1;
+        double x3 = x,     y3 = y, z3 = z + 1;
+
+        // tile indices: (x,z)
+        return new TileQuad(
+            x0, y0, z0,
+            x1, y1, z1,
+            x2, y2, z2,
+            x3, y3, z3,
+            x,  z
+        );
+    }
+
     public int[] screenToWorldTileOnZPlane(int zPlane, double sx, double sy) {
+        // Backwards-compatible wrapper
+        return screenToWorldTileOnPlane(SelectionState.BasePlane.Z, zPlane, sx, sy);
+    }
+
+    public int[] screenToWorldTileOnPlane(SelectionState.BasePlane base, int index,
+                                          double sx, double sy) {
         if (world == null) return null;
 
         double scale = baseScale * world.cameraZoom;
@@ -599,11 +671,34 @@ public class WorldIsoRenderer {
         double[][] R = rotationMatrix(world.cameraYawDeg, world.cameraPitchDeg, world.cameraRollDeg);
 
         List<TileQuad> tiles = new ArrayList<>();
-        for (int y = 0; y < world.size.heightY; y++) {
-            for (int x = 0; x < world.size.widthX; x++) {
-                tiles.add(tileZ(x, y, zPlane));
+
+        switch (base) {
+            case Z -> {
+                // z = index, vary x,y
+                for (int y = 0; y < world.size.heightY; y++) {
+                    for (int x = 0; x < world.size.widthX; x++) {
+                        tiles.add(tileZ(x, y, index));
+                    }
+                }
+            }
+            case X -> {
+                // x = index, vary y,z
+                for (int z = 0; z < world.size.depthZ; z++) {
+                    for (int y = 0; y < world.size.heightY; y++) {
+                        tiles.add(tileX(index, y, z));
+                    }
+                }
+            }
+            case Y -> {
+                // y = index, vary x,z
+                for (int z = 0; z < world.size.depthZ; z++) {
+                    for (int x = 0; x < world.size.widthX; x++) {
+                        tiles.add(tileY(x, index, z));
+                    }
+                }
             }
         }
+
         tiles.sort(Comparator.comparingDouble(t -> -t.avgZ));
 
         for (TileQuad tq : tiles) {
@@ -686,6 +781,7 @@ public class WorldIsoRenderer {
         if (logicalPath == null || logicalPath.isBlank()) return null;
         try {
             String url = textureResolver.resolve(logicalPath);
+            System.out.println("url: " + url );
             return (url == null) ? null : new Image(url, false);
         } catch (Throwable ignored) {
             return null;

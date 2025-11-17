@@ -43,6 +43,10 @@ project(':tools:2d-map-editor') {
   // configure root for map tools
   tasks.matching { it.name in ['run', 'runMap', 'runWorld'] }.configureEach { t ->
     if (t instanceof JavaExec) {
+      File binDir = rootProject.layout.buildDirectory
+        .dir("generatedConfig/${configSet}-${projectVersion}/bin")
+        .get().asFile
+      t.systemProperty 'gw.bin.dir', binDir.absolutePath
       t.systemProperty 'configSet', rootProject.configSet
       t.systemProperty 'gw.rootDir', rootProject.projectDir.absolutePath
     }

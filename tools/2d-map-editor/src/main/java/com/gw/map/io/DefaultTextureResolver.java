@@ -13,6 +13,7 @@ import java.util.Objects;
 public class DefaultTextureResolver implements TextureResolver {
     @Override
     public String resolve(String logicalPath) throws Exception {
+
         // 1) Absolute or relative filesystem path
         Path p = Path.of(logicalPath);
         if (!p.isAbsolute()) p = Path.of(".").resolve(logicalPath).normalize();

@@ -4,7 +4,9 @@ import com.gwngames.core.api.base.cfg.ILocale;
 import com.gwngames.core.api.base.ITranslationService;
 import com.gwngames.core.api.build.ITranslatable;
 import com.gwngames.core.api.build.Inject;
+import com.gwngames.core.base.cfg.i18n.TranslationService;
 import com.gwngames.core.base.log.FileLogger;
+import com.gwngames.core.build.CoreLocale;
 import com.gwngames.core.data.LogFiles;
 import com.gwngames.core.util.Cdi;
 
@@ -18,18 +20,25 @@ import java.util.regex.Pattern;
  * @author samlam
  */
 public class BaseException extends Exception {
-    private static final FileLogger log = FileLogger.get(LogFiles.ERROR);
+    protected static final FileLogger log = FileLogger.get(LogFiles.ERROR);
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\$(\\d+)");
 
-    private final ExceptionCode errorCode;
-    private final ITranslatable errorKey;
-    protected final String[] params;
+    protected ExceptionCode errorCode;
+    protected ITranslatable errorKey;
+    protected String[] params;
 
     @Inject
     protected ITranslationService translator;
 
     @Inject
     protected ILocale locale;
+
+    protected BaseException(){
+        if (locale == null)
+            locale = new CoreLocale();
+        if (translator == null)
+            translator = new TranslationService();
+    }
 
     public BaseException(ITranslatable errorKey, ExceptionCode code, String... params) {
         // Inject translation service before anything else

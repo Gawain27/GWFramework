@@ -111,6 +111,10 @@ public class WorldDef {
         /** Origin of this section in world tile coordinates. */
         public int wx, wy, wz;
 
+        public double rotXDeg = 0.0; // rotate around X
+        public double rotYDeg = 0.0; // rotate around Y
+        public double rotZDeg = 0.0; // rotate around Z
+
         public SectionPlacement() {
         }
 

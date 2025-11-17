@@ -101,29 +101,48 @@ public class WorldIsoRenderer {
     }
 
     private static double[] planeToWorld(Plane2DMap plane, SectionPlacement section, double u, double v) {
-        double x, y, z;
+        // Local coordinates in section space (before rotation)
+        double lx, ly, lz;
         switch (plane.base) {
-            case Z -> {
-                x = section.wx + u;
-                y = section.wy + v;
-                z = section.wz + plane.planeIndex;
+            case Z -> { // z = k, u->x, v->y
+                lx = u;
+                ly = v;
+                lz = plane.planeIndex;
             }
-            case X -> {
-                x = section.wx + plane.planeIndex;
-                y = section.wy + u;
-                z = section.wz + v;
+            case X -> { // x = k, u->y, v->z
+                lx = plane.planeIndex;
+                ly = u;
+                lz = v;
             }
-            case Y -> {
-                x = section.wx + u;
-                y = section.wy + plane.planeIndex;
-                z = section.wz + v;
+            case Y -> { // y = k, u->x, v->z
+                lx = u;
+                ly = plane.planeIndex;
+                lz = v;
             }
             default -> {
-                x = section.wx + u;
-                y = section.wy + v;
-                z = section.wz;
+                lx = u;
+                ly = v;
+                lz = 0;
             }
         }
+
+        // Section rotation: we interpret rotXDeg/rotYDeg/rotZDeg as pitch/yaw/roll
+        // and reuse the existing rotationMatrix(yaw, pitch, roll).
+        double[][] Rsec = rotationMatrix(
+            section.rotYDeg, // yaw   ← rotate around Y
+            section.rotXDeg, // pitch ← rotate around X
+            section.rotZDeg  // roll  ← rotate around Z
+        );
+
+        double xr = Rsec[0][0] * lx + Rsec[0][1] * ly + Rsec[0][2] * lz;
+        double yr = Rsec[1][0] * lx + Rsec[1][1] * ly + Rsec[1][2] * lz;
+        double zr = Rsec[2][0] * lx + Rsec[2][1] * ly + Rsec[2][2] * lz;
+
+        // Translate to world
+        double x = section.wx + xr;
+        double y = section.wy + yr;
+        double z = section.wz + zr;
+
         return new double[]{x, y, z};
     }
 
@@ -506,21 +525,97 @@ public class WorldIsoRenderer {
         int sy = Math.max(1, sp.map.size.heightY);
         int sz = Math.max(1, sp.map.size.depthZ);
 
-        double x0 = sp.wx;
-        double y0 = sp.wy;
-        double z0 = sp.wz;
-        double x1 = sp.wx + sx;
-        double y1 = sp.wy + sy;
-        double z1 = sp.wz + sz;
+        // Local corners in section space (before rotation)
+        double[][] local = new double[][]{
+            {0,   0,   0},   // 0: (0,0,0)
+            {sx,  0,   0},   // 1: (sx,0,0)
+            {sx,  sy,  0},   // 2: (sx,sy,0)
+            {0,   sy,  0},   // 3: (0,sy,0)
+            {0,   0,   sz},  // 4: (0,0,sz)
+            {sx,  0,   sz},  // 5: (sx,0,sz)
+            {sx,  sy,  sz},  // 6: (sx,sy,sz)
+            {0,   sy,  sz}   // 7: (0,sy,sz)
+        };
 
+        // Section rotation as a matrix (reuse camera helper)
+        double[][] Rsec = rotationMatrix(
+            sp.rotYDeg, // yaw around Y
+            sp.rotXDeg, // pitch around X
+            sp.rotZDeg  // roll around Z
+        );
+
+        // Rotate + translate corners into world space
+        double[][] worldPts = new double[8][3];
+        for (int i = 0; i < 8; i++) {
+            double lx = local[i][0];
+            double ly = local[i][1];
+            double lz = local[i][2];
+
+            double xr = Rsec[0][0] * lx + Rsec[0][1] * ly + Rsec[0][2] * lz;
+            double yr = Rsec[1][0] * lx + Rsec[1][1] * ly + Rsec[1][2] * lz;
+            double zr = Rsec[2][0] * lx + Rsec[2][1] * ly + Rsec[2][2] * lz;
+
+            worldPts[i][0] = sp.wx + xr;
+            worldPts[i][1] = sp.wy + yr;
+            worldPts[i][2] = sp.wz + zr;
+        }
+
+        // Helper to create Quads
         List<Quad> faces = new ArrayList<>();
 
-        faces.add(new Quad(x0, y0, z0, x1, y0, z0, x1, y1, z0, x0, y1, z0));
-        faces.add(new Quad(x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1));
-        faces.add(new Quad(x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1));
-        faces.add(new Quad(x0, y1, z0, x1, y1, z0, x1, y1, z1, x0, y1, z1));
-        faces.add(new Quad(x0, y0, z0, x0, y1, z0, x0, y1, z1, x0, y0, z1));
-        faces.add(new Quad(x1, y0, z0, x1, y1, z0, x1, y1, z1, x1, y0, z1));
+        // Indices: 0..7 as defined above
+        double[] p000 = worldPts[0];
+        double[] p100 = worldPts[1];
+        double[] p110 = worldPts[2];
+        double[] p010 = worldPts[3];
+        double[] p001 = worldPts[4];
+        double[] p101 = worldPts[5];
+        double[] p111 = worldPts[6];
+        double[] p011 = worldPts[7];
+
+        // Same faces as before, just with rotated points
+        // "bottom" (z ~ 0 in local space)
+        faces.add(new Quad(
+            p000[0], p000[1], p000[2],
+            p100[0], p100[1], p100[2],
+            p110[0], p110[1], p110[2],
+            p010[0], p010[1], p010[2]
+        ));
+        // "top" (z ~ sz)
+        faces.add(new Quad(
+            p001[0], p001[1], p001[2],
+            p101[0], p101[1], p101[2],
+            p111[0], p111[1], p111[2],
+            p011[0], p011[1], p011[2]
+        ));
+        // front
+        faces.add(new Quad(
+            p000[0], p000[1], p000[2],
+            p100[0], p100[1], p100[2],
+            p101[0], p101[1], p101[2],
+            p001[0], p001[1], p001[2]
+        ));
+        // back
+        faces.add(new Quad(
+            p010[0], p010[1], p010[2],
+            p110[0], p110[1], p110[2],
+            p111[0], p111[1], p111[2],
+            p011[0], p011[1], p011[2]
+        ));
+        // left
+        faces.add(new Quad(
+            p000[0], p000[1], p000[2],
+            p010[0], p010[1], p010[2],
+            p011[0], p011[1], p011[2],
+            p001[0], p001[1], p001[2]
+        ));
+        // right
+        faces.add(new Quad(
+            p100[0], p100[1], p100[2],
+            p110[0], p110[1], p110[2],
+            p111[0], p111[1], p111[2],
+            p101[0], p101[1], p101[2]
+        ));
 
         faces.sort(Comparator.comparingDouble(q -> -q.avgZ));
 
@@ -532,7 +627,11 @@ public class WorldIsoRenderer {
 
             g.setStroke(Color.rgb(255, 180, 0, 0.95));
             g.setLineWidth(3.0);
-            g.strokePolygon(new double[]{s0[0], s1[0], s2[0], s3[0]}, new double[]{s0[1], s1[1], s2[1], s3[1]}, 4);
+            g.strokePolygon(
+                new double[]{s0[0], s1[0], s2[0], s3[0]},
+                new double[]{s0[1], s1[1], s2[1], s3[1]},
+                4
+            );
         }
     }
 

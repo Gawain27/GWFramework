@@ -24,6 +24,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.Separator;
+import javafx.scene.control.TextField;
 import javafx.scene.control.ToolBar;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.DataFormat;
@@ -68,12 +69,27 @@ public class WorldEditorPane extends BorderPane {
     private final Button btnRefreshMaps = new Button("Refresh Maps");
     // Left sidebar - sections in world
     private final ListView<SectionEntry> sectionList = new ListView<>();
+    // Section movement buttons
     private final Button btnMoveNegX = new Button("X-");
     private final Button btnMovePosX = new Button("X+");
     private final Button btnMoveNegY = new Button("Y-");
     private final Button btnMovePosY = new Button("Y+");
     private final Button btnMoveNegZ = new Button("Z-");
     private final Button btnMovePosZ = new Button("Z+");
+    // move step input (tiles)
+    private final TextField moveStepField = new TextField("1");
+
+    // rotation buttons
+    private final Button btnRotNegX = new Button("RotX-");
+    private final Button btnRotPosX = new Button("RotX+");
+    private final Button btnRotNegY = new Button("RotY-");
+    private final Button btnRotPosY = new Button("RotY+");
+    private final Button btnRotNegZ = new Button("RotZ-");
+    private final Button btnRotPosZ = new Button("RotZ+");
+
+    // NEW: rotation step input (degrees)
+    private final TextField rotationStepField = new TextField("15");
+
     private final Button btnRefreshSections = new Button("Refresh Sections");
     // Near other section controls
     private final Button btnDeleteSection = new Button("Delete Section");
@@ -221,12 +237,28 @@ public class WorldEditorPane extends BorderPane {
         styleMoveButton(btnMoveNegZ);
         styleMoveButton(btnMovePosZ);
 
+        moveStepField.setPrefColumnCount(4);
+
+        styleMoveButton(btnRotNegX);
+        styleMoveButton(btnRotPosX);
+        styleMoveButton(btnRotNegY);
+        styleMoveButton(btnRotPosY);
+        styleMoveButton(btnRotNegZ);
+        styleMoveButton(btnRotPosZ);
+
         btnMoveNegX.setOnAction(e -> moveSelectedSection(-1, 0, 0));
         btnMovePosX.setOnAction(e -> moveSelectedSection(+1, 0, 0));
         btnMoveNegY.setOnAction(e -> moveSelectedSection(0, -1, 0));
         btnMovePosY.setOnAction(e -> moveSelectedSection(0, +1, 0));
         btnMoveNegZ.setOnAction(e -> moveSelectedSection(0, 0, -1));
         btnMovePosZ.setOnAction(e -> moveSelectedSection(0, 0, +1));
+
+        btnRotNegX.setOnAction(e -> rotateSelectedSection(-1, 0, 0));
+        btnRotPosX.setOnAction(e -> rotateSelectedSection(+1, 0, 0));
+        btnRotNegY.setOnAction(e -> rotateSelectedSection(0, -1, 0));
+        btnRotPosY.setOnAction(e -> rotateSelectedSection(0, +1, 0));
+        btnRotNegZ.setOnAction(e -> rotateSelectedSection(0, 0, -1));
+        btnRotPosZ.setOnAction(e -> rotateSelectedSection(0, 0, +1));
 
         btnRefreshSections.setMaxWidth(Double.MAX_VALUE);
         btnRefreshSections.setOnAction(e -> reloadSectionList());
@@ -245,6 +277,30 @@ public class WorldEditorPane extends BorderPane {
         moveGrid.add(new Label("Z:"), 0, r);
         moveGrid.add(btnMoveNegZ, 1, r);
         moveGrid.add(btnMovePosZ, 2, r);
+        moveGrid.add(new Label("Move step:"), 0, r);
+        moveGrid.add(moveStepField, 1, r, 2, 1);
+
+        GridPane rotGrid = new GridPane();
+        rotGrid.setHgap(4);
+        rotGrid.setVgap(4);
+
+        rotationStepField.setPrefColumnCount(4);
+
+        int rr = 0;
+        rotGrid.add(new Label("Rot X:"), 0, rr);
+        rotGrid.add(btnRotNegX, 1, rr);
+        rotGrid.add(btnRotPosX, 2, rr++);
+
+        rotGrid.add(new Label("Rot Y:"), 0, rr);
+        rotGrid.add(btnRotNegY, 1, rr);
+        rotGrid.add(btnRotPosY, 2, rr++);
+
+        rotGrid.add(new Label("Rot Z:"), 0, rr);
+        rotGrid.add(btnRotNegZ, 1, rr);
+        rotGrid.add(btnRotPosZ, 2, rr++);
+
+        rotGrid.add(new Label("Step °:"), 0, rr);
+        rotGrid.add(rotationStepField, 1, rr, 2, 1);
 
         // after moveGrid and before sectionsBox creation
 
@@ -260,6 +316,7 @@ public class WorldEditorPane extends BorderPane {
             sectionsLabel,
             sectionList,
             moveGrid,
+            rotGrid,
             sectionsButtons
         );
 
@@ -403,6 +460,51 @@ public class WorldEditorPane extends BorderPane {
      *  Sections in world
      * ============================================================ */
 
+    private int parseMoveStep() {
+        try {
+            String txt = moveStepField.getText();
+            if (txt == null) return 1;
+            int v = Integer.parseInt(txt.trim());
+            if (v <= 0) return 1;
+            return v;
+        } catch (Exception ex) {
+            return 1;
+        }
+    }
+
+    private double parseRotationStep() {
+        try {
+            String txt = rotationStepField.getText();
+            if (txt == null) return 15.0;
+            double v = Double.parseDouble(txt.trim());
+            if (v <= 0.0) return 15.0;
+            return v;
+        } catch (Exception ex) {
+            return 15.0;
+        }
+    }
+
+    private double normalizeAngle(double deg) {
+        double r = deg % 360.0;
+        if (r < 0) r += 360.0;
+        return r;
+    }
+
+    private void rotateSelectedSection(int dX, int dY, int dZ) {
+        SectionEntry entry = sectionList.getSelectionModel().getSelectedItem();
+        if (entry == null || world == null) return;
+
+        double step = parseRotationStep();
+        SectionPlacement sp = entry.section();
+
+        sp.rotXDeg = normalizeAngle(sp.rotXDeg + dX * step);
+        sp.rotYDeg = normalizeAngle(sp.rotYDeg + dY * step);
+        sp.rotZDeg = normalizeAngle(sp.rotZDeg + dZ * step);
+
+        // For now we keep labels as-is; if you want, we can show rotation in the list label.
+        redraw();
+    }
+
     private void reloadMapList() {
         List<Path> files = mapRepo.listJsonFiles();
         List<MapEntry> entries = files.stream().map(p -> {
@@ -461,10 +563,12 @@ public class WorldEditorPane extends BorderPane {
         SectionEntry entry = sectionList.getSelectionModel().getSelectedItem();
         if (entry == null || world == null) return;
 
+        int step = parseMoveStep();
         SectionPlacement sp = entry.section();
-        sp.wx += dx;
-        sp.wy += dy;
-        sp.wz += dz;
+
+        sp.wx += dx * step;
+        sp.wy += dy * step;
+        sp.wz += dz * step;
 
         world.clampSectionToWorld(sp);
 

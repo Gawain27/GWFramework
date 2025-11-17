@@ -12,6 +12,7 @@ import com.gw.world.model.WorldDef;
 import com.gw.world.model.WorldDef.SectionPlacement;
 import com.gw.world.ui.WorldIsoRenderer.GhostSection;
 import com.gw.world.ui.dialog.NewWorldDialog;
+import com.gw.world.ui.sidebar.WorldGateSidebarPane;
 import javafx.animation.AnimationTimer;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
@@ -23,6 +24,7 @@ import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToolBar;
@@ -55,6 +57,7 @@ public class WorldEditorPane extends BorderPane {
 
     // Rendering
     private final Canvas canvas = new Canvas(900, 620);
+    private final WorldGateSidebarPane gateSidebar = new WorldGateSidebarPane();
     private final WorldIsoRenderer renderer = new WorldIsoRenderer(canvas);
     private final AnimationTimer animTimer;
     // Left sidebar - worlds
@@ -109,6 +112,10 @@ public class WorldEditorPane extends BorderPane {
         renderer.setWorld(world);
         renderer.setTemplateRepository(this.templateRepo);
         renderer.setTextureResolver(textureResolver);
+
+        gateSidebar.setWorld(world);
+        gateSidebar.setOnRequestRedraw(this::redraw);
+        setRight(gateSidebar);
 
         setLeft(buildLeftSidebar());
         setCenter(buildCenterCanvas());
@@ -165,7 +172,7 @@ public class WorldEditorPane extends BorderPane {
         return Math.max(lo, Math.min(hi, v));
     }
 
-    private VBox buildLeftSidebar() {
+    private ScrollPane buildLeftSidebar() {
         // ---- worlds ----
         worldList.setCellFactory(list -> new ListCell<>() {
             @Override
@@ -187,7 +194,12 @@ public class WorldEditorPane extends BorderPane {
         btnDeleteWorld.setOnAction(e -> doDeleteSelectedWorld());
         btnRefreshWorlds.setOnAction(e -> reloadWorldList());
 
-        ToolBar worldBar = new ToolBar(new Label("Worlds"), new Separator(Orientation.VERTICAL), btnNewWorld, btnSaveWorld);
+        ToolBar worldBar = new ToolBar(
+            new Label("Worlds"),
+            new Separator(Orientation.VERTICAL),
+            btnNewWorld,
+            btnSaveWorld
+        );
         worldBar.setStyle("-fx-background-color: linear-gradient(to bottom, #f8f8f8, #e8e8e8);");
 
         VBox worldBox = new VBox(4, worldBar, worldList, new VBox(4, btnDeleteWorld, btnRefreshWorlds));
@@ -237,15 +249,6 @@ public class WorldEditorPane extends BorderPane {
         styleMoveButton(btnMoveNegZ);
         styleMoveButton(btnMovePosZ);
 
-        moveStepField.setPrefColumnCount(4);
-
-        styleMoveButton(btnRotNegX);
-        styleMoveButton(btnRotPosX);
-        styleMoveButton(btnRotNegY);
-        styleMoveButton(btnRotPosY);
-        styleMoveButton(btnRotNegZ);
-        styleMoveButton(btnRotPosZ);
-
         btnMoveNegX.setOnAction(e -> moveSelectedSection(-1, 0, 0));
         btnMovePosX.setOnAction(e -> moveSelectedSection(+1, 0, 0));
         btnMoveNegY.setOnAction(e -> moveSelectedSection(0, -1, 0));
@@ -253,15 +256,10 @@ public class WorldEditorPane extends BorderPane {
         btnMoveNegZ.setOnAction(e -> moveSelectedSection(0, 0, -1));
         btnMovePosZ.setOnAction(e -> moveSelectedSection(0, 0, +1));
 
-        btnRotNegX.setOnAction(e -> rotateSelectedSection(-1, 0, 0));
-        btnRotPosX.setOnAction(e -> rotateSelectedSection(+1, 0, 0));
-        btnRotNegY.setOnAction(e -> rotateSelectedSection(0, -1, 0));
-        btnRotPosY.setOnAction(e -> rotateSelectedSection(0, +1, 0));
-        btnRotNegZ.setOnAction(e -> rotateSelectedSection(0, 0, -1));
-        btnRotPosZ.setOnAction(e -> rotateSelectedSection(0, 0, +1));
-
         btnRefreshSections.setMaxWidth(Double.MAX_VALUE);
         btnRefreshSections.setOnAction(e -> reloadSectionList());
+
+        moveStepField.setPrefColumnCount(4);
 
         GridPane moveGrid = new GridPane();
         moveGrid.setHgap(4);
@@ -276,33 +274,29 @@ public class WorldEditorPane extends BorderPane {
         moveGrid.add(btnMovePosY, 2, r++);
         moveGrid.add(new Label("Z:"), 0, r);
         moveGrid.add(btnMoveNegZ, 1, r);
-        moveGrid.add(btnMovePosZ, 2, r);
+        moveGrid.add(btnMovePosZ, 2, r++);
         moveGrid.add(new Label("Move step:"), 0, r);
         moveGrid.add(moveStepField, 1, r, 2, 1);
+
+        // rotation grid (as you already have it)
+        rotationStepField.setPrefColumnCount(4);
 
         GridPane rotGrid = new GridPane();
         rotGrid.setHgap(4);
         rotGrid.setVgap(4);
 
-        rotationStepField.setPrefColumnCount(4);
-
-        int rr = 0;
-        rotGrid.add(new Label("Rot X:"), 0, rr);
-        rotGrid.add(btnRotNegX, 1, rr);
-        rotGrid.add(btnRotPosX, 2, rr++);
-
-        rotGrid.add(new Label("Rot Y:"), 0, rr);
-        rotGrid.add(btnRotNegY, 1, rr);
-        rotGrid.add(btnRotPosY, 2, rr++);
-
-        rotGrid.add(new Label("Rot Z:"), 0, rr);
-        rotGrid.add(btnRotNegZ, 1, rr);
-        rotGrid.add(btnRotPosZ, 2, rr++);
-
-        rotGrid.add(new Label("Step °:"), 0, rr);
-        rotGrid.add(rotationStepField, 1, rr, 2, 1);
-
-        // after moveGrid and before sectionsBox creation
+        r = 0;
+        rotGrid.add(new Label("Rot X:"), 0, r);
+        rotGrid.add(btnRotNegX, 1, r);
+        rotGrid.add(btnRotPosX, 2, r++);
+        rotGrid.add(new Label("Rot Y:"), 0, r);
+        rotGrid.add(btnRotNegY, 1, r);
+        rotGrid.add(btnRotPosY, 2, r++);
+        rotGrid.add(new Label("Rot Z:"), 0, r);
+        rotGrid.add(btnRotNegZ, 1, r);
+        rotGrid.add(btnRotPosZ, 2, r++);
+        rotGrid.add(new Label("Rot step:"), 0, r);
+        rotGrid.add(rotationStepField, 1, r, 2, 1);
 
         btnDeleteSection.setMaxWidth(Double.MAX_VALUE);
         btnDeleteSection.setOnAction(e -> deleteSelectedSection());
@@ -320,16 +314,23 @@ public class WorldEditorPane extends BorderPane {
             sectionsButtons
         );
 
-        VBox left = new VBox(4, worldBox, mapsBox, sectionsBox);
-        left.setPadding(new Insets(4));
-        left.setStyle("-fx-background-color: #f4f4f4; -fx-border-color: #c0c0c0; -fx-border-width: 0 1 0 0;");
-        left.setPrefWidth(320);
-        return left;
+        VBox content = new VBox(4, worldBox, mapsBox, sectionsBox);
+        content.setPadding(new Insets(4));
+        content.setStyle("-fx-background-color: #f4f4f4; -fx-border-color: #c0c0c0; -fx-border-width: 0 1 0 0;");
+
+        ScrollPane scroll = new ScrollPane(content);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.setPrefWidth(320);
+
+        return scroll;
     }
 
     private void deleteSelectedSection() {
         if (world == null || world.sections == null) return;
 
+        int idx = sectionList.getSelectionModel().getSelectedIndex();
         SectionEntry entry = sectionList.getSelectionModel().getSelectedItem();
         if (entry == null) return;
 
@@ -339,7 +340,16 @@ public class WorldEditorPane extends BorderPane {
         renderer.setSelectedSection(null);
         reloadSectionList();
         redraw();
+
+        if (!sectionList.getItems().isEmpty()) {
+            int newIdx = Math.min(idx, sectionList.getItems().size() - 1);
+            sectionList.getSelectionModel().select(newIdx);
+            gateSidebar.setSelectedSectionIndex(newIdx);
+        } else {
+            gateSidebar.setSelectedSectionIndex(-1);
+        }
     }
+
 
     /* ============================================================
      *  World list
@@ -402,6 +412,8 @@ public class WorldEditorPane extends BorderPane {
         renderer.setSelectedSection(null);
         reloadSectionList();
         redraw();
+        gateSidebar.setWorld(world);
+        gateSidebar.setSelectedSectionIndex(-1);
     }
 
     /* ============================================================
@@ -520,8 +532,11 @@ public class WorldEditorPane extends BorderPane {
         sectionList.getSelectionModel().selectedItemProperty().addListener((obs, oldSel, newSel) -> {
             if (newSel != null) {
                 renderer.setSelectedSection(newSel.section());
+                int idx = sectionList.getSelectionModel().getSelectedIndex();
+                gateSidebar.setSelectedSectionIndex(idx);
             } else {
                 renderer.setSelectedSection(null);
+                gateSidebar.setSelectedSectionIndex(-1);
             }
             redraw();
         });
@@ -613,6 +628,9 @@ public class WorldEditorPane extends BorderPane {
         reloadSectionList();
         redraw();
 
+        gateSidebar.setWorld(world);
+        gateSidebar.setSelectedSectionIndex(-1);
+
         worldRepo.save(world);
         reloadWorldList();
 
@@ -663,6 +681,9 @@ public class WorldEditorPane extends BorderPane {
             renderer.setSelectedSection(null);
             reloadSectionList();
             redraw();
+
+            gateSidebar.setWorld(world);
+            gateSidebar.setSelectedSectionIndex(-1);
         }
 
         reloadWorldList();
@@ -710,9 +731,12 @@ public class WorldEditorPane extends BorderPane {
             SectionPlacement hit = renderer.hitTestSection(e.getX(), e.getY());
             if (hit != null) {
                 // select in list
-                for (SectionEntry se : sectionList.getItems()) {
+                for (int i = 0; i < sectionList.getItems().size(); i++) {
+                    SectionEntry se = sectionList.getItems().get(i);
                     if (se.section() == hit) {
                         sectionList.getSelectionModel().select(se);
+                        renderer.setSelectedSection(hit);
+                        gateSidebar.setSelectedSectionIndex(i);
                         break;
                     }
                 }
@@ -720,6 +744,7 @@ public class WorldEditorPane extends BorderPane {
             } else {
                 sectionList.getSelectionModel().clearSelection();
                 renderer.setSelectedSection(null);
+                gateSidebar.setSelectedSectionIndex(-1);
             }
             redraw();
         });
@@ -780,10 +805,12 @@ public class WorldEditorPane extends BorderPane {
                         // select the newly added section (last one)
                         if (!world.sections.isEmpty()) {
                             SectionPlacement last = world.sections.get(world.sections.size() - 1);
-                            for (SectionEntry entry : sectionList.getItems()) {
+                            for (int i = 0; i < sectionList.getItems().size(); i++) {
+                                SectionEntry entry = sectionList.getItems().get(i);
                                 if (entry.section() == last) {
                                     sectionList.getSelectionModel().select(entry);
                                     renderer.setSelectedSection(last);
+                                    gateSidebar.setSelectedSectionIndex(i);
                                     break;
                                 }
                             }

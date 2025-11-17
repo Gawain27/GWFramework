@@ -1,11 +1,13 @@
 package com.gw.world.model;
 
 import com.gw.map.model.MapDef;
+import com.gw.map.model.Plane2DMap;
 import com.gw.map.model.Size3i;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 /**
@@ -29,6 +31,9 @@ public class WorldDef {
 
     /** All sections (MapDef instances) placed in world space. */
     public List<SectionPlacement> sections = new ArrayList<>();
+    /** World-level gate links (across sections and planes). */
+    public final List<GateLink> gateLinks = new ArrayList<>();
+
 
     public static WorldDef createDefault() {
         return new WorldDef();
@@ -134,6 +139,59 @@ public class WorldDef {
         @Override
         public String toString() {
             return "Section[" + mapId + "] @" + "(" + wx + "," + wy + "," + wz + ")";
+        }
+    }
+
+    /** Endpoint of a gate in the world (section + plane + placement + gate index). */
+    public static final class GateEndpoint {
+        /** Index into world.sections list. */
+        public int sectionIndex;
+
+        /** Plane key inside the section's map ("Z=0", "X=1", "Y=2", etc.). */
+        public String planeKey;
+
+        /** Reference to a gate island inside that plane/map. */
+        public Plane2DMap.GateRef gateRef;
+
+        public GateEndpoint() {
+        }
+
+        public GateEndpoint(int sectionIndex, String planeKey, Plane2DMap.GateRef gateRef) {
+            this.sectionIndex = sectionIndex;
+            this.planeKey = planeKey;
+            this.gateRef = gateRef;
+        }
+    }
+
+    /** World-level link between two gate endpoints. */
+    public static final class GateLink {
+        private static final AtomicInteger CT = new AtomicInteger(1);
+        public final String id = "WGL-" + CT.getAndIncrement();
+
+        public GateEndpoint a;
+        public GateEndpoint b;
+        public String name = "";
+
+        public GateLink() {}
+
+        public GateLink(GateEndpoint a, GateEndpoint b, String name) {
+            this.a = a;
+            this.b = b;
+            this.name = name;
+        }
+
+        public boolean involves(GateEndpoint ep) {
+            if (ep == null) return false;
+            return equalsEndpoint(a, ep) || equalsEndpoint(b, ep);
+        }
+
+        private static boolean equalsEndpoint(GateEndpoint x, GateEndpoint y) {
+            if (x == y) return true;
+            if (x == null || y == null) return false;
+            if (x.sectionIndex != y.sectionIndex) return false;
+            if (x.planeKey == null ? y.planeKey != null : !x.planeKey.equals(y.planeKey)) return false;
+            if (x.gateRef == null || y.gateRef == null) return false;
+            return x.gateRef.equals(y.gateRef);
         }
     }
 }

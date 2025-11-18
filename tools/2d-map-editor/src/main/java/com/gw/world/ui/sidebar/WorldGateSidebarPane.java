@@ -1,11 +1,16 @@
 package com.gw.world.ui.sidebar;
 
+import com.gw.editor.template.TemplateDef;
+import com.gw.editor.template.TemplateRepository;
+import com.gw.editor.util.TemplateGateUtils;
+import com.gw.editor.util.TemplateSlice;
 import com.gw.map.model.MapDef;
 import com.gw.map.model.Plane2DMap;
 import com.gw.world.model.WorldDef;
 import com.gw.world.model.WorldDef.GateEndpoint;
 import com.gw.world.model.WorldDef.GateLink;
 import com.gw.world.model.WorldDef.SectionPlacement;
+import javafx.beans.property.BooleanProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -14,6 +19,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -29,13 +35,20 @@ public class WorldGateSidebarPane extends ScrollPane {
     private final ListView<String> gateList = new ListView<>();
     private final TextField gateNameField = new TextField();
     private final Button saveGateNameBtn = new Button("Save Gate Name");
-
+    private final CheckBox showCollisionBox = new CheckBox("Show collision tiles");
+    private final CheckBox showGateBox = new CheckBox("Show gate tiles");
     private final ListView<String> linkList = new ListView<>();
     private final TextField linkNameField = new TextField();
     private final ComboBox<String> gateSearch = new ComboBox<>();
     private final Button addLinkBtn = new Button("Add Link");
     private final Button removeLinkBtn = new Button("Remove Selected Link");
     private final Button saveLinkNameBtn = new Button("Save Link Name");
+
+    private TemplateRepository templateRepo = new TemplateRepository();
+
+    public void setTemplateRepository(TemplateRepository repo) {
+        if (repo != null) this.templateRepo = repo;
+    }
 
     private WorldDef world;
     private int selectedSectionIndex = -1;
@@ -49,6 +62,12 @@ public class WorldGateSidebarPane extends ScrollPane {
 
     private Runnable onRequestRedraw = () -> {};
 
+    private Consumer<GateEndpoint> onGateSelectionChanged = ep -> {};
+
+    public void setOnGateSelectionChanged(Consumer<GateEndpoint> c) {
+        this.onGateSelectionChanged = (c != null ? c : ep -> {});
+    }
+
     public WorldGateSidebarPane() {
         setContent(root);
         setFitToWidth(true);
@@ -58,6 +77,7 @@ public class WorldGateSidebarPane extends ScrollPane {
         root.setPadding(new Insets(8));
         root.setFillWidth(true);
 
+        root.getChildren().add(buildOverlaysPane());
         root.getChildren().add(buildGatesPane());
         root.getChildren().add(buildLinksPane());
 
@@ -71,10 +91,12 @@ public class WorldGateSidebarPane extends ScrollPane {
         gateList.getSelectionModel().selectedIndexProperty().addListener((o, ov, nv) -> {
             if (nv == null || nv.intValue() < 0 || nv.intValue() >= localGates.size()) {
                 gateNameField.clear();
+                onGateSelectionChanged.accept(null);   // no gate selected
             } else {
                 GateEntry ge = localGates.get(nv.intValue());
                 Plane2DMap.GateMeta meta = findGateMeta(ge.endpoint);
                 gateNameField.setText(meta == null ? "" : norm(meta.name));
+                onGateSelectionChanged.accept(ge.endpoint); // notify selected gate
             }
             refreshLinkVm();
             refreshLinkList();
@@ -98,7 +120,6 @@ public class WorldGateSidebarPane extends ScrollPane {
 
     public void setWorld(WorldDef world) {
         this.world = world;
-        // if world changes, indices may no longer be valid
         if (selectedSectionIndex < 0 || !isValidSectionIndex(selectedSectionIndex)) {
             selectedSectionIndex = -1;
         }
@@ -107,6 +128,8 @@ public class WorldGateSidebarPane extends ScrollPane {
         refreshLinkVm();
         refreshLinkList();
         rebuildGateSearch();
+        gateList.getSelectionModel().clearSelection();
+        onGateSelectionChanged.accept(null);
         updateControlsEnabled();
     }
 
@@ -121,6 +144,8 @@ public class WorldGateSidebarPane extends ScrollPane {
         refreshLinkVm();
         refreshLinkList();
         rebuildGateSearch();
+        gateList.getSelectionModel().clearSelection();
+        onGateSelectionChanged.accept(null);
         updateControlsEnabled();
     }
 
@@ -131,6 +156,12 @@ public class WorldGateSidebarPane extends ScrollPane {
     /* ------------------------------------------------------------
      *  UI builders
      * ------------------------------------------------------------ */
+    private TitledPane buildOverlaysPane() {
+        VBox box = new VBox(6, showCollisionBox, showGateBox);
+        TitledPane tp = new TitledPane("Overlays", box);
+        tp.setCollapsible(false);
+        return tp;
+    }
 
     private TitledPane buildGatesPane() {
         gateList.setPrefHeight(200);
@@ -193,12 +224,21 @@ public class WorldGateSidebarPane extends ScrollPane {
         for (Map.Entry<String, Plane2DMap> e : map.planes.entrySet()) {
             String planeKey = e.getKey();
             Plane2DMap plane = e.getValue();
-            if (plane == null || plane.gateMetas == null || plane.gateMetas.isEmpty()) continue;
+            if (plane == null || plane.placements.isEmpty()) continue;
 
-            for (Plane2DMap.GateMeta gm : plane.gateMetas) {
-                GateEndpoint ep = new GateEndpoint(selectedSectionIndex, planeKey, gm.ref);
-                String disp = displayForEndpoint(ep);
-                localGates.add(new GateEntry(ep, disp));
+            for (Plane2DMap.Placement p : plane.placements) {
+                TemplateDef snap = snapshotForPlacement(p);
+                if (snap == null) continue;
+
+                var islands = TemplateGateUtils.computeGateIslands(snap);
+                for (int gi = 0; gi < islands.size(); gi++) {
+                    Plane2DMap.GateRef ref = new Plane2DMap.GateRef(p.pid, gi);
+                    // ensure meta exists so names can be stored
+                    Plane2DMap.GateMeta meta = plane.ensureGateMeta(ref);
+                    GateEndpoint ep = new GateEndpoint(selectedSectionIndex, planeKey, meta.ref);
+                    String disp = displayForEndpoint(ep);
+                    localGates.add(new GateEntry(ep, disp));
+                }
             }
         }
     }
@@ -216,9 +256,12 @@ public class WorldGateSidebarPane extends ScrollPane {
         SectionPlacement sp = world.sections.get(ep.sectionIndex);
         MapDef map = sp.map;
         if (map == null) return null;
+
         Plane2DMap plane = map.planes.get(ep.planeKey);
-        if (plane == null) return null;
-        return plane.findGateMeta(ep.gateRef).orElse(null);
+        if (plane == null || ep.gateRef == null) return null;
+
+        // ensure a meta exists for that ref
+        return plane.ensureGateMeta(ep.gateRef);
     }
 
     private String displayForEndpoint(GateEndpoint ep) {
@@ -254,7 +297,7 @@ public class WorldGateSidebarPane extends ScrollPane {
 
     private void refreshLinkVm() {
         linkVm.clear();
-        if (world == null || world.gateLinks == null) return;
+        if (world == null) return;
         if (localGates.isEmpty()) return;
 
         Set<String> localKeySet = localGates.stream()
@@ -288,6 +331,30 @@ public class WorldGateSidebarPane extends ScrollPane {
         return ep.sectionIndex + "|" + ep.planeKey + "|" + ep.gateRef.pid() + "|" + ep.gateRef.gateIndex();
     }
 
+    private TemplateDef snapshotForPlacement(Plane2DMap.Placement p) {
+        if (p.dataSnap != null) return p.dataSnap;
+
+        TemplateDef src = templateRepo.findById(p.templateId);
+        if (src == null) return null;
+
+        TemplateDef snap;
+        if (p.regionIndex >= 0) {
+            // Same logic as in WorldIsoRenderer / PlaneSidebarPane
+            int tw = Math.max(1, src.tileWidthPx);
+            int th = Math.max(1, src.tileHeightPx);
+            int x0 = Math.max(0, p.srcXpx / tw);
+            int y0 = Math.max(0, p.srcYpx / th);
+            int x1 = Math.max(0, (p.srcXpx + p.srcWpx - 1) / tw);
+            int y1 = Math.max(0, (p.srcYpx + p.srcHpx - 1) / th);
+            snap = TemplateSlice.copyRegion(src, x0, y0, x1, y1);
+        } else {
+            snap = TemplateSlice.copyWhole(src);
+        }
+
+        p.dataSnap = snap;
+        return snap;
+    }
+
     private void rebuildGateSearch() {
         gateSearch.getItems().clear();
         searchIndex.clear();
@@ -304,11 +371,19 @@ public class WorldGateSidebarPane extends ScrollPane {
             for (Map.Entry<String, Plane2DMap> e : map.planes.entrySet()) {
                 String planeKey = e.getKey();
                 Plane2DMap plane = e.getValue();
-                if (plane == null || plane.gateMetas == null || plane.gateMetas.isEmpty()) continue;
+                if (plane == null || plane.placements.isEmpty()) continue;
 
-                for (Plane2DMap.GateMeta gm : plane.gateMetas) {
-                    GateEndpoint ep = new GateEndpoint(si, planeKey, gm.ref);
-                    all.add(ep);
+                for (Plane2DMap.Placement p : plane.placements) {
+                    TemplateDef snap = snapshotForPlacement(p);
+                    if (snap == null) continue;
+
+                    var islands = TemplateGateUtils.computeGateIslands(snap);
+                    for (int gi = 0; gi < islands.size(); gi++) {
+                        Plane2DMap.GateRef ref = new Plane2DMap.GateRef(p.pid, gi);
+                        Plane2DMap.GateMeta meta = plane.ensureGateMeta(ref);
+                        GateEndpoint ep = new GateEndpoint(si, planeKey, meta.ref);
+                        all.add(ep);
+                    }
                 }
             }
         }
@@ -316,7 +391,7 @@ public class WorldGateSidebarPane extends ScrollPane {
         // exclude current section's gates from the search list
         List<GateEndpoint> others = all.stream()
             .filter(ep -> ep.sectionIndex != selectedSectionIndex)
-            .collect(Collectors.toList());
+            .toList();
 
         List<String> labels = new ArrayList<>();
         for (GateEndpoint ep : others) {
@@ -324,7 +399,7 @@ public class WorldGateSidebarPane extends ScrollPane {
             labels.add(label);
             searchIndex.put(label, ep);
         }
-        Collections.sort(labels);
+        labels.sort(String::compareTo);
         gateSearch.getItems().addAll(labels);
     }
 
@@ -473,6 +548,22 @@ public class WorldGateSidebarPane extends ScrollPane {
             this.endpoint = endpoint;
             this.display = display;
         }
+    }
+
+    public BooleanProperty showCollisionOverlayProperty() {
+        return showCollisionBox.selectedProperty();
+    }
+
+    public BooleanProperty showGateOverlayProperty() {
+        return showGateBox.selectedProperty();
+    }
+
+    public boolean isShowCollisionOverlay() {
+        return showCollisionBox.isSelected();
+    }
+
+    public boolean isShowGateOverlay() {
+        return showGateBox.isSelected();
     }
 }
 

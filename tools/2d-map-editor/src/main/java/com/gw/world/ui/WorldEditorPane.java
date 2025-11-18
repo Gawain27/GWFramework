@@ -26,6 +26,7 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
+import javafx.scene.control.SplitPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToolBar;
 import javafx.scene.input.ClipboardContent;
@@ -111,14 +112,43 @@ public class WorldEditorPane extends BorderPane {
 
         renderer.setWorld(world);
         renderer.setTemplateRepository(this.templateRepo);
-        renderer.setTextureResolver(textureResolver);
+        renderer.setShowCollisionOverlay(gateSidebar.isShowCollisionOverlay());
+        renderer.setShowGateOverlay(gateSidebar.isShowGateOverlay());
 
+        // After creating renderer and gateSidebar, and after setWorld(...)
+        gateSidebar.setOnGateSelectionChanged(ep -> {
+            renderer.setHighlightedGate(ep);
+            redraw();
+        });
+
+        gateSidebar.showCollisionOverlayProperty().addListener((obs, oldV, newV) -> {
+            renderer.setShowCollisionOverlay(newV);
+            redraw();
+        });
+
+        gateSidebar.showGateOverlayProperty().addListener((obs, oldV, newV) -> {
+            renderer.setShowGateOverlay(newV);
+            redraw();
+        });
+
+        // Build the three main panes
+        var leftSidebar  = buildLeftSidebar();   // ScrollPane (see next step)
+        var centerPane   = buildCenterCanvas();  // VBox with Canvas
         gateSidebar.setWorld(world);
         gateSidebar.setOnRequestRedraw(this::redraw);
-        setRight(gateSidebar);
 
-        setLeft(buildLeftSidebar());
-        setCenter(buildCenterCanvas());
+        // SplitPane with 3 resizable regions
+        SplitPane split = new SplitPane();
+        split.getItems().addAll(leftSidebar, centerPane, gateSidebar);
+        split.setDividerPositions(0.23, 0.77); // tweak to taste
+
+        // Optional: minimum sizes so you can’t collapse them to zero
+        leftSidebar.setMinWidth(200);
+        centerPane.setMinWidth(300);
+        gateSidebar.setMinWidth(220);
+
+        // Use the SplitPane as the main content
+        setCenter(split);
 
         setFocusTraversable(true);
         setupKeyTracking();

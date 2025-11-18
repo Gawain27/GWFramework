@@ -2,6 +2,8 @@ package com.gw.world.ui;
 
 import com.gw.editor.template.TemplateDef;
 import com.gw.editor.template.TemplateRepository;
+import com.gw.editor.ui.CollisionShapes;
+import com.gw.editor.util.TemplateGateUtils;
 import com.gw.editor.util.TemplateSlice;
 import com.gw.map.io.DefaultTextureResolver;
 import com.gw.map.io.TextureResolver;
@@ -13,7 +15,6 @@ import com.gw.world.model.SectionQuad;
 import com.gw.world.model.TileQuad;
 import com.gw.world.model.WorldDef;
 import com.gw.world.model.WorldDef.SectionPlacement;
-import com.gwngames.core.base.log.FileLogger;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.image.Image;
@@ -47,6 +48,25 @@ public class WorldIsoRenderer {
 
     public WorldIsoRenderer(Canvas canvas) {
         this.canvas = canvas;
+    }
+
+    /** Overlays toggled from right sidebar. */
+    private boolean showCollisionOverlay = false;
+    private boolean showGateOverlay = false;
+
+    /** Gate selected in right sidebar (may be null). */
+    private WorldDef.GateEndpoint highlightedGate = null;
+
+    public void setShowCollisionOverlay(boolean show) {
+        this.showCollisionOverlay = show;
+    }
+
+    public void setShowGateOverlay(boolean show) {
+        this.showGateOverlay = show;
+    }
+
+    public void setHighlightedGate(WorldDef.GateEndpoint ep) {
+        this.highlightedGate = ep;
     }
 
     private static double[][] rotationMatrix(double yawDeg, double pitchDeg, double rollDeg) {
@@ -327,19 +347,21 @@ public class WorldIsoRenderer {
         for (SectionPlacement sp : world.sections) {
             if (sp == null || sp.map == null || sp.map.planes == null) continue;
 
-            for (Plane2DMap plane : sp.map.planes.values()) {
+            for (var e : sp.map.planes.entrySet()) {
+                String planeKey = e.getKey();
+                Plane2DMap plane = e.getValue();
                 if (plane == null || plane.placements.isEmpty()) continue;
 
                 for (Plane2DMap.Placement p : plane.placements) {
                     double depth = placementDepthCamera(sp, plane, p, R);
-                    items.add(new DrawItem(sp, plane, p, depth));
+                    items.add(new DrawItem(sp, planeKey, plane, p, depth));
                 }
             }
         }
 
         items.sort(Comparator.comparingDouble(di -> -di.depthZ));
         for (DrawItem di : items) {
-            drawPlacement(g, di.section, di.plane, di.p, R, scale, ox, oy);
+            drawPlacement(g, di.section, di.planeKey, di.plane, di.p, R, scale, ox, oy);
         }
     }
 
@@ -361,8 +383,12 @@ public class WorldIsoRenderer {
         return zr;
     }
 
-    private void drawPlacement(GraphicsContext g, SectionPlacement section, Plane2DMap plane, Plane2DMap.Placement p, double[][] R, double scale, double ox, double oy) {
-
+    private void drawPlacement(GraphicsContext g,
+                               SectionPlacement section,
+                               String planeKey,
+                               Plane2DMap plane,
+                               Plane2DMap.Placement p,
+                               double[][] R, double scale, double ox, double oy){
         TemplateDef snap = p.dataSnap;
         if (snap == null) {
             TemplateDef src = templateRepo.findById(p.templateId);
@@ -509,7 +535,80 @@ public class WorldIsoRenderer {
         Affine A = new Affine(mxx, mxy, tx, myx, myy, ty);
         g.setTransform(A);
         g.setImageSmoothing(false);
+
+        // Draw the texture region
         g.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+
+        int tileW = snap.tileWidthPx;
+        int tileH = snap.tileHeightPx;
+
+        // ---------- BLUE highlight for currently selected gate (always active) ----------
+        if (highlightedGate != null && world != null && world.sections != null
+            && tileW > 0 && tileH > 0) {
+
+            int thisSectionIndex = world.sections.indexOf(section);
+            if (thisSectionIndex == highlightedGate.sectionIndex
+                && planeKey != null
+                && planeKey.equals(highlightedGate.planeKey)
+                && highlightedGate.gateRef != null
+                && highlightedGate.gateRef.pid() != null
+                // IMPORTANT: compare to p.pid, not p.templateId
+                && highlightedGate.gateRef.pid().equals(p.pid)) {
+
+                var islands = TemplateGateUtils.computeGateIslands(snap);
+                int gi = highlightedGate.gateRef.gateIndex();
+                if (gi >= 0 && gi < islands.size()) {
+                    var cluster = islands.get(gi);
+                    for (int[] cell : cluster) {
+                        int gx = cell[0];
+                        int gy = cell[1];
+                        double px = gx * tileW;
+                        double py = gy * tileH;
+
+                        g.setFill(Color.color(0.2, 0.5, 1.0, 0.35));
+                        g.fillRect(px, py, tileW, tileH);
+                        g.setStroke(Color.color(0.2, 0.5, 1.0, 0.95));
+                        g.setLineWidth(2.5);
+                        g.strokeRect(px, py, tileW, tileH);
+                    }
+                }
+            }
+        }
+
+        // ---------- Optional overlays: collision (yellow) + gate tiles (green) ----------
+        if ((showCollisionOverlay || showGateOverlay) && tileW > 0 && tileH > 0) {
+            int tilesX = sw / tileW;
+            int tilesY = sh / tileH;
+
+            for (int tyTile = 0; tyTile < tilesY; tyTile++) {
+                for (int txTile = 0; txTile < tilesX; txTile++) {
+                    TemplateDef.TileDef td = snap.tileAt(txTile, tyTile);
+                    if (td == null) continue;
+
+                    double px = txTile * tileW;
+                    double py = tyTile * tileH;
+
+                    // Collision tiles (solid) in yellow via CollisionShapes.
+                    if (showCollisionOverlay && td.solid) {
+                        TemplateDef.ShapeType st =
+                            (td.shape != null ? td.shape : TemplateDef.ShapeType.RECT_FULL);
+                        TemplateDef.Orientation ori =
+                            (td.orientation != null ? td.orientation : TemplateDef.Orientation.UP);
+                        CollisionShapes.get(st).draw(g, px, py, tileW, tileH, ori);
+                    }
+
+                    // Gate tiles in green.
+                    if (showGateOverlay && td.gate) {
+                        g.setFill(Color.color(0, 1, 0, 0.25));
+                        g.fillRect(px, py, tileW, tileH);
+                        g.setStroke(Color.color(0, 1, 0, 0.9));
+                        g.setLineWidth(2);
+                        g.strokeRect(px, py, tileW, tileH);
+                    }
+                }
+            }
+        }
+
         g.restore();
     }
 
@@ -653,7 +752,7 @@ public class WorldIsoRenderer {
 
             for (Plane2DMap.Placement p : plane.placements) {
                 double depth = placementDepthCamera(sp, plane, p, R);
-                items.add(new DrawItem(sp, plane, p, depth));
+                items.add(new DrawItem(sp, plane.id, plane, p, depth));
             }
         }
         items.sort(Comparator.comparingDouble(di -> -di.depthZ));
@@ -661,7 +760,7 @@ public class WorldIsoRenderer {
         g.save();
         g.setGlobalAlpha(0.65); // ghost content slightly transparent
         for (DrawItem di : items) {
-            drawPlacement(g, di.section, di.plane, di.p, R, scale, ox, oy);
+            drawPlacement(g, di.section, di.planeKey, di.plane, di.p, R, scale, ox, oy);
         }
         g.restore();
 
@@ -902,6 +1001,11 @@ public class WorldIsoRenderer {
         }
     }
 
-    private record DrawItem(SectionPlacement section, Plane2DMap plane, Plane2DMap.Placement p, double depthZ) {
-    }
+    private record DrawItem(
+        SectionPlacement section,
+        String planeKey,
+        Plane2DMap plane,
+        Plane2DMap.Placement p,
+        double depthZ
+    ) {}
 }

@@ -57,16 +57,23 @@ public class WorldIsoRenderer {
     /** Gate selected in right sidebar (may be null). */
     private WorldDef.GateEndpoint highlightedGate = null;
 
+    /** Gate link selected in right sidebar (may be null). */
+    private WorldDef.GateLink highlightedLink = null;
+
+    public void setHighlightedGate(WorldDef.GateEndpoint ep) {
+        this.highlightedGate = ep;
+    }
+
+    public void setHighlightedLink(WorldDef.GateLink link) {
+        this.highlightedLink = link;
+    }
+
     public void setShowCollisionOverlay(boolean show) {
         this.showCollisionOverlay = show;
     }
 
     public void setShowGateOverlay(boolean show) {
         this.showGateOverlay = show;
-    }
-
-    public void setHighlightedGate(WorldDef.GateEndpoint ep) {
-        this.highlightedGate = ep;
     }
 
     private static double[][] rotationMatrix(double yawDeg, double pitchDeg, double rollDeg) {
@@ -388,13 +395,20 @@ public class WorldIsoRenderer {
                                String planeKey,
                                Plane2DMap plane,
                                Plane2DMap.Placement p,
-                               double[][] R, double scale, double ox, double oy){
+                               double[][] R, double scale, double ox, double oy) {
+
         TemplateDef snap = p.dataSnap;
         if (snap == null) {
             TemplateDef src = templateRepo.findById(p.templateId);
             if (src == null) return;
             if (p.regionIndex >= 0) {
-                snap = TemplateSlice.copyRegion(src, Math.max(0, p.srcXpx / Math.max(1, src.tileWidthPx)), Math.max(0, p.srcYpx / Math.max(1, src.tileHeightPx)), Math.max(0, (p.srcXpx + p.srcWpx - 1) / Math.max(1, src.tileWidthPx)), Math.max(0, (p.srcYpx + p.srcHpx - 1) / Math.max(1, src.tileHeightPx)));
+                snap = TemplateSlice.copyRegion(
+                    src,
+                    Math.max(0, p.srcXpx / Math.max(1, src.tileWidthPx)),
+                    Math.max(0, p.srcYpx / Math.max(1, src.tileHeightPx)),
+                    Math.max(0, (p.srcXpx + p.srcWpx - 1) / Math.max(1, src.tileWidthPx)),
+                    Math.max(0, (p.srcYpx + p.srcHpx - 1) / Math.max(1, src.tileHeightPx))
+                );
             } else {
                 snap = TemplateSlice.copyWhole(src);
             }
@@ -440,36 +454,24 @@ public class WorldIsoRenderer {
         double P0u, P0v, P1u, P1v, P2u, P2v;
         switch (p.rotQ & 3) {
             case 1 -> {
-                P0u = TRu;
-                P0v = TRv;
-                P1u = BRu;
-                P1v = BRv;
-                P2u = TLu;
-                P2v = TLv;
+                P0u = TRu; P0v = TRv;
+                P1u = BRu; P1v = BRv;
+                P2u = TLu; P2v = TLv;
             }
             case 2 -> {
-                P0u = BRu;
-                P0v = BRv;
-                P1u = BLu;
-                P1v = BLv;
-                P2u = TRu;
-                P2v = TRv;
+                P0u = BRu; P0v = BRv;
+                P1u = BLu; P1v = BLv;
+                P2u = TRu; P2v = TRv;
             }
             case 3 -> {
-                P0u = BLu;
-                P0v = BLv;
-                P1u = TLu;
-                P1v = TLv;
-                P2u = BRu;
-                P2v = BRv;
+                P0u = BLu; P0v = BLv;
+                P1u = TLu; P1v = TLv;
+                P2u = BRu; P2v = BRv;
             }
             default -> {
-                P0u = TLu;
-                P0v = TLv;
-                P1u = TRu;
-                P1v = TRv;
-                P2u = BLu;
-                P2v = BLv;
+                P0u = TLu; P0v = TLv;
+                P1u = TRu; P1v = TRv;
+                P2u = BLu; P2v = BLv;
             }
         }
 
@@ -479,7 +481,11 @@ public class WorldIsoRenderer {
 
         double[] edge01 = new double[]{P1w[0] - P0w[0], P1w[1] - P0w[1], P1w[2] - P0w[2]};
         double[] edge02 = new double[]{P2w[0] - P0w[0], P2w[1] - P0w[1], P2w[2] - P0w[2]};
-        double[] P3w = new double[]{P0w[0] + edge01[0] + edge02[0], P0w[1] + edge01[1] + edge02[1], P0w[2] + edge01[2] + edge02[2]};
+        double[] P3w = new double[]{
+            P0w[0] + edge01[0] + edge02[0],
+            P0w[1] + edge01[1] + edge02[1],
+            P0w[2] + edge01[2] + edge02[2]
+        };
 
         int mode = p.tiltMode;
         double ang = p.tiltDegrees;
@@ -509,15 +515,9 @@ public class WorldIsoRenderer {
             P1w = rotateAroundAxis(new double[]{P1w[0] - cx, P1w[1] - cy, P1w[2] - cz}, axis, cosA, sinA);
             P2w = rotateAroundAxis(new double[]{P2w[0] - cx, P2w[1] - cy, P2w[2] - cz}, axis, cosA, sinA);
 
-            P0w[0] += cx;
-            P0w[1] += cy;
-            P0w[2] += cz;
-            P1w[0] += cx;
-            P1w[1] += cy;
-            P1w[2] += cz;
-            P2w[0] += cx;
-            P2w[1] += cy;
-            P2w[2] += cz;
+            P0w[0] += cx; P0w[1] += cy; P0w[2] += cz;
+            P1w[0] += cx; P1w[1] += cy; P1w[2] += cz;
+            P2w[0] += cx; P2w[1] += cy; P2w[2] += cz;
         }
 
         double[] S0 = project(R, scale, ox, oy, P0w[0], P0w[1], P0w[2]);
@@ -536,74 +536,100 @@ public class WorldIsoRenderer {
         g.setTransform(A);
         g.setImageSmoothing(false);
 
-        // Draw the texture region
+        // --- 1) Draw the texture region ---
         g.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
 
         int tileW = snap.tileWidthPx;
         int tileH = snap.tileHeightPx;
+        if (tileW > 0 && tileH > 0) {
 
-        // ---------- BLUE highlight for currently selected gate (always active) ----------
-        if (highlightedGate != null && world != null && world.sections != null
-            && tileW > 0 && tileH > 0) {
+            // --- 2) Optional overlays (yellow collision, green gate tiles) ---
+            if (showCollisionOverlay || showGateOverlay) {
+                int tilesX = sw / tileW;
+                int tilesY = sh / tileH;
 
-            int thisSectionIndex = world.sections.indexOf(section);
-            if (thisSectionIndex == highlightedGate.sectionIndex
-                && planeKey != null
-                && planeKey.equals(highlightedGate.planeKey)
-                && highlightedGate.gateRef != null
-                && highlightedGate.gateRef.pid() != null
-                // IMPORTANT: compare to p.pid, not p.templateId
-                && highlightedGate.gateRef.pid().equals(p.pid)) {
+                for (int tyTile = 0; tyTile < tilesY; tyTile++) {
+                    for (int txTile = 0; txTile < tilesX; txTile++) {
+                        TemplateDef.TileDef td = snap.tileAt(txTile, tyTile);
+                        if (td == null) continue;
 
-                var islands = TemplateGateUtils.computeGateIslands(snap);
-                int gi = highlightedGate.gateRef.gateIndex();
-                if (gi >= 0 && gi < islands.size()) {
-                    var cluster = islands.get(gi);
-                    for (int[] cell : cluster) {
-                        int gx = cell[0];
-                        int gy = cell[1];
-                        double px = gx * tileW;
-                        double py = gy * tileH;
+                        double px = txTile * tileW;
+                        double py = tyTile * tileH;
 
-                        g.setFill(Color.color(0.2, 0.5, 1.0, 0.35));
-                        g.fillRect(px, py, tileW, tileH);
-                        g.setStroke(Color.color(0.2, 0.5, 1.0, 0.95));
-                        g.setLineWidth(2.5);
-                        g.strokeRect(px, py, tileW, tileH);
+                        // Collision tiles (solid) in yellow via CollisionShapes.
+                        if (showCollisionOverlay && td.solid) {
+                            TemplateDef.ShapeType st =
+                                (td.shape != null ? td.shape : TemplateDef.ShapeType.RECT_FULL);
+                            TemplateDef.Orientation ori =
+                                (td.orientation != null ? td.orientation : TemplateDef.Orientation.UP);
+                            CollisionShapes.get(st).draw(g, px, py, tileW, tileH, ori);
+                        }
+
+                        // Gate tiles in green.
+                        if (showGateOverlay && td.gate) {
+                            g.setFill(Color.color(0, 1, 0, 0.25));
+                            g.fillRect(px, py, tileW, tileH);
+                            g.setStroke(Color.color(0, 1, 0, 0.9));
+                            g.setLineWidth(2);
+                            g.strokeRect(px, py, tileW, tileH);
+                        }
                     }
                 }
             }
-        }
 
-        // ---------- Optional overlays: collision (yellow) + gate tiles (green) ----------
-        if ((showCollisionOverlay || showGateOverlay) && tileW > 0 && tileH > 0) {
-            int tilesX = sw / tileW;
-            int tilesY = sh / tileH;
+            // --- 3) Highlights (blue for gate, purple for link endpoints) on top ---
+            boolean needBlue = highlightedGate != null &&
+                endpointMatchesPlacement(highlightedGate, section, planeKey, p);
+            boolean needPurple = highlightedLink != null && (
+                endpointMatchesPlacement(highlightedLink.a, section, planeKey, p) ||
+                    endpointMatchesPlacement(highlightedLink.b, section, planeKey, p)
+            );
 
-            for (int tyTile = 0; tyTile < tilesY; tyTile++) {
-                for (int txTile = 0; txTile < tilesX; txTile++) {
-                    TemplateDef.TileDef td = snap.tileAt(txTile, tyTile);
-                    if (td == null) continue;
+            if (needBlue || needPurple) {
+                var islands = TemplateGateUtils.computeGateIslands(snap);
 
-                    double px = txTile * tileW;
-                    double py = tyTile * tileH;
+                // Purple for link endpoints (both sides)
+                if (needPurple && highlightedLink != null) {
+                    WorldDef.GateEndpoint[] eps = { highlightedLink.a, highlightedLink.b };
+                    for (WorldDef.GateEndpoint ep : eps) {
+                        if (!endpointMatchesPlacement(ep, section, planeKey, p)) continue;
+                        if (ep.gateRef == null) continue;
+                        int gi = ep.gateRef.gateIndex();
+                        if (gi < 0 || gi >= islands.size()) continue;
 
-                    // Collision tiles (solid) in yellow via CollisionShapes.
-                    if (showCollisionOverlay && td.solid) {
-                        TemplateDef.ShapeType st =
-                            (td.shape != null ? td.shape : TemplateDef.ShapeType.RECT_FULL);
-                        TemplateDef.Orientation ori =
-                            (td.orientation != null ? td.orientation : TemplateDef.Orientation.UP);
-                        CollisionShapes.get(st).draw(g, px, py, tileW, tileH, ori);
+                        var cluster = islands.get(gi);
+                        for (int[] cell : cluster) {
+                            int gx = cell[0];
+                            int gy = cell[1];
+                            double px = gx * tileW;
+                            double py = gy * tileH;
+
+                            g.setFill(Color.color(0.7, 0.3, 0.9, 0.4));   // purple fill
+                            g.fillRect(px, py, tileW, tileH);
+                            g.setStroke(Color.color(0.7, 0.3, 0.9, 0.95)); // purple border
+                            g.setLineWidth(2.8);
+                            g.strokeRect(px, py, tileW, tileH);
+                        }
                     }
+                }
 
-                    // Gate tiles in green.
-                    if (showGateOverlay && td.gate) {
-                        g.setFill(Color.color(0, 1, 0, 0.25));
-                        g.fillRect(px, py, tileW, tileH);
-                        g.setStroke(Color.color(0, 1, 0, 0.9));
-                        g.setLineWidth(2);
-                        g.strokeRect(px, py, tileW, tileH);
+                // Blue for single-gate selection
+                if (needBlue && highlightedGate != null && highlightedGate.gateRef != null) {
+                    int gi = highlightedGate.gateRef.gateIndex();
+                    if (gi >= 0 && gi < islands.size()) {
+                        var cluster = islands.get(gi);
+                        for (int[] cell : cluster) {
+                            int gx = cell[0];
+                            int gy = cell[1];
+                            double px = gx * tileW;
+                            double py = gy * tileH;
+
+                            g.setFill(Color.color(0.2, 0.5, 1.0, 0.35));
+                            g.fillRect(px, py, tileW, tileH);
+                            g.setStroke(Color.color(0.2, 0.5, 1.0, 0.95));
+                            g.setLineWidth(2.5);
+                            g.strokeRect(px, py, tileW, tileH);
+                        }
                     }
                 }
             }
@@ -808,6 +834,21 @@ public class WorldIsoRenderer {
                 4
             );
         }
+    }
+
+    private boolean endpointMatchesPlacement(WorldDef.GateEndpoint ep,
+                                             SectionPlacement section,
+                                             String planeKey,
+                                             Plane2DMap.Placement p) {
+        if (world == null || ep == null || ep.gateRef == null || ep.gateRef.pid() == null) return false;
+        if (planeKey == null || ep.planeKey == null) return false;
+
+        int thisSectionIndex = world.sections.indexOf(section);
+        if (thisSectionIndex != ep.sectionIndex) return false;
+        if (!planeKey.equals(ep.planeKey)) return false;
+
+        // Very important: GateRef.pid() uses the placement pid, not templateId
+        return ep.gateRef.pid().equals(p.pid);
     }
 
     /* ============================================================

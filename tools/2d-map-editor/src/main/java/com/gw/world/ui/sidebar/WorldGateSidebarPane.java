@@ -46,10 +46,6 @@ public class WorldGateSidebarPane extends ScrollPane {
 
     private TemplateRepository templateRepo = new TemplateRepository();
 
-    public void setTemplateRepository(TemplateRepository repo) {
-        if (repo != null) this.templateRepo = repo;
-    }
-
     private WorldDef world;
     private int selectedSectionIndex = -1;
 
@@ -62,10 +58,19 @@ public class WorldGateSidebarPane extends ScrollPane {
 
     private Runnable onRequestRedraw = () -> {};
 
-    private Consumer<GateEndpoint> onGateSelectionChanged = ep -> {};
+    private Consumer<WorldDef.GateEndpoint> onGateSelectionChanged = ep -> {};
+    private Consumer<WorldDef.GateLink> onLinkSelectionChanged = gl -> {};
 
-    public void setOnGateSelectionChanged(Consumer<GateEndpoint> c) {
+    public void setTemplateRepository(TemplateRepository repo) {
+        if (repo != null) this.templateRepo = repo;
+    }
+
+    public void setOnGateSelectionChanged(Consumer<WorldDef.GateEndpoint> c) {
         this.onGateSelectionChanged = (c != null ? c : ep -> {});
+    }
+
+    public void setOnLinkSelectionChanged(Consumer<WorldDef.GateLink> c) {
+        this.onLinkSelectionChanged = (c != null ? c : gl -> {});
     }
 
     public WorldGateSidebarPane() {
@@ -91,12 +96,12 @@ public class WorldGateSidebarPane extends ScrollPane {
         gateList.getSelectionModel().selectedIndexProperty().addListener((o, ov, nv) -> {
             if (nv == null || nv.intValue() < 0 || nv.intValue() >= localGates.size()) {
                 gateNameField.clear();
-                onGateSelectionChanged.accept(null);   // no gate selected
+                onGateSelectionChanged.accept(null);  // clear gate highlight
             } else {
                 GateEntry ge = localGates.get(nv.intValue());
                 Plane2DMap.GateMeta meta = findGateMeta(ge.endpoint);
                 gateNameField.setText(meta == null ? "" : norm(meta.name));
-                onGateSelectionChanged.accept(ge.endpoint); // notify selected gate
+                onGateSelectionChanged.accept(ge.endpoint);  // highlight this gate in blue
             }
             refreshLinkVm();
             refreshLinkList();
@@ -105,9 +110,11 @@ public class WorldGateSidebarPane extends ScrollPane {
         linkList.getSelectionModel().selectedIndexProperty().addListener((o, ov, nv) -> {
             if (nv == null || nv.intValue() < 0 || nv.intValue() >= linkVm.size()) {
                 linkNameField.clear();
+                onLinkSelectionChanged.accept(null);  // clear purple highlight
             } else {
                 GateLink gl = linkVm.get(nv.intValue());
                 linkNameField.setText(gl.name == null ? "" : gl.name);
+                onLinkSelectionChanged.accept(gl);    // highlight link endpoints in purple
             }
         });
 

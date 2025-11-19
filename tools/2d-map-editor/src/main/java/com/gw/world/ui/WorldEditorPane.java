@@ -121,6 +121,12 @@ public class WorldEditorPane extends BorderPane {
             redraw();
         });
 
+
+        gateSidebar.setOnLinkSelectionChanged(gl -> {
+            renderer.setHighlightedLink(gl);
+            redraw();
+        });
+
         gateSidebar.showCollisionOverlayProperty().addListener((obs, oldV, newV) -> {
             renderer.setShowCollisionOverlay(newV);
             redraw();

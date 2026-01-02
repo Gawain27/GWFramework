@@ -1,0 +1,55 @@
+{
+  "id": "koalio",
+  "logicalPath": "koalio.png",
+  "imageWidthPx": 128,
+  "imageHeightPx": 32,
+  "tileWidthPx": 16,
+  "tileHeightPx": 16,
+  "complex": true,
+  "animated": true,
+  "tiles": {},
+  "regions": [
+    {
+      "id": "koala0",
+      "x0": 0,
+      "y0": 0,
+      "x1": 0,
+      "y1": 1
+    },
+    {
+      "id": "koala1",
+      "x0": 1,
+      "y0": 0,
+      "x1": 1,
+      "y1": 1
+    },
+    {
+      "id": "koala2",
+      "x0": 2,
+      "y0": 0,
+      "x1": 2,
+      "y1": 1
+    },
+    {
+      "id": "koala3",
+      "x0": 3,
+      "y0": 0,
+      "x1": 3,
+      "y1": 1
+    },
+    {
+      "id": "koala4",
+      "x0": 4,
+      "y0": 0,
+      "x1": 4,
+      "y1": 1
+    },
+    {
+      "id": "koala5",
+      "x0": 5,
+      "y0": 0,
+      "x1": 5,
+      "y1": 1
+    }
+  ]
+}

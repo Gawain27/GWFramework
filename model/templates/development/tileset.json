@@ -1,0 +1,198 @@
+{
+  "id": "tileset",
+  "logicalPath": "tileSet.png",
+  "imageWidthPx": 256,
+  "imageHeightPx": 256,
+  "tileWidthPx": 16,
+  "tileHeightPx": 16,
+  "complex": true,
+  "tiles": {
+    "10,7": {
+      "gx": 10,
+      "gy": 7,
+      "customFloat": 0.0,
+      "gate": true,
+      "solid": false,
+      "shape": "RECT_FULL",
+      "orientation": "UP"
+    },
+    "10,9": {
+      "gx": 10,
+      "gy": 9,
+      "customFloat": 0.0,
+      "gate": false,
+      "solid": false,
+      "shape": "RECT_FULL",
+      "orientation": "UP"
+    },
+    "4,9": {
+      "gx": 4,
+      "gy": 9,
+      "customFloat": 0.0,
+      "gate": true,
+      "solid": false,
+      "shape": "RECT_FULL",
+      "orientation": "UP"
+    },
+    "12,6": {
+      "gx": 12,
+      "gy": 6,
+      "customFloat": 0.0,
+      "gate": false,
+      "solid": false,
+      "shape": "RECT_FULL",
+      "orientation": "UP"
+    },
+    "4,8": {
+      "gx": 4,
+      "gy": 8,
+      "customFloat": 0.0,
+      "gate": true,
+      "solid": false,
+      "shape": "RECT_FULL",
+      "orientation": "UP"
+    },
+    "5,7": {
+      "gx": 5,
+      "gy": 7,
+      "customFloat": 0.0,
+      "gate": false,
+      "solid": false,
+      "shape": "RECT_FULL",
+      "orientation": "UP"
+    },
+    "11,7": {
+      "gx": 11,
+      "gy": 7,
+      "customFloat": 0.0,
+      "gate": true,
+      "solid": false,
+      "shape": "RECT_FULL",
+      "orientation": "UP"
+    },
+    "4,7": {
+      "gx": 4,
+      "gy": 7,
+      "customFloat": 0.0,
+      "gate": false,
+      "solid": false,
+      "shape": "RECT_FULL",
+      "orientation": "UP"
+    },
+    "5,8": {
+      "gx": 5,
+      "gy": 8,
+      "customFloat": 0.0,
+      "gate": true,
+      "solid": false,
+      "shape": "RECT_FULL",
+      "orientation": "UP"
+    },
+    "5,4": {
+      "gx": 5,
+      "gy": 4,
+      "customFloat": 0.0,
+      "gate": false,
+      "solid": false,
+      "shape": "RECT_FULL",
+      "orientation": "UP"
+    },
+    "5,9": {
+      "gx": 5,
+      "gy": 9,
+      "customFloat": 0.0,
+      "gate": true,
+      "solid": false,
+      "shape": "RECT_FULL",
+      "orientation": "UP"
+    },
+    "12,7": {
+      "gx": 12,
+      "gy": 7,
+      "customFloat": 0.0,
+      "gate": true,
+      "solid": false,
+      "shape": "RECT_FULL",
+      "orientation": "UP"
+    }
+  },
+  "regions": [
+    {
+      "id": "tree",
+      "x0": 0,
+      "y0": 0,
+      "x1": 8,
+      "y1": 9
+    },
+    {
+      "id": "mountain",
+      "x0": 9,
+      "y0": 0,
+      "x1": 15,
+      "y1": 4
+    },
+    {
+      "id": "mound",
+      "x0": 9,
+      "y0": 5,
+      "x1": 13,
+      "y1": 7
+    },
+    {
+      "id": "rock",
+      "x0": 14,
+      "y0": 5,
+      "x1": 15,
+      "y1": 6
+    },
+    {
+      "id": "stone",
+      "x0": 14,
+      "y0": 7,
+      "x1": 14,
+      "y1": 7
+    },
+    {
+      "id": "block",
+      "x0": 15,
+      "y0": 7,
+      "x1": 15,
+      "y1": 7
+    },
+    {
+      "id": "block2",
+      "x0": 14,
+      "y0": 8,
+      "x1": 14,
+      "y1": 8
+    },
+    {
+      "id": "block3",
+      "x0": 13,
+      "y0": 8,
+      "x1": 13,
+      "y1": 8
+    },
+    {
+      "id": "spike",
+      "x0": 15,
+      "y0": 8,
+      "x1": 15,
+      "y1": 8
+    },
+    {
+      "id": "cloud",
+      "x0": 10,
+      "y0": 8,
+      "x1": 11,
+      "y1": 9
+    },
+    {
+      "id": "cloud2",
+      "x0": 0,
+      "y0": 10,
+      "x1": 3,
+      "y1": 11
+    }
+  ]
+}

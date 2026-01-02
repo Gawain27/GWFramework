@@ -1,4 +1,15 @@
 <!--#SUMMARY-->
+<!-- ---------- 0.0.16O -------------------------------------------------- -->
+<tr>
+    <td>
+        <span class="tag" style="color:var(--v2)">0.0.16&nbsp;O</span>
+    </td>
+    <td>19&nbsp;November&nbsp;2025</td>
+    <td>
+        World&nbsp;sections iso view with per-axis transforms, resizable sidebars, collision/gate overlays,
+        and world-level gate &amp; link management with in-scene highlighting.
+    </td>
+</tr>
 <!-- ---------- 0.0.15N -------------------------------------------------- -->
 <tr>
     <td>
@@ -36,6 +47,131 @@
     </td>
 </tr>
 <!--#DETAILS-->
+<!-- ---------- 0.0.16O -------------------------------------------------- -->
+<details>
+    <summary style="color:var(--v2)">
+        <span class="tag" style="color:var(--v2)">0.0.16&nbsp;O</span>
+        <em style="flex:1">“World&nbsp;Sections, Gates &amp;&nbsp;Overlays” – released&nbsp;19&nbsp;November&nbsp;2025</em>
+    </summary>
+    <div class="entry-body">
+
+        <h3>🧭 World Sections Canvas &amp; Layout</h3>
+        <ul>
+            <li><strong>World sections layout</strong>:
+                central <code>WorldIsoRenderer</code> canvas, left section list, and right gate sidebar integrated
+                into a single editor view.</li>
+            <li><strong>Resizable sidebars</strong>:
+                left and right panes are hosted in a <code>SplitPane</code>, allowing horizontal drag to resize
+                each sidebar relative to the world view.</li>
+            <li><strong>Scrollable sidebars</strong>:
+                both side panels (plane sidebar and world gate sidebar) are <code>ScrollPane</code>-backed,
+                so large maps with many sections or gates remain usable without clipping.</li>
+        </ul>
+
+        <h3>🧊 3D Iso Renderer: Sections, Ghosts &amp; Selection</h3>
+        <ul>
+            <li><strong>Section-aware world rendering</strong>:
+                <code>WorldIsoRenderer</code> now draws every <code>SectionPlacement</code> as a box in world
+                space using a shared yaw/pitch/roll camera, reusing the same projection helpers as the plane view.</li>
+            <li><strong>Rotated selection outline</strong>:
+                the yellow selection frame is computed from the section’s rotated 3D bounding box, so it
+                follows <code>rotXDeg</code>, <code>rotYDeg</code> and <code>rotZDeg</code> instead of
+                assuming axis-aligned sections.</li>
+            <li><strong>Ghost sections while dragging</strong>:
+                moving a section uses a dedicated <code>GhostSection</code> model – content is drawn with
+                reduced alpha plus a translucent bounding box, making it obvious where the section will land.</li>
+            <li><strong>Depth-stable placement drawing</strong>:
+                all plane placements inside sections are collected into <code>DrawItem</code> entries and
+                sorted by camera-space depth, ensuring consistent back-to-front compositing in the iso view.</li>
+        </ul>
+
+        <h3>🎛️ Per-Axis Translation &amp; Rotation Controls</h3>
+        <ul>
+            <li><strong>Section transform controls</strong> (UI side, wired to the renderer):
+                buttons for <code>+X</code>, <code>-X</code>, <code>+Y</code>, <code>-Y</code>,
+                <code>+Z</code>, <code>-Z</code> move the selected section in world space.</li>
+            <li><strong>Step size input</strong>:
+                a numeric field defines the translation step in tiles/units; all six translation buttons
+                use this value, allowing fine or coarse repositioning without re-entering coordinates.</li>
+            <li><strong>Per-axis rotation buttons</strong>:
+                additional <code>+X</code>/<code>-X</code>, <code>+Y</code>/<code>-Y</code>,
+                <code>+Z</code>/<code>-Z</code> rotation controls adjust <code>rotXDeg</code>,
+                <code>rotYDeg</code>, <code>rotZDeg</code> with a user-defined degree step.</li>
+            <li>UI state and the yellow world-space selection outline remain in sync as sections are moved
+                and rotated.</li>
+        </ul>
+
+        <h3>🚪 World Gate Sidebar &amp; Linking</h3>
+        <ul>
+            <li><strong>World-level gate sidebar</strong> (<code>WorldGateSidebarPane</code>):
+                new right-hand scrollable panel that operates on <code>WorldDef</code> instead of a single plane.</li>
+            <li><strong>Per-section gate listing</strong>:
+                lists all gates belonging to the <em>currently selected section</em> across all planes of its
+                <code>MapDef</code>, using <code>GateEndpoint</code> to identify section + plane + gate.</li>
+            <li><strong>Gate renaming</strong>:
+                editing a gate name writes back to the underlying <code>Plane2DMap.GateMeta</code>, and
+                refreshes both the local gate list and the global search index.</li>
+            <li><strong>World gate links</strong>:
+                displays all <code>WorldDef.GateLink</code> instances that involve any local gate, with
+                add/remove/rename operations hooked into the world model.</li>
+            <li><strong>Gate search &amp; linking</strong>:
+                a searchable combo lists all other gates in the world (excluding the current section);
+                selecting one and hitting “Add Link” creates a symmetrical link between the two endpoints
+                if not already present.</li>
+            <li><strong>Duplicate protection</strong>:
+                links are compared via a stable endpoint key so adding the same pair twice is silently ignored.</li>
+        </ul>
+
+        <h3>🎨 Collision &amp; Gate Overlays</h3>
+        <ul>
+            <li><strong>Two new overlays</strong> toggled from the right sidebar:
+                “Show collision tiles” and “Show gate tiles”.</li>
+            <li><strong>Collision overlay</strong>:
+                for each placement’s <code>TemplateDef</code>, solid tiles are rendered in yellow using
+                <code>CollisionShapes</code> strategies, respecting <code>shape</code> and
+                <code>orientation</code> (full rect, half-rect, triangle varieties).</li>
+            <li><strong>Gate overlay</strong>:
+                gate tiles (<code>td.gate = true</code>) are drawn as green rectangles on top of the texture,
+                using the same tile grid derived from the placement’s source region.</li>
+            <li>Both overlays are drawn in the placement’s local image space via the same affine transform
+                used to project the texture, so they stay perfectly aligned with rotations, scaling and tilt.</li>
+        </ul>
+
+        <h3>🌈 Gate &amp; Link Highlighting in the World View</h3>
+        <ul>
+            <li><strong>Blue gate highlight</strong>:
+                selecting a gate in the world gate sidebar calls back into <code>WorldIsoRenderer</code> via
+                <code>setHighlightedGate</code>. The renderer:
+                <ul>
+                    <li>matches the selected <code>GateEndpoint</code> against each placement
+                        (section index + plane key + <code>GateRef.pid()</code>),</li>
+                    <li>uses <code>TemplateGateUtils.computeGateIslands()</code> to find the island for the
+                        gate index, and</li>
+                    <li>draws that island’s tiles in blue over the placement texture.</li>
+                </ul>
+            </li>
+            <li><strong>Purple link highlight</strong>:
+                selecting a world gate link passes the <code>GateLink</code> to the renderer via
+                <code>setHighlightedLink</code>; both endpoints are resolved and their gate islands are
+                overdrawn in purple so the connection is visible in context.</li>
+            <li><strong>Overlay-friendly ordering</strong>:
+                collision (yellow) and gate (green) overlays are drawn first; blue and purple highlights
+                are rendered last, guaranteeing that selections remain clearly visible.</li>
+        </ul>
+
+        <h3>✅ Outcome</h3>
+        <ul>
+            <li>World sections can be positioned and rotated directly in a 3D-ish iso view with clear,
+                rotation-aware selection feedback.</li>
+            <li>Gate metadata is now editable and linkable at the <em>world</em> level, not just per-plane.</li>
+            <li>Collision and gate tiles are inspectable in-context, with precise overlays that track texture
+                transforms and tilt.</li>
+            <li>Selected gates and gate links are visually highlighted inside the world, making cross-section
+                navigation and debugging substantially easier.</li>
+        </ul>
+
+    </div>
+</details>
 <!-- ---------- 0.0.15N -------------------------------------------------- -->
 <details>
     <summary style="color:var(--v1)">

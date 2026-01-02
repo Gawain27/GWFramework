@@ -23,8 +23,6 @@ public @interface Inject {
     Class<? extends IBaseComp> subTypeOf() default IBaseComp.class;
     /** If true, create a new temporary comp every time annotated component is injected */
     boolean createNew() default false;
-    /** If true, concrete class injected will never unload. */
-    boolean immortal() default false;
     /** Specify the sub component, if component has multiple */
     SubComponentNames subComp() default SubComponentNames.NONE;
 }

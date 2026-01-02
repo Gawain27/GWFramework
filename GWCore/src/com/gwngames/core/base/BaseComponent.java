@@ -167,13 +167,12 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem<BaseCom
                 ? loader.listSubComponents(elemMeta.component(), subIface)
                 : loader.listSubComponents(elemMeta.component());
 
-        final boolean immortal = inj.immortal();
         final List proxies = new ArrayList(classes.size());
 
         for (Class<?> implClass : classes) {
             Supplier<IBaseComp> supplier = getIBaseCompSupplier((Class<? extends IBaseComp>) implClass, loader);
 
-            Object proxy = LazyProxy.of((Class) elemType, supplier, immortal);
+            Object proxy = LazyProxy.of((Class) elemType, supplier);
             proxies.add(proxy);
         }
 
@@ -226,7 +225,7 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem<BaseCom
 
         Class<IBaseComp> depType = (Class<IBaseComp>) f.getType();
         Supplier<IBaseComp> create = getIBaseCompSupplier(inj, depType);
-        Object proxy = LazyProxy.of(depType, create, inj.immortal());
+        Object proxy = LazyProxy.of(depType, create);
         try {
             f.set(host, proxy);
         } catch (IllegalAccessException e) {

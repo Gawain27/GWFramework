@@ -5,11 +5,7 @@ import java.util.*;
 import com.gwngames.core.api.asset.IAssetPath;
 
 public enum GwstarterAssets implements IAssetPath {
-    ASSETS_TXT("assets.txt"),
-    LIBGDX128_PNG("libgdx128.png"),
-    LIBGDX16_PNG("libgdx16.png"),
-    LIBGDX32_PNG("libgdx32.png"),
-    LIBGDX64_PNG("libgdx64.png");
+    ASSETS_TXT("assets.txt");
 
     private final String defaultPath;
     private final Map<String,String> localePaths;

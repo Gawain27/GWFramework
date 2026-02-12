@@ -5,7 +5,13 @@ import java.util.*;
 import com.gwngames.core.api.asset.IAssetPath;
 
 public enum DevelopmentAssets implements IAssetPath {
-    ASSETS_TXT("assets.txt");
+    ASSETS_TXT("assets.txt"),
+    KOALIO_SINGLE_PNG("koalio-single.png"),
+    KOALIO_PNG("koalio.png"),
+    LEVEL1_TMX("level1.tmx"),
+    LIGHTS_ATLAS("lights.atlas"),
+    LIGHTS_PNG("lights.png"),
+    TILESET_PNG("tileSet.png");
 
     private final String defaultPath;
     private final Map<String,String> localePaths;

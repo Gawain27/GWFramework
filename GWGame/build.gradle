@@ -1,0 +1,29 @@
+// ---------------------------------------------------------------------
+// gwgame/build.gradle : Level 2 library (your game engine)
+// ---------------------------------------------------------------------
+
+ext.projectLevel = 2
+
+dependencies {
+  // -----------------------------------------------------------------
+  // All your game libraries here:
+  // -----------------------------------------------------------------
+
+  implementation project(path: ':gwcore', configuration: 'testOutput')
+}
+
+sourceSets {
+  main {
+    java.srcDirs = ['src']
+    resources.srcDirs = ['resources']
+  }
+  test {
+    java.srcDirs      = ['test']
+    resources.srcDirs = ['test-resources']
+    compileClasspath += sourceSets.main.output
+    runtimeClasspath += output + compileClasspath
+  }
+}
+
+
+

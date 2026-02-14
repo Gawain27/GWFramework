@@ -1,24 +1,26 @@
 // *** GENERATED FILE – DO NOT EDIT ***
-package com.gwngames.assets;
+package com.gwngames.assets.ui;
 
 import java.util.*;
 import com.gwngames.core.api.asset.IAssetPath;
 
-public enum GwstarterAssets implements IAssetPath {
-    ASSETS_TXT("assets.txt"),
-    LIBGDX128_PNG("libgdx128.png"),
-    LIBGDX16_PNG("libgdx16.png"),
-    LIBGDX32_PNG("libgdx32.png"),
-    LIBGDX64_PNG("libgdx64.png");
+public enum GwgameUIAssets implements IAssetPath {
+    FONT_LIST_FNT("ui/font-list.fnt"),
+    FONT_SUBTITLE_FNT("ui/font-subtitle.fnt"),
+    FONT_WINDOW_FNT("ui/font-window.fnt"),
+    FONT_FNT("ui/font.fnt"),
+    UISKIN_ATLAS("ui/uiskin.atlas"),
+    UISKIN_JSON("ui/uiskin.json"),
+    UISKIN_PNG("ui/uiskin.png");
 
     private final String defaultPath;
     private final Map<String,String> localePaths;
 
-    GwstarterAssets(String path) {
+    GwgameUIAssets(String path) {
         this.defaultPath = path;
         this.localePaths = Map.of();
     }
-    GwstarterAssets(String baseName, Map<String,String> localePaths) {
+    GwgameUIAssets(String baseName, Map<String,String> localePaths) {
         this.defaultPath = baseName;
         this.localePaths = Collections.unmodifiableMap(localePaths);
     }

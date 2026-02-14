@@ -1,24 +1,20 @@
 // *** GENERATED FILE – DO NOT EDIT ***
-package com.gwngames.assets;
+package com.gwngames.assets.METAINF.services;
 
 import java.util.*;
 import com.gwngames.core.api.asset.IAssetPath;
 
-public enum GwstarterAssets implements IAssetPath {
-    ASSETS_TXT("assets.txt"),
-    LIBGDX128_PNG("libgdx128.png"),
-    LIBGDX16_PNG("libgdx16.png"),
-    LIBGDX32_PNG("libgdx32.png"),
-    LIBGDX64_PNG("libgdx64.png");
+public enum GwcoreServicesAssets implements IAssetPath {
+    ORG_SLF4J_SPI_SLF4JSERVICEPROVIDER("META-INF/services/org.slf4j.spi.SLF4JServiceProvider");
 
     private final String defaultPath;
     private final Map<String,String> localePaths;
 
-    GwstarterAssets(String path) {
+    GwcoreServicesAssets(String path) {
         this.defaultPath = path;
         this.localePaths = Map.of();
     }
-    GwstarterAssets(String baseName, Map<String,String> localePaths) {
+    GwcoreServicesAssets(String baseName, Map<String,String> localePaths) {
         this.defaultPath = baseName;
         this.localePaths = Collections.unmodifiableMap(localePaths);
     }

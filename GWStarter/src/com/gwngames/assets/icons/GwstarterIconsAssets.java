@@ -1,24 +1,22 @@
 // *** GENERATED FILE – DO NOT EDIT ***
-package com.gwngames.assets;
+package com.gwngames.assets.icons;
 
 import java.util.*;
 import com.gwngames.core.api.asset.IAssetPath;
 
-public enum GwstarterAssets implements IAssetPath {
-    ASSETS_TXT("assets.txt"),
-    LIBGDX128_PNG("libgdx128.png"),
-    LIBGDX16_PNG("libgdx16.png"),
-    LIBGDX32_PNG("libgdx32.png"),
-    LIBGDX64_PNG("libgdx64.png");
+public enum GwstarterIconsAssets implements IAssetPath {
+    LOGO_ICNS("icons/logo.icns"),
+    LOGO_ICO("icons/logo.ico"),
+    LOGO_PNG("icons/logo.png");
 
     private final String defaultPath;
     private final Map<String,String> localePaths;
 
-    GwstarterAssets(String path) {
+    GwstarterIconsAssets(String path) {
         this.defaultPath = path;
         this.localePaths = Map.of();
     }
-    GwstarterAssets(String baseName, Map<String,String> localePaths) {
+    GwstarterIconsAssets(String baseName, Map<String,String> localePaths) {
         this.defaultPath = baseName;
         this.localePaths = Collections.unmodifiableMap(localePaths);
     }

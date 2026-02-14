@@ -4,21 +4,23 @@ package com.gwngames.assets;
 import java.util.*;
 import com.gwngames.core.api.asset.IAssetPath;
 
-public enum GwstarterAssets implements IAssetPath {
+public enum GwgameAssets implements IAssetPath {
     ASSETS_TXT("assets.txt"),
-    LIBGDX128_PNG("libgdx128.png"),
-    LIBGDX16_PNG("libgdx16.png"),
-    LIBGDX32_PNG("libgdx32.png"),
-    LIBGDX64_PNG("libgdx64.png");
+    KOALIO_SINGLE_PNG("koalio-single.png"),
+    KOALIO_PNG("koalio.png"),
+    LEVEL1_TMX("level1.tmx"),
+    LIGHTS_ATLAS("lights.atlas"),
+    LIGHTS_PNG("lights.png"),
+    TILESET_PNG("tileSet.png");
 
     private final String defaultPath;
     private final Map<String,String> localePaths;
 
-    GwstarterAssets(String path) {
+    GwgameAssets(String path) {
         this.defaultPath = path;
         this.localePaths = Map.of();
     }
-    GwstarterAssets(String baseName, Map<String,String> localePaths) {
+    GwgameAssets(String baseName, Map<String,String> localePaths) {
         this.defaultPath = baseName;
         this.localePaths = Collections.unmodifiableMap(localePaths);
     }

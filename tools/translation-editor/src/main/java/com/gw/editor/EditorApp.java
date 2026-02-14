@@ -68,7 +68,7 @@ public class EditorApp extends Application {
     private final ObservableList<ObservableList<String>> rowsRaw =
         FXCollections.observableArrayList();
     private final FilteredList<ObservableList<String>> rowsView =
-        new FilteredList<>(rowsRaw, _ -> true);
+        new FilteredList<>(rowsRaw, a -> true);
 
     // primary stage (for centering/owning popups)
     private Stage primaryStage;
@@ -80,7 +80,7 @@ public class EditorApp extends Application {
 
         moduleBox.setPromptText("Module");
         moduleBox.getItems().setAll(moduleCsv.keySet());
-        moduleBox.valueProperty().addListener((_, _, nv) -> {
+        moduleBox.valueProperty().addListener((a, b, nv) -> {
             log(Lv.INFO, "Module changed → " + nv);
             loadCsv(nv);
         });
@@ -89,15 +89,15 @@ public class EditorApp extends Application {
         filterField.setPrefWidth(180);
 
         localeBox.setPromptText("Locale");
-        localeBox.valueProperty().addListener((_, _, nv) -> {
+        localeBox.valueProperty().addListener((a, b, nv) -> {
             log(Lv.INFO, "Locale changed → " + nv);
             translateBtn.setDisable(nv == null);
         });
         translateBtn.setDisable(true);
-        translateBtn.setOnAction(_ -> autoTranslate());
+        translateBtn.setOnAction(a -> autoTranslate());
 
         saveBtn.setDisable(true);
-        saveBtn.setOnAction(_ -> saveCsv());
+        saveBtn.setOnAction(a -> saveCsv());
 
         var bar = new ToolBar(
             moduleBox, localeBox, translateBtn,
@@ -105,7 +105,7 @@ public class EditorApp extends Application {
             new Separator(), filterField
         );
 
-        filterField.textProperty().addListener((_, _, newText) -> {
+        filterField.textProperty().addListener((a, b, newText) -> {
             String needle = newText.toLowerCase().trim();
             rowsView.setPredicate(row -> needle.isEmpty() ||
                 row.stream().anyMatch(cell -> cell.toLowerCase().contains(needle)));
@@ -287,7 +287,7 @@ public class EditorApp extends Application {
 
             if (c > 0) {
                 // Popup editor cell — double-click to edit
-                col.setCellFactory(_ -> new TableCell<>() {
+                col.setCellFactory(a -> new TableCell<>() {
                     {
                         setOnMouseClicked(ev -> {
                             if (ev.getClickCount() == 2 && !isEmpty()) {
@@ -339,14 +339,14 @@ public class EditorApp extends Application {
         okBtn.setDefaultButton(true);
         cancelBtn.setCancelButton(true);
 
-        okBtn.setOnAction(_ -> {
+        okBtn.setOnAction(a -> {
             onOk.accept(area.getText());
             dlg.close();
         });
-        cancelBtn.setOnAction(_ -> dlg.close());
+        cancelBtn.setOnAction(a -> dlg.close());
 
         // Close without changes on focus loss (click outside)
-        dlg.focusedProperty().addListener((_, _, isNow) -> {
+        dlg.focusedProperty().addListener((a, b, isNow) -> {
             if (!isNow) dlg.close();
         });
 
@@ -413,31 +413,44 @@ public class EditorApp extends Application {
             "Inserted " + filled + " translation" + (filled == 1 ? "" : "s") + ".");
     }
 
-    /* -------- callDeepL (replace the old method completely) ------------ */
     private String callDeepL(String key, String text, String tgt) {
         try {
-            String payload = "auth_key=" + URLEncoder.encode(key, StandardCharsets.UTF_8) +
-                "&text=" + URLEncoder.encode(text, StandardCharsets.UTF_8) +
-                "&target_lang=" + URLEncoder.encode(tgt.replace('_', '-'), StandardCharsets.UTF_8);
+            // NOTE: auth_key is NO LONGER sent in the body. It must be in the Authorization header.
+            String payload =
+                "text=" + URLEncoder.encode(text, StandardCharsets.UTF_8) +
+                    "&target_lang=" + URLEncoder.encode(tgt.replace('_', '-'), StandardCharsets.UTF_8);
+
             log(Lv.DEBUG, "DeepL payload → " + payload.substring(0, Math.min(120, payload.length())));
+
             var url = URI.create("https://api-free.deepl.com/v2/translate").toURL();
             HttpURLConnection con = (HttpURLConnection) url.openConnection();
             con.setDoOutput(true);
             con.setRequestMethod("POST");
-            con.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-            try (var out = new DataOutputStream(con.getOutputStream())) {
-                out.writeBytes(payload);
+            con.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
+            con.setRequestProperty("Authorization", "DeepL-Auth-Key " + key);
+
+            try (var out = new OutputStreamWriter(con.getOutputStream(), StandardCharsets.UTF_8)) {
+                out.write(payload);
             }
+
             int code = con.getResponseCode();
             log(Lv.DEBUG, "DeepL HTTP " + code + " (" + con.getResponseMessage() + ')');
-            try (InputStream is = code == 200 ? con.getInputStream() : con.getErrorStream()) {
+
+            try (InputStream is = (code >= 200 && code < 300) ? con.getInputStream() : con.getErrorStream()) {
                 String body = new String(is.readAllBytes(), StandardCharsets.UTF_8);
                 log(Lv.TRACE, "DeepL body ⇐ " + body);
-                if (code == 200) {
+
+                if (code >= 200 && code < 300) {
+                    // Response shape: {"translations":[{"detected_source_language":"EN","text":"..."}]}
                     int i = body.indexOf("\"text\":\"");
-                    if (i > 0) {
+                    if (i >= 0) {
                         int j = body.indexOf('"', i + 8);
-                        return body.substring(i + 8, j).replace("\\n", "\n").replace("\\\"", "\"");
+                        if (j > i) {
+                            return body.substring(i + 8, j)
+                                .replace("\\n", "\n")
+                                .replace("\\\"", "\"")
+                                .replace("\\\\", "\\");
+                        }
                     }
                 }
             }

@@ -292,6 +292,21 @@ public class WorldEditorPane extends BorderPane {
         btnMoveNegZ.setOnAction(e -> moveSelectedSection(0, 0, -1));
         btnMovePosZ.setOnAction(e -> moveSelectedSection(0, 0, +1));
 
+        // rotation buttons should match move button wiring
+        styleMoveButton(btnRotNegX);
+        styleMoveButton(btnRotPosX);
+        styleMoveButton(btnRotNegY);
+        styleMoveButton(btnRotPosY);
+        styleMoveButton(btnRotNegZ);
+        styleMoveButton(btnRotPosZ);
+
+        btnRotNegX.setOnAction(e -> rotateSelectedSection(-1, 0, 0));
+        btnRotPosX.setOnAction(e -> rotateSelectedSection(+1, 0, 0));
+        btnRotNegY.setOnAction(e -> rotateSelectedSection(0, -1, 0));
+        btnRotPosY.setOnAction(e -> rotateSelectedSection(0, +1, 0));
+        btnRotNegZ.setOnAction(e -> rotateSelectedSection(0, 0, -1));
+        btnRotPosZ.setOnAction(e -> rotateSelectedSection(0, 0, +1));
+
         btnRefreshSections.setMaxWidth(Double.MAX_VALUE);
         btnRefreshSections.setOnAction(e -> reloadSectionList());
 

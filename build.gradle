@@ -44,14 +44,22 @@ def cleanTasks = includedProjects.collect { it.tasks.named('clean') }
 //  high-level umbrella tasks
 // ------------------------------------------------------------------
 tasks.register('build') {
+  group = 'build'
+  description = 'Build all included projects (no tests, no distribution archives).'
   dependsOn buildTasks
   dependsOn tasks.named('assembleChangelog')
-  dependsOn 'generateRunScripts', 'zipDistribution', 'tarDistribution'
+  dependsOn 'generateRunScripts'
+}
+
+tasks.register('testAll') {
+  group = 'verification'
+  description = 'Run tests for all included projects.'
+  dependsOn testTasks
 }
 
 tasks.register('run', Exec) {
   dependsOn classTasks, 'generateRunScripts'
-  mustRunAfter 'zipDistribution', 'tarDistribution'
+  //mustRunAfter 'zipDistribution', 'tarDistribution'
 
   doFirst {
     File binDir   = file("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin")
@@ -94,9 +102,10 @@ tasks.register('run', Exec) {
 
 tasks.register('delivery') {
   group       = 'distribution'
-  description = 'Assemble distributable archives (zip & tar) and run tests.'
+  description = 'Run tests and assemble distributable archives (zip & tar).'
   dependsOn tasks.named('assembleChangelog')
-  dependsOn testTasks, 'zipDistribution', 'tarDistribution'
+  dependsOn tasks.named('testAll')
+  dependsOn 'generateRunScripts', 'zipDistribution', 'tarDistribution'
 }
 
 tasks.register('clean', Delete) {
@@ -105,26 +114,58 @@ tasks.register('clean', Delete) {
 }
 
 // ===================================================================
+//  🔁 resetAssetHashes – set every *_hash in gradle.properties to 0
+// ===================================================================
+tasks.register('resetAssetHashes') {
+  group = 'build'
+  description = 'Set all *_hash properties in gradle.properties to 0.'
+
+  // Adjust if your properties file lives elsewhere
+  def propsFile = rootProject.file('gradle.properties')
+
+  inputs.file(propsFile)
+  outputs.file(propsFile)
+
+  doLast {
+    if (!propsFile.exists()) {
+      throw new GradleException("gradle.properties not found at: ${propsFile}")
+    }
+
+    def original = propsFile.getText('UTF-8')
+    def updated = original
+    // Replace lines like: something_hash=12345   (preserve key, keep comments on same line)
+      .replaceAll(/(?m)^(\s*[A-Za-z0-9_.-]+_hash)\s*=\s*([^\r\n#]*)(\s*(#.*)?)$/) { all, key, val, tail ->
+        "${key}=0${tail ?: ''}"
+      }
+
+    if (updated != original) {
+      propsFile.setText(updated, 'UTF-8')
+      logger.lifecycle("✅ Set *_hash properties to 0 in ${propsFile}")
+    } else {
+      logger.lifecycle("ℹ️ No *_hash properties found to update in ${propsFile}")
+    }
+  }
+}
+
+// ===================================================================
 //  🔄  refreshAssets – download & regenerate asset meta only
 // ===================================================================
-tasks.register('refreshAssets') {
-  group       = 'build'
-  description = 'Download remote resource ZIPs and regenerate assets.txt + enum classes.'
+tasks.named('refreshAssets').configure {
+  // collect the tasks (TaskCollection is fine as dependsOn input)
+  def updates = subprojects.collectMany { p -> p.tasks.matching { it.name == 'updateResources' } }
+  def txts    = subprojects.collectMany { p -> p.tasks.matching { it.name == 'generateAssetsTxt' } }
+  def enums   = subprojects.collectMany { p -> p.tasks.matching { it.name == 'generateAssetEnums' } }
 
-  // collect the 3 task providers from every participating sub-project
-  def updates  = subprojects.collectMany { p ->
-    p.tasks.matching { it.name == 'updateResources' }
-  }
-  def txts     = subprojects.collectMany { p ->
-    p.tasks.matching { it.name == 'generateAssetsTxt' }
-  }
-  def enums    = subprojects.collectMany { p ->
-    p.tasks.matching { it.name == 'generateAssetEnums' }
-  }
-
+  // First zero the hashes, then run updateResources, then regenerate metadata
+  dependsOn tasks.named('resetAssetHashes')
   dependsOn updates
   dependsOn txts
   dependsOn enums
+
+  // Enforce ordering: resetAssetHashes -> updateResources -> generators
+  updates.each { it.mustRunAfter(tasks.named('resetAssetHashes')) }
+  txts.each    { it.mustRunAfter(updates) }
+  enums.each   { it.mustRunAfter(txts) }
 }
 
 

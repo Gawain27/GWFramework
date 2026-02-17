@@ -16,6 +16,9 @@ public class FileLogger {
     /** Toggle in case you ever want to disable dashboard tapping at runtime. */
     private static volatile boolean tapDashboard = true;
 
+    /** When true, all FileLogger instances log to LogFiles.TEST */
+    private static volatile boolean forceTestLogFile = false;
+
     private final String logFilePath;
 
     private FileLogger(String logFilePath) {
@@ -25,6 +28,8 @@ public class FileLogger {
     public static FileLogger get(String logFilePath){ return new FileLogger(logFilePath); }
     public static void setLevel (int level){ enabled_level = level; }
     public static void setDashboardTap(boolean on){ tapDashboard = on; }
+    /** For tests (or launchers) to force all logs into LogFiles.TEST. */
+    public static void setForceTestLogFile(boolean on) { forceTestLogFile = on; }
 
     // ───────────────────────── public API ─────────────────────────
 
@@ -123,5 +128,26 @@ public class FileLogger {
                 LogBus.record(key, lvl, line, ex);
             }
         } catch (Throwable ignored) {}
+    }
+
+    /** Heuristic auto-detect for common test runners + an explicit system property. */
+    private static boolean isRunningTests() {
+        if (forceTestLogFile) return true;
+
+        // allow: -Dgw.tests=true (recommended)
+        if (Boolean.getBoolean("gw.tests")) return true;
+
+        // JUnit 4/5 / Gradle test worker classnames
+        StackTraceElement[] st = Thread.currentThread().getStackTrace();
+        for (StackTraceElement e : st) {
+            String cn = e.getClassName();
+            if (cn.startsWith("org.junit.")
+                || cn.startsWith("org.gradle.api.internal.tasks.testing.")
+                || cn.startsWith("org.gradle.internal.dispatch.")
+                || cn.startsWith("org.testng.")) {
+                return true;
+            }
+        }
+        return false;
     }
 }

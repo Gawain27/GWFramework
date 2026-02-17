@@ -125,10 +125,92 @@ tasks.register('prepareDistribution', Copy) {
     into "$buildDir/generatedConfig"
 }
 
+/* =========================================================================
+ * Copy model/ data for active configSet projects into final distribution:
+ *   model/<subproj>/maps      -> <distro>/data/model/maps
+ *   model/<subproj>/templates -> <distro>/data/model/templates
+ *   model/<subproj>/worlds    -> <distro>/data/model/worlds
+ * ========================================================================= */
+tasks.register('copyModelData') {
+  group       = 'distribution'
+  description = 'Copy model data (maps/templates/worlds) for configSet projects into distribution data/model'
+
+  // Ensure distro skeleton exists
+  dependsOn 'prepareDistribution'
+
+  doLast {
+    // Distro root is: build/generatedConfig/<configSet>-<projectVersion>/
+    File distroDir = file("$buildDir/generatedConfig/${configSet}-${projectVersion}")
+    File modelOut  = new File(distroDir, "data/model")
+    File mapsOut   = new File(modelOut, "maps")
+    File tempsOut  = new File(modelOut, "templates")
+    File worldsOut = new File(modelOut, "worlds")
+
+    mapsOut.mkdirs()
+    tempsOut.mkdirs()
+    worldsOut.mkdirs()
+
+    // Only projects from the ACTIVE configSet
+    List<String> activeProjects = (parsedConfig.projects ?: [])
+      .collect { it.name as String }
+      .findAll { it != null && !it.isBlank() }
+
+    println "🧩  Copying model data for configSet='${configSet}': ${activeProjects}"
+
+    // Source root: <repoRoot>/model/<subproj>/(maps|templates|worlds)
+    File modelSrcRoot = file("$rootDir/model")
+    if (!modelSrcRoot.exists()) {
+      println "⚠️  No model/ directory found at: $modelSrcRoot (skipping)"
+      return
+    }
+
+    int copiedCount = 0
+
+    activeProjects.each { String projName ->
+      File projRoot = new File(modelSrcRoot, projName)
+      if (!projRoot.exists()) {
+        println "ℹ️  No model data for project '$projName' at: $projRoot"
+        return
+      }
+
+      // maps
+      File srcMaps = new File(projRoot, "maps")
+      if (srcMaps.exists()) {
+        ant.copy(todir: mapsOut, overwrite: true) {
+          fileset(dir: srcMaps)
+        }
+        copiedCount++
+        println "  ✅ maps      ← model/${projName}/maps"
+      }
+
+      // templates
+      File srcTemplates = new File(projRoot, "templates")
+      if (srcTemplates.exists()) {
+        ant.copy(todir: tempsOut, overwrite: true) {
+          fileset(dir: srcTemplates)
+        }
+        copiedCount++
+        println "  ✅ templates ← model/${projName}/templates"
+      }
+
+      // worlds
+      File srcWorlds = new File(projRoot, "worlds")
+      if (srcWorlds.exists()) {
+        ant.copy(todir: worldsOut, overwrite: true) {
+          fileset(dir: srcWorlds)
+        }
+        copiedCount++
+        println "  ✅ worlds    ← model/${projName}/worlds"
+      }
+    }
+
+    println "📚  Model copy complete → ${modelOut} (segments copied: ${copiedCount})"
+  }
+}
+
 /* ---------------- copyProjectJarsToDistribution ----------------------- */
 tasks.register('copyProjectJarsToDistribution', Copy) {
-
-    dependsOn 'prepareDistribution', jarTaskProviders
+    dependsOn tasks.named('copyModelData'), jarTaskProviders
     doFirst { println '📥  Copying freshly-built jars into distribution …' }
     from projectJarProviders.collect { it.flatMap { j -> j.archiveFile } }
     into "$buildDir/generatedConfig/${configSet}-${projectVersion}/lib"

@@ -172,5 +172,3 @@ Thumbs.db
 !**/resources/translation/
 !**/resources/translation/**
 !tools/**
-
-gradle.properties

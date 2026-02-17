@@ -17,6 +17,7 @@ import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.event.base.AbstractEvent;
 import com.gwngames.core.util.Cdi;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 
@@ -42,6 +43,11 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public abstract class BaseTest {
     protected static final FileLogger log = FileLogger.get(LogFiles.TEST);
+
+    @BeforeAll
+    static void forceLogsToTestFile() {
+        FileLogger.setForceTestLogFile(true);
+    }
 
     /** JUnit entry‑point – do **not** override. */
     @Test

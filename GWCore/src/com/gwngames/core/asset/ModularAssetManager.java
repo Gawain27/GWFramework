@@ -32,16 +32,19 @@ import java.util.concurrent.ConcurrentHashMap;
 @Init(module = ModuleNames.CORE)
 public final class ModularAssetManager extends BaseComponent implements IAssetManager, Disposable {
 
+    // TODO: to config
     /** Idle-time before an unused asset is evicted (milliseconds). */
     private static volatile long TTL_MS = Long.getLong("gw.asset.ttl", 5 * 60_000);
     public static void setTtl(long millis) { TTL_MS = millis; }
 
     private static final FileLogger LOG = FileLogger.get(LogFiles.ASSET);
 
-    // DI
-    @Inject private IAssetSubTypeRegistry reg;
-    @Inject private ILocale              locale;
-    @Inject private IPathResolver        paths;
+    @Inject
+    private IAssetSubTypeRegistry reg;
+    @Inject
+    private ILocale locale;
+    @Inject
+    private IPathResolver paths;
 
     /** LibGDX manager using absolute paths. */
     private final AssetManager gdx = new AssetManager(new AbsoluteFileHandleResolver());

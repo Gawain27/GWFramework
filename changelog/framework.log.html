@@ -11,7 +11,20 @@
 
 <table>
     <tr><th style="width:110px">Version</th><th style="width:160px">Date</th><th>Highlights</th></tr>
-    <!-- ---------- 0.0.16O -------------------------------------------------- -->
+    <!-- ---------- 0.0.17P -------------------------------------------------- -->
+<tr>
+    <td>
+        <span class="tag" style="color:var(--v3)">0.0.17&nbsp;P</span>
+    </td>
+    <td>16&nbsp;February&nbsp;2026</td>
+    <td>
+        Runtime&nbsp;world&nbsp;render&nbsp;pipeline: multi-threaded render-chunk compilation into draw commands,
+        GL-thread command execution with asset-backed texture-region caching, deterministic World/Section state beans,
+        dynamic-entity repository with world/section placement, camera bean with entity follow, and distribution build
+        now packages configSet-scoped model data (maps/templates/worlds) under <code>../data/model</code>.
+    </td>
+</tr>
+<!-- ---------- 0.0.16O -------------------------------------------------- -->
 <tr>
     <td>
         <span class="tag" style="color:var(--v2)">0.0.16&nbsp;O</span>
@@ -132,6 +145,107 @@
     <td>24&nbsp;May&nbsp;2025</td>
     <td>First public “starter” release.</td></tr>      <!--  🡐 Gradle drops rows here -->
 </table>
+
+<!-- ---------- 0.0.17P -------------------------------------------------- -->
+<details>
+    <summary style="color:var(--v3)">
+        <span class="tag" style="color:var(--v3)">0.0.17&nbsp;P</span>
+        <em style="flex:1">“Runtime&nbsp;World&nbsp;Pipeline&nbsp;&amp;&nbsp;Model&nbsp;Packaging” – released&nbsp;16&nbsp;February&nbsp;2026</em>
+    </summary>
+    <div class="entry-body">
+
+        <h3>🧩 Deterministic Runtime World State (Beans)</h3>
+        <ul>
+            <li><strong>World manager bean</strong>:
+                centralised access to the <em>active</em> <code>WorldDef</code> and its lifecycle,
+                with deterministic lookup by id and stable, explicit setters for runtime switching.</li>
+            <li><strong>Section/active-section tracking</strong>:
+                structured APIs to enumerate, resolve and update the <em>current section</em> where the player
+                is interacting, including section-local coordinates mapped into world space.</li>
+            <li><strong>Section query utilities</strong>:
+                predictable helpers to compute section bounds and world-space transforms for placements,
+                preparing runtime systems (spawn, triggers, navigation) to reason about the world consistently.</li>
+        </ul>
+
+        <h3>🧍 Dynamic Entities: Repository &amp; Placement</h3>
+        <ul>
+            <li><strong>Dynamic entity repository</strong>:
+                a dedicated runtime registry that stores, identifies and enumerates dynamic entities
+                (characters, scene objects, temporary effects) independently from static map placements.</li>
+            <li><strong>World/section placement model</strong>:
+                entities keep explicit placement metadata: world id, section id/index, and local/world position,
+                with safe APIs to move entities and rebind them across sections.</li>
+            <li><strong>Runtime-friendly identity</strong>:
+                entity ids are stable keys suitable for persistence, networking or editor hooks, without
+                coupling to rendering internals.</li>
+        </ul>
+
+        <h3>🎥 Camera Management Bean (Focus &amp; Follow)</h3>
+        <ul>
+            <li><strong>Camera configuration API</strong>:
+                a bean to set camera pose (position, yaw/pitch/roll or equivalent) and “look-at”
+                targets in world or section space.</li>
+            <li><strong>Follow / focus support</strong>:
+                camera can lock onto a dynamic entity as a focus target, updating each frame while still
+                allowing optional smoothing / offsets for gameplay feel.</li>
+            <li><strong>Decoupled from rendering</strong>:
+                camera state is owned by the camera bean; render compilation reads a snapshot each frame,
+                keeping thread boundaries clean.</li>
+        </ul>
+
+        <h3>🧱 Static World Rendering: Render Chunks &amp; Draw Commands</h3>
+        <ul>
+            <li><strong>RenderChunks strategy (multi-threaded)</strong>:
+                worker threads compile visible static content into immutable draw command buffers,
+                allowing heavy sorting, visibility filtering and placement-to-quad expansion off the GL thread.</li>
+            <li><strong>Overridable visibility policy</strong>:
+                the strategy that selects what to render is pluggable; the default policy renders a
+                <strong>9×9 section window</strong> with the active section centered.</li>
+            <li><strong>Queue-based handoff</strong>:
+                prepared chunks/frames are sent to the render queue as render events, ensuring the GL thread
+                only consumes ready-to-draw data.</li>
+        </ul>
+
+        <h3>🧵 GL-Thread Execution &amp; Texture-Region Support</h3>
+        <ul>
+            <li><strong>GL-thread command executor</strong>:
+                render commands are executed only on the LibGDX render thread, preserving correctness while
+                keeping compilation parallel.</li>
+            <li><strong>Asset-backed region resolution</strong>:
+                the asset manager gained a structured way to resolve <strong>texture regions</strong> directly
+                (including from <code>IAssetPath</code>), enabling template-style sub-rect rendering
+                without reloading textures.</li>
+            <li><strong>Region caching &amp; reuse</strong>:
+                region lookups are cached per (texture path + region key) so repeated placements and animated
+                frames avoid allocation churn.</li>
+        </ul>
+
+        <h3>📦 Distribution Build: ConfigSet-Scoped Model Packaging</h3>
+        <ul>
+            <li><strong>Model copy task</strong>:
+                Gradle now copies JSON model data for the <em>active configSet projects</em> into the final distribution.</li>
+            <li><strong>Packaged layout</strong>:
+                <code>model/&lt;subproj&gt;/{maps,templates,worlds}</code> is merged into
+                <code>../data/model/{maps,templates,worlds}</code> under the generated distro directory.</li>
+            <li><strong>Runtime alignment</strong>:
+                engine pathing resolves assets from <code>../data/assets</code> and models from
+                <code>../data/model</code>, matching the packaged structure for both IDE and JAR deployments.</li>
+        </ul>
+
+        <h3>✅ Outcome</h3>
+        <ul>
+            <li>Static world rendering is now a <strong>two-stage pipeline</strong>:
+                multi-threaded chunk compilation → GL-thread execution, with a clean queue boundary.</li>
+            <li>World and section state are accessible and modifiable through deterministic beans,
+                enabling runtime spawning and gameplay systems.</li>
+            <li>Dynamic entities have a first-class repository and placement model, and the camera can
+                follow them without coupling systems together.</li>
+            <li>Final builds ship with the correct configSet-scoped model data, so maps/templates/worlds
+                load reliably from the packaged distribution.</li>
+        </ul>
+
+    </div>
+</details>
 
 <!-- ---------- 0.0.16O -------------------------------------------------- -->
 <details>

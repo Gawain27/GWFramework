@@ -6,6 +6,7 @@ import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureAtlas;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.gwngames.core.api.asset.IAssetSubType;
 import com.gwngames.core.api.asset.IFileExtension;
 import com.gwngames.core.api.build.Init;
@@ -36,7 +37,7 @@ public enum BuiltInSubTypes implements IAssetSubType {
     SOUND ("sound",  AssetCategory.AUDIO,   Sound.class,   Ext.WAV),
 
     /* TEXTURE ---------------------------------------------------- */
-    TEXTURE("texture", AssetCategory.TEXTURE, Texture.class,     Ext.PNG),
+    TEXTURE("texture", AssetCategory.TEXTURE, TextureRegion.class,     Ext.PNG),
     ATLAS  ("atlas",   AssetCategory.TEXTURE, TextureAtlas.class,Ext.ATLAS),
 
     /* DATA ------------------------------------------------------- */

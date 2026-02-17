@@ -1,14 +1,13 @@
 package com.gwngames.core.base.init;
 
+import com.gwngames.DefaultModule;
+import com.gwngames.core.CoreComponent;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.base.cfg.IClassLoader;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseTest;
-import com.gwngames.core.base.cfg.ModuleClassLoader;
-import com.gwngames.core.data.ComponentNames;
-import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.PlatformNames;
 import com.gwngames.core.util.ClassUtils;
+import com.gwngames.starter.Platform;
 import org.junit.jupiter.api.Assertions;
 
 import java.util.List;
@@ -32,15 +31,15 @@ public class InterfaceInitAnnotationComplianceTest extends BaseTest {
             Init init = IClassLoader.resolvedInit(c);
 
             Assertions.assertEquals(
-                ModuleNames.INTERFACE, init.module(),
+                DefaultModule.INTERFACE, init.module(),
                 c + " must inherit module=INTERFACE (directly or via parent)");
 
             Assertions.assertNotEquals(
-                ComponentNames.NONE, init.component(),
+                CoreComponent.NONE, init.component(),
                 c + " must declare/inherit a non-NONE component");
 
             Assertions.assertEquals(
-                PlatformNames.ALL, init.platform(),
+                Platform.ALL, init.platform(),
                 c + " must not override platform at interface level");
 
             checked++;

@@ -1,17 +1,19 @@
 package com.gwngames.core.event.base;
 
-import com.badlogic.gdx.utils.Array;
+import com.gwngames.core.CoreModule;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.event.IEvent;
 import com.gwngames.core.api.event.IMacroEvent;
 import com.gwngames.core.base.BaseComponent;
-import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.util.StringUtils;
 
-@Init(module = ModuleNames.CORE)
+import java.util.ArrayList;
+import java.util.List;
+
+@Init(module = CoreModule.CORE)
 public class MacroEvent extends BaseComponent implements IMacroEvent {
     private String id;
-    private final Array<IEvent> events = new Array<>();
+    private final List<IEvent> events = new ArrayList<>();
 
     @Override
     public void addEvent(IEvent event) {
@@ -20,7 +22,7 @@ public class MacroEvent extends BaseComponent implements IMacroEvent {
     }
 
     @Override
-    public Array<IEvent> getEvents() { return events; }
+    public List<IEvent> getEvents() { return events; }
 
     @Override
     public String getId() {

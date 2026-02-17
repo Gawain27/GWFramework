@@ -1,6 +1,6 @@
 package com.gwngames.game.data.render;
 
-import com.gwngames.game.api.render.IRenderPhase;package com.gwngames.core.api.render;
+import com.gwngames.game.api.render.IRenderPhase;
 
 /**
  * High-level rendering buckets. The composer uses these to produce a deterministic order.

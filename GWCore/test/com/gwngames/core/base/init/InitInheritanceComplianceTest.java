@@ -1,11 +1,11 @@
 package com.gwngames.core.base.init;
 
+import com.gwngames.DefaultModule;
+import com.gwngames.core.CoreComponent;
 import com.gwngames.core.api.base.cfg.IClassLoader;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseTest;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
-import com.gwngames.core.data.ComponentNames;
-import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.util.ClassUtils;
 import org.junit.jupiter.api.Assertions;
 
@@ -39,18 +39,18 @@ public final class InitInheritanceComplianceTest extends BaseTest {
                 () -> err("resolvedInit returned null", type));
 
             /* ---- Rule #1: no sentinel values may survive ---------------- */
-            Assertions.assertNotEquals(ComponentNames.NONE, merged.component(),
+            Assertions.assertNotEquals(CoreComponent.NONE, merged.component(),
                 () -> err("component() still NONE", type));
 
-            Assertions.assertNotEquals(ModuleNames.UNIMPLEMENTED, merged.module(),
+            Assertions.assertNotEquals(DefaultModule.UNIMPLEMENTED, merged.module(),
                 () -> err("module() still UNIMPLEMENTED", type));
 
             /* ---- Rule #2 & #3: INTERFACE only for interfaces ------------ */
             if (type.isInterface()) {
-                Assertions.assertEquals(ModuleNames.INTERFACE, merged.module(),
+                Assertions.assertEquals(DefaultModule.INTERFACE, merged.module(),
                     () -> err("interfaces must resolve to module = INTERFACE", type));
             } else {
-                Assertions.assertNotEquals(ModuleNames.INTERFACE, merged.module(),
+                Assertions.assertNotEquals(DefaultModule.INTERFACE, merged.module(),
                     () -> err("concrete classes must NOT resolve to INTERFACE", type));
             }
         }

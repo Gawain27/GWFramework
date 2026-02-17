@@ -132,8 +132,9 @@ tasks.register('resetAssetHashes') {
       if (!propsFile.exists()) return
 
       def original = propsFile.getText('UTF-8')
-      def updated = original.replaceAll(/(?m)^(\s*[A-Za-z0-9_.-]+_hash)\s*=\s*([^\r\n#]*)(\s*(#.*)?)$/) { all, key, val, tail ->
-        "${key}=0${tail ?: ''}"
+      def updated = original.replaceAll(/(?m)^(\s*[A-Za-z0-9_.-]+_hash)\s*=\s*([^\r\n#]*)(\s*(#.*)?)$/) {
+        all, key, val, tail, comment ->
+          "${key}=0${tail ?: ''}"
       }
 
       if (updated != original) {

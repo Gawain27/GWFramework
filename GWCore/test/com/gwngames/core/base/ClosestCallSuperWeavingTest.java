@@ -1,10 +1,11 @@
 package com.gwngames.core.base;
 
+import com.gwngames.DefaultModule;
+import com.gwngames.core.CoreComponent;
+import com.gwngames.core.CoreModule;
+import com.gwngames.core.CoreSubComponent;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.data.ComponentNames;
-import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.util.ClosestScan;
 import com.gwngames.core.util.ClosestWeaver;
 
@@ -73,12 +74,12 @@ public class ClosestCallSuperWeavingTest extends BaseTest {
 
     /* ======================= Fixtures ======================= */
 
-    @Init(component = ComponentNames.POPPO, module = ModuleNames.INTERFACE)
+    @Init(component = CoreComponent.POPPO, module = DefaultModule.INTERFACE)
     public interface IPoppo extends IBaseComp {}
     /**
      * Lower implementation (the "real" super after weaving).
      */
-    @Init(subComp = SubComponentNames.NONE, module = ModuleNames.CORE)
+    @Init(subComp = CoreSubComponent.NONE, module = CoreModule.CORE)
     public static class PippoLower extends BaseComponent implements IPoppo {
         protected String who() { return "LOWER"; }
         protected int    sum(int a, int b) { return a + b; }
@@ -90,7 +91,7 @@ public class ClosestCallSuperWeavingTest extends BaseTest {
      * Higher implementation extending ClosestComponent at compile-time.
      * The loader rewrites its super to PippoLower and rewrites the marker calls.
      */
-    @Init(subComp = SubComponentNames.NONE, module = ModuleNames.TEST)
+    @Init(subComp = CoreSubComponent.NONE, module = DefaultModule.TEST)
     public static class PippoHigher extends ClosestComponent implements IPoppo{
         protected String who() {
             // Should be rewritten to invokespecial PippoLower.who()

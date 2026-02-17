@@ -1,17 +1,17 @@
 package com.gwngames.core.build.monitor.view;
 
+import com.gwngames.core.CoreModule;
+import com.gwngames.core.CoreSubComponent;
 import com.gwngames.core.api.base.monitor.IDashboardItem;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.build.monitor.BaseDashboardContent;
 
 import com.gwngames.core.base.log.LogBus;
-import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.util.StringUtils;
 
 /** Lists registered components with an error counter badge. */
-@Init(module = ModuleNames.CORE, subComp = SubComponentNames.DASHBOARD_LOGS_COMPONENT)
+@Init(module = CoreModule.CORE, subComp = CoreSubComponent.DASHBOARD_LOGS_COMPONENT)
 public class ComponentContent extends BaseDashboardContent<BaseComponent> {
 
     @Override

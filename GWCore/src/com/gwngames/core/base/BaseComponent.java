@@ -1,5 +1,6 @@
 package com.gwngames.core.base;
 
+import com.gwngames.core.CoreSubComponent;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.base.cfg.IClassLoader;
 import com.gwngames.core.api.base.monitor.IDashboardItem;
@@ -10,7 +11,6 @@ import com.gwngames.core.base.cfg.ModuleClassLoader;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.base.log.LogBus;
 import com.gwngames.core.data.LogFiles;
-import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.util.ClassUtils;
 import com.gwngames.core.util.ComponentUtils;
 import org.jetbrains.annotations.NotNull;
@@ -68,20 +68,20 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem<BaseCom
     /* ===================== Public lookup helpers ===================== */
 
     public static <T extends IBaseComp> T getInstance(Class<T> type) {
-        return getInstance(type, SubComponentNames.NONE, false);
+        return getInstance(type, CoreSubComponent.NONE, false);
     }
 
-    public static <T extends IBaseComp> T getInstance(Class<T> type, SubComponentNames sub) {
+    public static <T extends IBaseComp> T getInstance(Class<T> type, String sub) {
         return getInstance(type, sub, false);
     }
 
     public static <T extends IBaseComp> T getInstance(Class<T> type, boolean fresh) {
-        return getInstance(type, SubComponentNames.NONE, fresh);
+        return getInstance(type, CoreSubComponent.NONE, fresh);
     }
 
     @SuppressWarnings("unchecked")
     public static <T extends IBaseComp> T getInstance(Class<T> type,
-                                                      SubComponentNames sub,
+                                                      String sub,
                                                       boolean fresh) {
         if (!fresh) {
             return (T) INSTANCES.computeIfAbsent(cacheKey(type, sub),
@@ -92,11 +92,11 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem<BaseCom
 
     /* ================= instantiation & @Inject wiring ================= */
 
-    private static <T extends IBaseComp> T createAndInject(Class<T> iface, SubComponentNames sub) {
+    private static <T extends IBaseComp> T createAndInject(Class<T> iface, String sub) {
         Init meta = IClassLoader.resolvedInit(iface);
 
         ModuleClassLoader loader = ModuleClassLoader.getInstance();
-        T obj = (sub == SubComponentNames.NONE)
+        T obj = (sub.equals(CoreSubComponent.NONE))
             ? loader.tryCreate(meta.component())
             : loader.tryCreate(meta.component(), sub);
         if (obj == null)
@@ -235,24 +235,24 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem<BaseCom
 
     @NotNull
     private static Supplier<IBaseComp> getIBaseCompSupplier(Inject inj, Class<IBaseComp> depType) {
-        SubComponentNames sub = inj.subComp();
+        String sub = inj.subComp();
         return () -> {
             if (inj.createNew()) {
-                if (sub != SubComponentNames.NONE)
+                if (!sub.equals(CoreSubComponent.NONE))
                     return ModuleClassLoader.getInstance().tryCreate(
                         depType.getAnnotation(Init.class).component(), sub);
                 return ModuleClassLoader.getInstance().tryCreate(
                     depType.getAnnotation(Init.class).component());
             }
-            return sub == SubComponentNames.NONE
+            return sub.equals(CoreSubComponent.NONE)
                 ? getInstance(depType)
                 : getInstance(depType, sub);
         };
     }
 
 
-    private static String cacheKey(Class<?> t, SubComponentNames sub) {
-        return t.getName() + '#' + sub.name();
+    private static String cacheKey(Class<?> t, String sub) {
+        return t.getName() + '#' + sub;
     }
 
     public static Collection<IBaseComp> allCachedInstances() {

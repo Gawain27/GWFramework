@@ -1,12 +1,12 @@
 package com.gwngames.core.base.init;
 
+import com.gwngames.DefaultModule;
+import com.gwngames.core.CoreSubComponent;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.base.cfg.IClassLoader;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseTest;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
-import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.SubComponentNames;
 import org.junit.jupiter.api.Assertions;
 
 import java.lang.reflect.Field;
@@ -46,12 +46,12 @@ public class SubComponentForceDefinitionTest extends BaseTest {
 
             // if interface extends IBaseComp  -> module must be INTERFACE
             if (extendsBase) {
-                Assertions.assertEquals(ModuleNames.INTERFACE, an.module(),
+                Assertions.assertEquals(DefaultModule.INTERFACE, an.module(),
                     "Interface "+iface.getSimpleName()+" extends IBaseComp but module!=INTERFACE");
             }
 
             // if annotation says INTERFACE    -> interface must extend IBaseComp
-            if (an.module() == ModuleNames.INTERFACE) {
+            if (an.module().equals(DefaultModule.INTERFACE)) {
                 Assertions.assertTrue(extendsBase,
                     "Interface "+iface.getSimpleName()+" has module=INTERFACE but does not extend IBaseComp");
             }
@@ -74,7 +74,7 @@ public class SubComponentForceDefinitionTest extends BaseTest {
                 Assertions.assertNotNull(implAnn,
                     "Concrete "+impl.getSimpleName()+" missing @Init");
 
-                Assertions.assertNotEquals(SubComponentNames.NONE, implAnn.subComp(),
+                Assertions.assertNotEquals(CoreSubComponent.NONE, implAnn.subComp(),
                     "Concrete "+impl.getSimpleName()+" must define subComp (interface "
                         +iface.getSimpleName()+")");
             }

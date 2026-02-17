@@ -5,7 +5,6 @@ import com.badlogic.gdx.Input.*;
 import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.input.NativeInputConfiguration;
 import com.gwngames.core.api.event.input.IInputEvent;
-import com.gwngames.core.api.input.*;
 import com.gwngames.core.base.BaseTest;
 import com.gwngames.core.event.input.ButtonEvent;
 import com.gwngames.core.input.adapter.KeyboardInputAdapter;

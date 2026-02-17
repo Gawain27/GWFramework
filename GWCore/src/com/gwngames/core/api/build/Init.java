@@ -1,11 +1,8 @@
 package com.gwngames.core.api.build;
 
+import com.gwngames.DefaultModule;
 import com.gwngames.core.CoreComponent;
 import com.gwngames.core.CoreSubComponent;
-import com.gwngames.core.data.ComponentNames;
-import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.PlatformNames;
-import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.starter.Platform;
 
 import java.lang.annotation.*;
@@ -14,7 +11,7 @@ import java.lang.annotation.*;
 @Target(ElementType.TYPE)
 public @interface Init {
     /** The module (INTERFACE for interfaces). */
-    ModuleNames module() default ModuleNames.UNIMPLEMENTED;
+    String module() default DefaultModule.UNIMPLEMENTED;
 
     /** Component this class/interface belongs to. */
     String component() default CoreComponent.NONE;

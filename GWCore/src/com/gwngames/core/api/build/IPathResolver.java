@@ -1,17 +1,16 @@
 package com.gwngames.core.api.build;
 
+import com.gwngames.DefaultModule;
+import com.gwngames.core.CoreComponent;
 import com.gwngames.core.api.base.IBaseComp;
-import com.gwngames.core.data.ComponentNames;
-import com.gwngames.core.data.ModuleNames;
 
 import java.nio.file.Path;
-import java.util.Optional;
 
 /**
  * Resolves commonly used filesystem paths for the running application.
  * All returned paths are absolute and normalized.
  */
-@Init(component = ComponentNames.PATH_RESOLVER, module = ModuleNames.INTERFACE)
+@Init(component = CoreComponent.PATH_RESOLVER, module = DefaultModule.INTERFACE)
 public interface IPathResolver extends IBaseComp {
     default Path assetsDir(){
      return execDir().getParent().resolve("data").resolve("assets").normalize();

@@ -1,16 +1,16 @@
 package com.gwngames.core.api.event;
 
+import com.gwngames.DefaultModule;
+import com.gwngames.core.CoreComponent;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.event.trigger.IEventTrigger;
 import com.gwngames.core.api.ex.EventException;
 import com.gwngames.core.base.log.FileLogger;
-import com.gwngames.core.data.ComponentNames;
-import com.gwngames.core.data.ModuleNames;
 
 import java.util.List;
 
-@Init(module = ModuleNames.INTERFACE, component = ComponentNames.MASTER_EVENT_QUEUE)
+@Init(module = DefaultModule.INTERFACE, component = CoreComponent.MASTER_EVENT_QUEUE)
 public interface IMasterEventQueue extends IBaseComp {
     void registerQueue(IEventQueue q);
 

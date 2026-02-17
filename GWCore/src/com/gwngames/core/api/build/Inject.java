@@ -1,7 +1,7 @@
 package com.gwngames.core.api.build;
 
+import com.gwngames.core.CoreSubComponent;
 import com.gwngames.core.api.base.IBaseComp;
-import com.gwngames.core.data.SubComponentNames;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -24,5 +24,5 @@ public @interface Inject {
     /** If true, create a new temporary comp every time annotated component is injected */
     boolean createNew() default false;
     /** Specify the sub component, if component has multiple */
-    SubComponentNames subComp() default SubComponentNames.NONE;
+    String subComp() default CoreSubComponent.NONE;
 }

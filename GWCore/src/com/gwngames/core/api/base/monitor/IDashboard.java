@@ -1,8 +1,8 @@
 package com.gwngames.core.api.base.monitor;
 
+import com.gwngames.DefaultModule;
+import com.gwngames.core.CoreComponent;
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.data.ComponentNames;
-import com.gwngames.core.data.ModuleNames;
 
 import java.io.InputStream;
 import java.util.List;
@@ -12,7 +12,7 @@ import java.util.List;
  * concrete implementation also hosts the HTTP endpoint and renders the page,
  * but this interface is kept minimal so tests can replace it with a stub.
  */
-@Init(module = ModuleNames.INTERFACE, component = ComponentNames.DASHBOARD)
+@Init(module = DefaultModule.INTERFACE, component = CoreComponent.DASHBOARD)
 public non-sealed interface IDashboard extends IDashboardNode {
 
     void maybeStart();
@@ -22,4 +22,6 @@ public non-sealed interface IDashboard extends IDashboardNode {
     void shutdown();
 
     InputStream renderBoard();
+
+    String prepareCss();
 }

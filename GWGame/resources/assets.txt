@@ -1,4 +1,6 @@
+META-INF/services/com.gwngames.core.api.plugin.TestEnvironmentPlugin.txt
 assets.txt
+css/dashboard-dark.css
 koalio-single.png
 koalio.png
 level1.tmx

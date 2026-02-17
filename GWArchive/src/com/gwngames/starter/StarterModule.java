@@ -1,28 +1,17 @@
 package com.gwngames.starter;
 
+import com.gwngames.catalog.ModuleCatalog;
+import com.gwngames.catalog.ModulePriorities;
+
 /**
  * Module identifiers used for wiring/overrides and priority-based resolution.
  */
-public enum StarterModule {
+@ModulePriorities({
+    @ModulePriorities.Entry(id = "starter", priority = 999),
+})
+@ModuleCatalog
+public final class StarterModule {
+    private StarterModule() {}
 
-    // ---------------------------------------------------------------------
-    // Runtime / launcher
-    // ---------------------------------------------------------------------
-    STARTER("Starter", 1000);
-
-    private final String moduleName;
-    private final int modulePriority;
-
-    StarterModule(String moduleName, int modulePriority) {
-        this.moduleName = moduleName;
-        this.modulePriority = modulePriority;
-    }
-
-    public String getName() {
-        return moduleName;
-    }
-
-    public int getPriority() {
-        return modulePriority;
-    }
+    public static final String STARTER = "starter";
 }

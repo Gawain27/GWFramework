@@ -1,6 +1,5 @@
 package com.gwngames.core.input;
 
-import com.gwngames.core.api.input.*;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.BaseTest;
 import com.gwngames.core.util.Cdi;

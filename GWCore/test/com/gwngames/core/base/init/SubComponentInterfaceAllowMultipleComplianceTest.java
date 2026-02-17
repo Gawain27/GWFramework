@@ -1,8 +1,8 @@
 package com.gwngames.core.base.init;
 
+import com.gwngames.core.CoreSubComponent;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseTest;
-import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.util.ClassUtils;
 import org.junit.jupiter.api.Assertions;
 
@@ -20,7 +20,7 @@ final class SubComponentInterfaceAllowMultipleComplianceTest extends BaseTest {
 
             /* only interested in multi-sub-component concretes */
             if (concrete.isInterface()) return;
-            if (ann == null || ann.subComp() == SubComponentNames.NONE) return;
+            if (ann == null || ann.subComp() == CoreSubComponent.NONE) return;
 
             boolean ok = hasAllowMultipleInterface(concrete);
 

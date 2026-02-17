@@ -1,6 +1,7 @@
 package com.gwngames.starter.launcher;
 
 import com.badlogic.gdx.Application;
+import com.gwngames.core.CoreComponent;
 import com.gwngames.core.api.base.cfg.IConfig;
 import com.gwngames.core.api.base.cfg.IContext;
 import com.gwngames.core.api.base.monitor.IDashboard;
@@ -10,15 +11,14 @@ import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
 import com.gwngames.core.base.log.FileLogger;
-import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.LogFiles;
-import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.PlatformNames;
+import com.gwngames.starter.Platform;
+import com.gwngames.starter.StarterModule;
 import com.gwngames.starter.StartupHelper;
 import com.gwngames.starter.build.ILauncher;
 import com.gwngames.starter.build.ILauncherMaster;
 
-@Init(module = ModuleNames.STARTER)
+@Init(module = StarterModule.STARTER)
 public class LauncherMaster extends BaseComponent implements ILauncherMaster {
 
     private static final Application.ApplicationType platformDetected = ILauncherMaster.detectPlatform();
@@ -70,10 +70,10 @@ public class LauncherMaster extends BaseComponent implements ILauncherMaster {
 
     public static ILauncher getNewLauncher() {
         return switch (platformDetected) {
-            case Android -> loader.tryCreate(ComponentNames.LAUNCHER, PlatformNames.ANDROID);
-            case iOS     -> loader.tryCreate(ComponentNames.LAUNCHER, PlatformNames.IOS);
-            case Desktop -> loader.tryCreate(ComponentNames.LAUNCHER, PlatformNames.DESKTOP);
-            case WebGL   -> loader.tryCreate(ComponentNames.LAUNCHER, PlatformNames.WEB);
+            case Android -> loader.tryCreate(CoreComponent.LAUNCHER, Platform.ANDROID);
+            case iOS     -> loader.tryCreate(CoreComponent.LAUNCHER, Platform.IOS);
+            case Desktop -> loader.tryCreate(CoreComponent.LAUNCHER, Platform.DESKTOP);
+            case WebGL   -> loader.tryCreate(CoreComponent.LAUNCHER, Platform.WEB);
             default      -> throw new IllegalStateException("Unknown platform detected");
         };
     }

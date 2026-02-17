@@ -1,8 +1,6 @@
 package com.gwngames.core.build.monitor;
 
-import com.badlogic.gdx.files.FileHandle;
-import com.gwngames.assets.css.GwcoreCssAssets;
-import com.gwngames.core.api.asset.IAssetManager;
+import com.gwngames.core.CoreModule;
 import com.gwngames.core.api.base.cfg.IConfig;
 import com.gwngames.core.api.base.monitor.*;
 import com.gwngames.core.api.build.Init;
@@ -11,7 +9,6 @@ import com.gwngames.core.api.build.PostInject;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.LogFiles;
-import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.cfg.BuildParameters;
 import io.javalin.Javalin;
 
@@ -21,14 +18,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 
-@Init(module = ModuleNames.CORE)
+@Init(module = CoreModule.CORE)
 public class CoreDashboard extends BaseComponent implements IDashboard, AutoCloseable {
     private final FileLogger log = FileLogger.get(LogFiles.MONITOR);
 
     @Inject
     private IConfig config;
-    @Inject
-    private IAssetManager assetManager;
 
     /**
      * All dashboard content blocks (boxes)
@@ -107,9 +102,13 @@ public class CoreDashboard extends BaseComponent implements IDashboard, AutoClos
         return new ByteArrayInputStream(html.getBytes(StandardCharsets.UTF_8));
     }
 
+    @Override
+    public String prepareCss(){
+        throw new IllegalStateException("No dashboard CSS defined for the project");
+    }
+
     private String buildHtml() {
-        FileHandle CSSFile = assetManager.get(GwcoreCssAssets.DASHBOARD_DARK_CSS);
-        String CSS = CSSFile.readString();
+
         StringBuilder sb = new StringBuilder();
         sb.append("""
             <!DOCTYPE html>
@@ -120,7 +119,7 @@ public class CoreDashboard extends BaseComponent implements IDashboard, AutoClos
               <title>GW Dashboard</title>
               <style>
             """)
-            .append(CSS)
+            .append(prepareCss())
             .append("""
               </style>
             </head>

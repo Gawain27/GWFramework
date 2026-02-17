@@ -1,13 +1,14 @@
 package com.gwngames.starter.build;
 
 import com.badlogic.gdx.Application;
+import com.gwngames.DefaultModule;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.data.ComponentNames;
-import com.gwngames.core.data.ModuleNames;
+
+import com.gwngames.starter.StarterComponent;
 import com.gwngames.starter.launcher.LauncherMaster;
 
-@Init(component = ComponentNames.LAUNCHER_MASTER, module = ModuleNames.INTERFACE)
+@Init(component = StarterComponent.LAUNCHER_MASTER, module = DefaultModule.INTERFACE)
 public interface ILauncherMaster extends IBaseComp {
     void start(String ...args);
 

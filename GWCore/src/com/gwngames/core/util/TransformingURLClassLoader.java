@@ -1,11 +1,10 @@
 package com.gwngames.core.util;
 
+import com.gwngames.core.CoreSubComponent;
 import com.gwngames.core.api.base.cfg.IClassLoader;
 import com.gwngames.core.base.log.FileLogger;
-import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.LogFiles;
-import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.SubComponentNames;
+import com.gwngames.core.generated.ModulePriorityRegistry;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -93,19 +92,17 @@ public class TransformingURLClassLoader extends URLClassLoader {
                 // resolve comp/sub/prio without loading the class
                 String moduleSimple = scan.initModuleEnumSimple()
                     .orElseThrow(() -> new IllegalStateException("Missing @Init.module() on " + scan.thisInternalName()));
-                int currentPrio = ModuleNames.valueOf(moduleSimple).getPriority();
+                int currentPrio = ModulePriorityRegistry.priorityOf(moduleSimple);
 
-                ComponentNames comp = scan.hintComponentEnumSimple()
-                    .map(ComponentNames::valueOf)
-                    .or(() -> scan.initComponentEnumSimpleIfNotAuto().map(ComponentNames::valueOf))
+                String comp = scan.hintComponentEnumSimple()
+                    .or(() -> scan.initComponentEnumSimpleIfNotAuto().map(e -> e+" ".trim()))
                     .orElseThrow(() -> new IllegalStateException(
                         "Cannot resolve component for " + scan.thisInternalName()
                             + " — set @ClosestOver(component=...) or non-AUTO @Init(component=...)"));
 
-                SubComponentNames sub = scan.hintSubEnumSimple()
-                    .map(SubComponentNames::valueOf)
-                    .or(() -> scan.initSubEnumSimpleIfNotAuto().map(SubComponentNames::valueOf))
-                    .orElse(SubComponentNames.NONE);
+                String sub = scan.hintSubEnumSimple()
+                    .or(() -> scan.initSubEnumSimpleIfNotAuto().map(e -> e+" ".trim()))
+                    .orElse(CoreSubComponent.NONE);
 
                 Class<?> lower = gw.findNextLowerFor(comp, sub, currentPrio);
                 String lowerInt = lower.getName().replace('.', '/');

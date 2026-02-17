@@ -1,12 +1,12 @@
 package com.gwngames.core.api.build;
 
+import com.gwngames.DefaultModule;
+import com.gwngames.core.CoreComponent;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.build.check.StartupCheckImpl;
-import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.LogFiles;
-import com.gwngames.core.data.ModuleNames;
 
 import java.util.List;
 
@@ -15,7 +15,7 @@ import java.util.List;
  *
  * @author samlam
  * */
-@Init(component = ComponentNames.SYSTEM, module = ModuleNames.INTERFACE)
+@Init(component = CoreComponent.SYSTEM, module = DefaultModule.INTERFACE)
 public interface ISystem extends IBaseComp {
     FileLogger log = FileLogger.get(LogFiles.SYSTEM);
 
@@ -23,7 +23,7 @@ public interface ISystem extends IBaseComp {
         List<StartupCheckImpl> checks;
         ModuleClassLoader classLoader = ModuleClassLoader.getInstance();
 
-        checks = classLoader.tryCreateAll(ComponentNames.STARTUP_CHECK);
+        checks = classLoader.tryCreateAll(CoreComponent.STARTUP_CHECK);
 
         return checks;
     }

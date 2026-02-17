@@ -1,0 +1,75 @@
+package com.gwngames.game.input.adapter;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.InputProcessor;
+import com.badlogic.gdx.math.Vector2;
+import com.gwngames.core.api.build.Init;
+import com.gwngames.game.GameComponent;
+import com.gwngames.game.GameModule;
+import com.gwngames.game.api.input.ITouchAdapter;
+import com.gwngames.game.api.input.ITouchIdentifier;
+import com.gwngames.game.input.BaseInputAdapter;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Touch-screen adapter – keeps one identifier per pointer index so that
+ * equality & history work as expected across frames.
+ */
+@Init(module = GameModule.GAME)
+public class TouchInputAdapter extends BaseInputAdapter implements ITouchAdapter, InputProcessor {
+    private final Map<Integer, ITouchIdentifier> pointerId = new HashMap<>();
+
+    @Override public void start() {
+        Gdx.input.setInputProcessor(this);
+    }
+
+    @Override
+    public void stop() {
+        if (Gdx.input.getInputProcessor() == this)
+            Gdx.input.setInputProcessor(null);
+    }
+
+    @Override
+    public String getAdapterName() {
+        return "Touchscreen";
+    }
+
+    /* ───────────────────── touch events ───────────────────── */
+
+    @Override
+    public boolean touchDown(int sx, int sy, int pointer, int button) {
+        inputManager.emitTouchDown(this, id(pointer), new Vector2(sx, sy), 1f);
+        return false;
+    }
+
+    @Override
+    public boolean touchUp(int sx, int sy, int pointer, int button) {
+        inputManager.emitTouchUp(this, id(pointer), new Vector2(sx, sy), 0f);
+        return false;
+    }
+
+    @Override
+    public boolean touchDragged(int sx, int sy, int pointer) {
+        inputManager.emitTouchDrag(this, id(pointer), new Vector2(sx, sy), 1f);
+        return false;
+    }
+
+    /* unused InputProcessor parts ------------------------------------- */
+    @Override public boolean keyDown(int keycode)            { return false; }
+    @Override public boolean keyUp(int keycode)              { return false; }
+    @Override public boolean keyTyped(char c)                { return false; }
+    @Override public boolean touchCancelled(int x,int y,int p,int b){return false;}
+    @Override public boolean mouseMoved(int x,int y)         { return false; }
+    @Override public boolean scrolled(float dx,float dy)     { return false; }
+
+    /* helper – returns (and caches) the identifier for a pointer */
+    private ITouchIdentifier id(int pointer) {
+        // TODO map screen_zone -> recordWhilePressed
+        ITouchIdentifier id = loader.tryCreate(GameComponent.TOUCH_INPUT);
+        id.setPointer(pointer);
+        id.setRecordWhilePressed(true);
+        return pointerId.computeIfAbsent(pointer, p -> id);
+    }
+}

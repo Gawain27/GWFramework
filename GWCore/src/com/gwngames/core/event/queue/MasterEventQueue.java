@@ -1,5 +1,7 @@
 package com.gwngames.core.event.queue;
 
+import com.gwngames.core.CoreModule;
+import com.gwngames.core.CoreSubComponent;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.api.build.PostInject;
@@ -10,8 +12,6 @@ import com.gwngames.core.api.ex.UnknownEventException;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.LogFiles;
-import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.event.base.AbstractEvent;
 import com.gwngames.core.event.base.MacroEvent;
 import com.gwngames.core.event.cond.base.ConditionPolicy;
@@ -22,12 +22,12 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 
-@Init(module = ModuleNames.CORE)
+@Init(module = CoreModule.CORE)
 public class MasterEventQueue extends BaseComponent implements IMasterEventQueue {
     private static final FileLogger log = FileLogger.get(LogFiles.EVENT);
 
     // auto starts the logging process
-    @Inject(subComp = SubComponentNames.EVENT_STATUS_LOGGER)
+    @Inject(subComp = CoreSubComponent.EVENT_STATUS_LOGGER)
     private IEventLogger eventStatusLogger;
     @Inject(loadAll = true)
     private List<IEventQueue> concreteSubQueues;

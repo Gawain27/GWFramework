@@ -1,10 +1,10 @@
 package com.gwngames.core.base.init;
 
+import com.gwngames.DefaultModule;
+import com.gwngames.core.CoreComponent;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseTest;
-import com.gwngames.core.data.ComponentNames;
-import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.util.ClassUtils;
 import org.junit.jupiter.api.Assertions;
 
@@ -17,7 +17,7 @@ import java.util.*;
  * <ul>
  *     <li>Must carry an {@link Init} annotation.</li>
  *     <li>{@link Init#component()} must be <em>unset</em> (i.e. {@code NONE}).</li>
- *     <li>{@link Init#module()} cannot be {@link ModuleNames#INTERFACE}.</li>
+ *     <li>{@link Init#module()} cannot be {@link DefaultModule#INTERFACE}.</li>
  * </ul>
  */
 public class ConcreteImplementationAnnotationComplianceTest extends BaseTest {
@@ -31,7 +31,7 @@ public class ConcreteImplementationAnnotationComplianceTest extends BaseTest {
         for (Class<?> c : annotated) {
             if (!IBaseComp.class.isAssignableFrom(c)) continue; // skip unrelated
             Init ann = c.getAnnotation(Init.class);
-            if (c.isInterface() && ann.module() == ModuleNames.INTERFACE) {
+            if (c.isInterface() && ann.module().equals(DefaultModule.INTERFACE)) {
                 // ensure a list entry
                 ifaceImpls.computeIfAbsent(c, k -> new ArrayList<>());
             }
@@ -57,9 +57,9 @@ public class ConcreteImplementationAnnotationComplianceTest extends BaseTest {
 
                 Init ann = impl.getAnnotation(Init.class);
                 Assertions.assertNotNull(ann, impl.getName() + " must be annotated with @Init");
-                Assertions.assertEquals(ComponentNames.NONE, ann.component(),
+                Assertions.assertEquals(CoreComponent.NONE, ann.component(),
                     impl.getName() + ": concrete classes must not set component()");
-                Assertions.assertNotEquals(ModuleNames.INTERFACE, ann.module(),
+                Assertions.assertNotEquals(DefaultModule.INTERFACE, ann.module(),
                     impl.getName() + " must not declare module() = INTERFACE");
             }
         }

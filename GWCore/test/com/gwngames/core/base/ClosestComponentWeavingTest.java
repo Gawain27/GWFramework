@@ -1,10 +1,11 @@
 package com.gwngames.core.base;
 
+import com.gwngames.DefaultModule;
+import com.gwngames.core.CoreComponent;
+import com.gwngames.core.CoreModule;
+import com.gwngames.core.CoreSubComponent;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.data.ComponentNames;
-import com.gwngames.core.data.ModuleNames;
-import com.gwngames.core.data.SubComponentNames;
 import com.gwngames.core.util.ClosestScan;
 import com.gwngames.core.util.ClosestWeaver;
 
@@ -49,12 +50,12 @@ public class ClosestComponentWeavingTest extends BaseTest {
 
     /* ======================= Fixtures ======================= */
 
-    @Init(component = ComponentNames.PIPPO, module = ModuleNames.INTERFACE)
+    @Init(component = CoreComponent.PIPPO, module = DefaultModule.INTERFACE)
     public interface IPippo extends IBaseComp {}
     /**
      * Pretend "lower module" implementation. Its constructor calls a virtual method.
      */
-    @Init(subComp = SubComponentNames.NONE, module = ModuleNames.CORE)
+    @Init(subComp = CoreSubComponent.NONE, module = CoreModule.CORE)
     public static class PippoLower extends BaseComponent {
         private final String value;
         public PippoLower() {
@@ -71,7 +72,7 @@ public class ClosestComponentWeavingTest extends BaseTest {
      * Pretend "higher module" implementation. Compiles against ClosestComponent,
      * but the loader will rewrite its super to PippoLower.
      */
-    @Init(subComp = SubComponentNames.NONE, module = ModuleNames.TEST)
+    @Init(subComp = CoreSubComponent.NONE, module = DefaultModule.TEST)
     public static class PippoHigher extends ClosestComponent {
         // No @Override on purpose: ClosestComponent doesn't declare this method at compile time.
         protected String initValue() { return "HIGHER"; }

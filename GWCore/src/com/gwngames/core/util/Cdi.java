@@ -1,12 +1,12 @@
 package com.gwngames.core.util;
 
+import com.gwngames.core.CoreSubComponent;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.api.build.PostInject;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
-import com.gwngames.core.data.SubComponentNames;
 
 import java.lang.reflect.*;
 import java.util.Collections;
@@ -86,11 +86,11 @@ public final class Cdi {
                     throw new IllegalStateException("@Inject on non-IBaseComp field: " + f);
                 }
 
-                SubComponentNames sub = inj.subComp();
+                String sub = inj.subComp();
                 boolean newInstance = inj.createNew();
 
                 Object wired;
-                if (sub == SubComponentNames.NONE) {
+                if (sub == CoreSubComponent.NONE) {
                     wired = newInstance
                         ? BaseComponent.getInstance((Class<? extends IBaseComp>) fieldType, true)
                         : BaseComponent.getInstance((Class<? extends IBaseComp>) fieldType);

@@ -1,34 +1,29 @@
 package com.gwngames;
 
+import com.gwngames.catalog.ModuleCatalog;
+import com.gwngames.catalog.ModulePriorities;
+
 /**
  * Module identifiers used for wiring/overrides and priority-based resolution.
  */
-public enum DefaultModule {
+@ModulePriorities({
+    @ModulePriorities.Entry(id = "unimplemented", priority = 0),
+    @ModulePriorities.Entry(id = "interface", priority = 1),
+    @ModulePriorities.Entry(id = "test", priority = 9999)
+})
+@ModuleCatalog
+public final class DefaultModule {
+    private DefaultModule() {}
 
     // ---------------------------------------------------------------------
     // Special / framework meta
     // ---------------------------------------------------------------------
-    UNIMPLEMENTED("Unimplemented", 0),
-    INTERFACE("Interface", 1),
+    public static final String INTERFACE = "interface";
+    public static final String UNIMPLEMENTED = "unimplemented";
 
     // ---------------------------------------------------------------------
     // Testing
     // ---------------------------------------------------------------------
-    TEST("Test", 9999);
+    public static final String TEST = "test";
 
-    private final String moduleName;
-    private final int modulePriority;
-
-    DefaultModule(String moduleName, int modulePriority) {
-        this.moduleName = moduleName;
-        this.modulePriority = modulePriority;
-    }
-
-    public String getName() {
-        return moduleName;
-    }
-
-    public int getPriority() {
-        return modulePriority;
-    }
 }

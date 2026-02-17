@@ -1,17 +1,17 @@
 package com.gwngames.core.api.base.cfg;
 
+import com.gwngames.DefaultModule;
+import com.gwngames.core.CoreComponent;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.cfg.IParam;
-import com.gwngames.core.data.ComponentNames;
-import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.util.ParamRegistry;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-@Init(component = ComponentNames.CONFIGURATION, module = ModuleNames.INTERFACE)
+@Init(component = CoreComponent.CONFIGURATION, module = DefaultModule.INTERFACE)
 public interface IConfig extends IBaseComp {
     /** Loads parameters and eventually sets defaults.<br>
      * Implementations should call registerParameters() once with required defaults. */

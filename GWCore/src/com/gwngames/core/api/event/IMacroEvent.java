@@ -1,16 +1,17 @@
 package com.gwngames.core.api.event;
 
-import com.badlogic.gdx.utils.Array;
+import com.gwngames.DefaultModule;
+import com.gwngames.core.CoreComponent;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.data.ComponentNames;
-import com.gwngames.core.data.ModuleNames;
 
-@Init(module = ModuleNames.INTERFACE, component = ComponentNames.MACRO_EVENT, allowMultiple = true)
+import java.util.List;
+
+@Init(module = DefaultModule.INTERFACE, component = CoreComponent.MACRO_EVENT, allowMultiple = true)
 public interface IMacroEvent extends IBaseComp {
     void addEvent(IEvent event);
 
-    Array<IEvent> getEvents();
+    List<IEvent> getEvents();
     String getId();
 
     void setId(String id);

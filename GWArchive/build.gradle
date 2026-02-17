@@ -1,0 +1,23 @@
+// ---------------------------------------------------------------------
+// gwarchive/build.gradle : Level 0 library for global definitions
+// ---------------------------------------------------------------------
+
+ext.projectLevel = 0
+
+// This module generally doesn't have dependencies
+// It's just a storage for all the components/features implemented
+dependencies {
+}
+
+sourceSets {
+  main {
+    java.srcDirs = ['src']
+    resources.srcDirs = ['resources']
+  }
+  test {
+    java.srcDirs      = ['test']
+    resources.srcDirs = ['test-resources']
+    compileClasspath += sourceSets.main.output
+    runtimeClasspath += output + compileClasspath
+  }
+}

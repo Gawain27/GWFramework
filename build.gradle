@@ -163,4 +163,7 @@ tasks.register('refreshAssets') {
   enumTasks.each { it.mustRunAfter(tasks.named('resetAssetHashes')) }
 }
 
+tasks.withType(JavaCompile).configureEach {
+  options.compilerArgs += ['-Agw.init.strict=true']
+}
 println '✅  root build.gradle loaded – high-level tasks configured'

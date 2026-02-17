@@ -1,6 +1,6 @@
 package com.gwngames.game.data.render;
 
-package com.gwngames.core.api.render;
+import com.gwngames.game.api.render.IRenderPhase;package com.gwngames.core.api.render;
 
 /**
  * High-level rendering buckets. The composer uses these to produce a deterministic order.
@@ -9,7 +9,7 @@ package com.gwngames.core.api.render;
  * UI: screen-space UI<br>
  * DEBUG: overlays, debug primitives<br>
  */
-public enum RenderPhase implements  {
+public enum RenderPhase implements IRenderPhase {
     WORLD,
     UI,
     DEBUG

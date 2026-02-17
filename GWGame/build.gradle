@@ -17,6 +17,7 @@ dependencies {
   api "com.badlogicgames.gdx:gdx:$gdxVersion"
 
   implementation project(path: ':gwcore', configuration: 'testOutput')
+  annotationProcessor project(':gwcore')
 }
 
 sourceSets {

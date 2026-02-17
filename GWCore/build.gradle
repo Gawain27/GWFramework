@@ -2,12 +2,24 @@
 // gwcore/build.gradle : Level 1 library
 // ---------------------------------------------------------------------
 
+plugins {
+  id 'java-library'
+}
+
+java {
+  toolchain { languageVersion = JavaLanguageVersion.of(21) }
+}
+
 ext.projectLevel = 1
 
 // This module doesn't apply 'application'.
 // If gwcore has dependencies, list them here:
 dependencies {
   implementation project(path: ':gwarchive')
+
+  // AutoService registers the processor in META-INF/services
+  compileOnly 'com.google.auto.service:auto-service-annotations:1.1.1'
+  annotationProcessor 'com.google.auto.service:auto-service:1.1.1'
 
   implementation "org.slf4j:slf4j-api:2.0.12"
   implementation 'org.codehaus.groovy:groovy-json:3.0.19'

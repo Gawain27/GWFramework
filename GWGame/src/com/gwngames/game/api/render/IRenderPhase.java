@@ -1,4 +1,4 @@
 package com.gwngames.game.api.render;
 
-public class IRenderPhase {
+public interface IRenderPhase {
 }

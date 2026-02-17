@@ -1,9 +1,12 @@
 package com.gwngames.core.api.build;
 
+import com.gwngames.core.CoreComponent;
+import com.gwngames.core.CoreSubComponent;
 import com.gwngames.core.data.ComponentNames;
 import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.PlatformNames;
 import com.gwngames.core.data.SubComponentNames;
+import com.gwngames.starter.Platform;
 
 import java.lang.annotation.*;
 
@@ -14,10 +17,10 @@ public @interface Init {
     ModuleNames module() default ModuleNames.UNIMPLEMENTED;
 
     /** Component this class/interface belongs to. */
-    ComponentNames component() default ComponentNames.NONE;
+    String component() default CoreComponent.NONE;
 
     /** Platform hint (interfaces typically ALL). */
-    PlatformNames platform() default PlatformNames.ALL;
+    String platform() default Platform.ALL;
 
     /** Whether the interface admits multiple concrete implementations. */
     boolean allowMultiple() default false;
@@ -32,7 +35,7 @@ public @interface Init {
     boolean forceDefinition() default false;
 
     /** Sub-component id (if any). */
-    SubComponentNames subComp() default SubComponentNames.NONE;
+    String subComp() default CoreSubComponent.NONE;
 
     /**
      * If true on a **concrete class**, the instance must be obtained via

@@ -51,6 +51,7 @@ application {
 // ---------------------------------------------------------------------
 dependencies {
   implementation project(path: ':gwcore', configuration: 'testOutput')
+  annotationProcessor project(':gwcore')
 
   implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
   implementation "com.badlogicgames.gdx-controllers:gdx-controllers-desktop:$gdxControllersVersion"

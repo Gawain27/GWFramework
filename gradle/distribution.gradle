@@ -3,51 +3,61 @@
  * ========================================================================= */
 import groovy.json.JsonOutput
 import org.gradle.api.tasks.bundling.Compression
+
 import java.nio.file.Path as NioPath
 import java.nio.file.Paths
 
+/* =========================================================================
+ * Helpers
+ * ========================================================================= */
+static String normName(Object o) {
+  return o == null ? null : o.toString().trim().toLowerCase(Locale.ROOT)
+}
+
 /* ---------------- helper (needs buildVerOf from bump-version.gradle) -- */
 Provider<String> starterBuildVersion = project.provider { buildVerOf('gwstarter') }
-def jarTaskProviders = includedProjects.collect { it.tasks.named('jar') }
-def projectJarProviders = includedProjects
-        .findAll { it.name != 'gwstarter' }.collect { it.tasks.named('jar') }
+
+def jarTaskProviders     = includedProjects.collect { it.tasks.named('jar') }
+def projectJarProviders  = includedProjects.findAll { it.name != 'gwstarter' }.collect { it.tasks.named('jar') }
 
 /* ---------------- write config.json + unpack starter ZIP -------------- */
 tasks.register('injectProjectVersionIntoConfig') {
-    dependsOn jarTaskProviders
+  dependsOn jarTaskProviders
 
-    doLast {
-        File genDir = file("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin")
-        genDir.mkdirs()
-        File jsonFile = new File(genDir, 'config.json')
+  doLast {
+    File genDir   = file("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin")
+    genDir.mkdirs()
+    File jsonFile = new File(genDir, 'config.json')
 
-        List<Map> projectsJson = parsedConfig.projects.collect { Map p ->
-            [
-                    name : p.name,
-                    level: rootProject.projectLevels[p.name],
-                    jar  : "lib/${p.name}-${buildVerOf(p.name)}.jar",
-                    type : parsedConfig.gameType
-            ]
-        } + [
-                name : 'gwstarter',
-                level: rootProject.projectLevels['gwstarter'] ?: 99,
-                jar  : "lib/${configSet}-${projectVersion}-${starterBuildVersion.get()}.jar",
-                type : parsedConfig.gameType
-        ]
+    List<Map> projectsJson = (parsedConfig.projects ?: []).collect { Map p ->
+      String rawName = p.name as String
+      String name    = normName(rawName)               // ✅ normalize
+      [
+        name : name,
+        level: (rootProject.projectLevels[name] ?: rootProject.projectLevels[rawName] ?: 0),
+        jar  : "lib/${name}-${buildVerOf(name)}.jar",
+        type : parsedConfig.gameType
+      ]
+    } + [
+      name : 'gwstarter',
+      level: rootProject.projectLevels['gwstarter'] ?: 99,
+      jar  : "lib/${configSet}-${projectVersion}-${starterBuildVersion.get()}.jar",
+      type : parsedConfig.gameType
+    ]
 
-        Map json = [ gameType: parsedConfig.gameType, projects: projectsJson ]
-        jsonFile.text = JsonOutput.prettyPrint(JsonOutput.toJson(json))
-        println "📄  config.json written → $jsonFile"
-    }
+    Map json = [ gameType: parsedConfig.gameType, projects: projectsJson ]
+    jsonFile.text = JsonOutput.prettyPrint(JsonOutput.toJson(json))
+    println "📄  config.json written → $jsonFile"
+  }
 }
 
 /* =========================================================================
  * Merge every <subproject>/resources/ tree into a single folder and
  * produce one combined assets.txt, resolving clashes by projectLevel.
  *
- *  •  assetsFinalDir  (root gradle.properties) tells us *where* to copy
- *     relative to  build/generatedConfig/<configSet>-<version>/bin/
- *  •  ext.projectLevels  (set in dependency-graph.gradle) decides
+ *  •  assetsFinalDir (root gradle.properties) tells us *where* to copy
+ *     relative to build/generatedConfig/<configSet>-<version>/bin/
+ *  •  ext.projectLevels (set in dependency-graph.gradle) decides
  *     precedence — highest level wins.
  *  •  runs AFTER all individual assets.txt are written and AFTER the
  *     bin/ folder exists, but BEFORE we package up the distribution.
@@ -56,45 +66,50 @@ tasks.register('mergeAssets') {
   group       = 'distribution'
   description = 'Collect resources from all sub-projects into one folder with a unified assets.txt'
 
-  /* --- we need every sub-project’s assets.txt ready -------------------- */
   dependsOn includedProjects.collect { it.tasks.named('generateAssetsTxt') }
   dependsOn 'injectProjectVersionIntoConfig'   // guarantees binDir exists
 
   doLast {
     /* ---------- locate the final destination (handles .. and absolute) ---- */
     NioPath binPath   = file("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin").toPath()
-    String userDir = (rootProject.findProperty('assetsFinalDir') ?: 'assets').trim()
-    NioPath finalPath = (Paths.get(userDir).isAbsolute()      // absolute → use as-is
+    String userDir    = (rootProject.findProperty('assetsFinalDir') ?: 'assets').trim()
+    NioPath finalPath = (Paths.get(userDir).isAbsolute()
       ? Paths.get(userDir)
-      : binPath.resolve(userDir))          // relative → under bin
+      : binPath.resolve(userDir))
       .normalize()
-    File finalDir  = finalPath.toFile()
+
+    File finalDir = finalPath.toFile()
     finalDir.mkdirs()
 
     println "📦  Merging resources into → $finalDir"
 
-    /* ---------- pick one “winning” asset for every path -------------- */
+    /* ---------- pick one “winning” asset for every path ------------------ */
     Map<String, Map> chosen = [:]   // path → [level: int, src: File]
 
     includedProjects.each { Project p ->
-      int lvl = (rootProject.projectLevels[p.name] ?: 0) as int
+      // ✅ projectLevels is keyed by normalized project name
+      String key = normName(p.name)
+      int lvl = (rootProject.projectLevels[key] ?: rootProject.projectLevels[p.name] ?: 0) as int
+
       File txt = file("${p.projectDir}/resources/assets.txt")
       if (!txt.exists()) return
 
       txt.eachLine { String relPath ->
+        if (!relPath) return
         File cand = file("${p.projectDir}/resources/$relPath")
         if (!cand.exists()) return
+
         Map prev = chosen[relPath]
-        if (prev == null || lvl > prev.level) {
+        if (prev == null || lvl > (prev.level as int)) {
           chosen[relPath] = [ level: lvl, src: cand ]
         }
       }
     }
 
-    /* ---------- copy winners and build the combined manifest -------------- */
+    /* ---------- copy winners and build the combined manifest ------------- */
     chosen.each { String relPath, Map entry ->
       NioPath destPath = finalPath.resolve(relPath).normalize()
-      File dest     = destPath.toFile()
+      File dest = destPath.toFile()
       dest.parentFile.mkdirs()
       ant.copy(file: entry.src, tofile: dest, overwrite: true)
     }
@@ -108,21 +123,23 @@ tasks.register('mergeAssets') {
 
 /* ---------------- prepareDistribution  -------------------------------- */
 tasks.register('prepareDistribution', Copy) {
-    dependsOn project(':gwstarter').tasks.named('distZip'), 'injectProjectVersionIntoConfig'
-    dependsOn tasks.named('mergeAssets')
+  dependsOn project(':gwstarter').tasks.named('distZip'), 'injectProjectVersionIntoConfig'
+  dependsOn tasks.named('mergeAssets')
 
-    from zipTree(project(':gwstarter').layout.buildDirectory.file("distributions/gwstarter-${projectVersion}.zip"))
-    eachFile { FileCopyDetails fcd ->
-        String rootOld = "gwstarter-${projectVersion}"
-        String rootNew = "${configSet}-${projectVersion}"
-        if (fcd.path.startsWith(rootOld)) fcd.path = fcd.path.replaceFirst(rootOld, rootNew)
-        if (fcd.path ==~ /.*\/lib\/gwstarter-\d+\.jar$/) {
-            fcd.path = fcd.path.replaceFirst(/gwstarter-\d+\.jar/,
-                    "${configSet}-${projectVersion}-${starterBuildVersion.get()}.jar")
-        }
+  from zipTree(project(':gwstarter').layout.buildDirectory.file("distributions/gwstarter-${projectVersion}.zip"))
+  eachFile { FileCopyDetails fcd ->
+    String rootOld = "gwstarter-${projectVersion}"
+    String rootNew = "${configSet}-${projectVersion}"
+    if (fcd.path.startsWith(rootOld)) fcd.path = fcd.path.replaceFirst(rootOld, rootNew)
+
+    if (fcd.path ==~ /.*\/lib\/gwstarter-\d+\.jar$/) {
+      fcd.path = fcd.path.replaceFirst(/gwstarter-\d+\.jar/,
+        "${configSet}-${projectVersion}-${starterBuildVersion.get()}.jar")
     }
-    includeEmptyDirs = false
-    into "$buildDir/generatedConfig"
+  }
+
+  includeEmptyDirs = false
+  into "$buildDir/generatedConfig"
 }
 
 /* =========================================================================
@@ -135,11 +152,9 @@ tasks.register('copyModelData') {
   group       = 'distribution'
   description = 'Copy model data (maps/templates/worlds) for configSet projects into distribution data/model'
 
-  // Ensure distro skeleton exists
   dependsOn 'prepareDistribution'
 
   doLast {
-    // Distro root is: build/generatedConfig/<configSet>-<projectVersion>/
     File distroDir = file("$buildDir/generatedConfig/${configSet}-${projectVersion}")
     File modelOut  = new File(distroDir, "data/model")
     File mapsOut   = new File(modelOut, "maps")
@@ -150,14 +165,13 @@ tasks.register('copyModelData') {
     tempsOut.mkdirs()
     worldsOut.mkdirs()
 
-    // Only projects from the ACTIVE configSet
+    // ✅ normalize active project names (matches lowercase include strategy)
     List<String> activeProjects = (parsedConfig.projects ?: [])
-      .collect { it.name as String }
+      .collect { normName(it.name) }
       .findAll { it != null && !it.isBlank() }
 
     println "🧩  Copying model data for configSet='${configSet}': ${activeProjects}"
 
-    // Source root: <repoRoot>/model/<subproj>/(maps|templates|worlds)
     File modelSrcRoot = file("$rootDir/model")
     if (!modelSrcRoot.exists()) {
       println "⚠️  No model/ directory found at: $modelSrcRoot (skipping)"
@@ -173,32 +187,23 @@ tasks.register('copyModelData') {
         return
       }
 
-      // maps
       File srcMaps = new File(projRoot, "maps")
       if (srcMaps.exists()) {
-        ant.copy(todir: mapsOut, overwrite: true) {
-          fileset(dir: srcMaps)
-        }
+        ant.copy(todir: mapsOut, overwrite: true) { fileset(dir: srcMaps) }
         copiedCount++
         println "  ✅ maps      ← model/${projName}/maps"
       }
 
-      // templates
       File srcTemplates = new File(projRoot, "templates")
       if (srcTemplates.exists()) {
-        ant.copy(todir: tempsOut, overwrite: true) {
-          fileset(dir: srcTemplates)
-        }
+        ant.copy(todir: tempsOut, overwrite: true) { fileset(dir: srcTemplates) }
         copiedCount++
         println "  ✅ templates ← model/${projName}/templates"
       }
 
-      // worlds
       File srcWorlds = new File(projRoot, "worlds")
       if (srcWorlds.exists()) {
-        ant.copy(todir: worldsOut, overwrite: true) {
-          fileset(dir: srcWorlds)
-        }
+        ant.copy(todir: worldsOut, overwrite: true) { fileset(dir: srcWorlds) }
         copiedCount++
         println "  ✅ worlds    ← model/${projName}/worlds"
       }
@@ -210,83 +215,84 @@ tasks.register('copyModelData') {
 
 /* ---------------- copyProjectJarsToDistribution ----------------------- */
 tasks.register('copyProjectJarsToDistribution', Copy) {
-    dependsOn tasks.named('copyModelData'), jarTaskProviders
-    doFirst { println '📥  Copying freshly-built jars into distribution …' }
-    from projectJarProviders.collect { it.flatMap { j -> j.archiveFile } }
-    into "$buildDir/generatedConfig/${configSet}-${projectVersion}/lib"
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+  dependsOn tasks.named('copyModelData'), jarTaskProviders
+  doFirst { println '📥  Copying freshly-built jars into distribution …' }
+  from projectJarProviders.collect { it.flatMap { j -> j.archiveFile } }
+  into "$buildDir/generatedConfig/${configSet}-${projectVersion}/lib"
+  duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 /* ---------------- createPathingJar ------------------------------------ */
 tasks.register('createPathingJar') {
-    dependsOn 'copyProjectJarsToDistribution'
-    doLast {
-        File distroDir = file("$buildDir/generatedConfig/${configSet}-${projectVersion}")
-        File binDir    = new File(distroDir, 'bin')
-        binDir.mkdirs()
-        File libDir    = new File(distroDir, 'lib')
-        File launcher  = new File(binDir, 'launcher.jar')
+  dependsOn 'copyProjectJarsToDistribution'
+  doLast {
+    File distroDir = file("$buildDir/generatedConfig/${configSet}-${projectVersion}")
+    File binDir    = new File(distroDir, 'bin')
+    binDir.mkdirs()
+    File libDir    = new File(distroDir, 'lib')
+    File launcher  = new File(binDir, 'launcher.jar')
 
-        String libs = libDir.listFiles()
-                .findAll { it.name.endsWith('.jar') }
-                .collect { "../lib/${it.name}" }
-                .sort()
-                .join(' ')
+    String libs = (libDir.listFiles() ?: [])
+      .findAll { it.name.endsWith('.jar') }
+      .collect { "../lib/${it.name}" }
+      .sort()
+      .join(' ')
 
-        ant.jar(destfile: launcher) {
-            manifest {
-                attribute(name: 'Manifest-Version', value: '1.0')
-                attribute(name: 'Main-Class', value: 'com.gwngames.starter.Starter')
-                attribute(name: 'Class-Path', value: libs)
-            }
-        }
-        println "📦  Pathing JAR created → $launcher"
+    ant.jar(destfile: launcher) {
+      manifest {
+        attribute(name: 'Manifest-Version', value: '1.0')
+        attribute(name: 'Main-Class', value: 'com.gwngames.starter.Starter')
+        attribute(name: 'Class-Path', value: libs)
+      }
     }
+    println "📦  Pathing JAR created → $launcher"
+  }
 }
 
 /* ---------------- generateRunScripts ---------------------------------- */
 tasks.register('generateRunScripts') {
-    dependsOn 'createPathingJar'
-    doLast {
-        File binDir = file("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin")
-        File sh = new File(binDir, 'run.sh')
-        sh.text = '''#!/usr/bin/env bash
+  dependsOn 'createPathingJar'
+  doLast {
+    File binDir = file("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin")
+
+    File sh = new File(binDir, 'run.sh')
+    sh.text = '''#!/usr/bin/env bash
 DIR="$( cd "${BASH_SOURCE%/*}" && pwd )"
 "${JAVA_HOME:+$JAVA_HOME/bin/}java" -jar "$DIR/launcher.jar" "$@"
 '''
-        sh.setExecutable(true)
+    sh.setExecutable(true)
 
-        File bat = new File(binDir, 'run.bat')
-        bat.text = '''@echo off
+    File bat = new File(binDir, 'run.bat')
+    bat.text = '''@echo off
 set DIRNAME=%~dp0
 set JAVA=%JAVA_HOME%\\bin\\java.exe
 if not exist "%JAVA%" set JAVA=java.exe
 "%JAVA%" -jar "%DIRNAME%launcher.jar" %*
 '''
-        println "🚀  run.sh & run.bat written to $binDir"
-    }
+    println "🚀  run.sh & run.bat written to $binDir"
+  }
 }
 
 /* ---------------- assembleTestRuntime (shared by test tasks) ---------- */
 tasks.register('assembleTestRuntime') {
-    dependsOn 'generateRunScripts'
-    outputs.dir("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin")
+  dependsOn 'generateRunScripts'
+  outputs.dir("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin")
 }
 
 /* ---------------- archive tasks --------------------------------------- */
 tasks.register('zipDistribution', Zip) {
-    dependsOn 'generateRunScripts'
-    archiveBaseName.set(configSet)
-    archiveVersion.set("${projectVersion}-${starterBuildVersion.get()}")
-    destinationDirectory.set(layout.buildDirectory.dir('distributions'))
-    from layout.buildDirectory.dir('generatedConfig')
+  dependsOn 'generateRunScripts'
+  archiveBaseName.set(configSet)
+  archiveVersion.set("${projectVersion}-${starterBuildVersion.get()}")
+  destinationDirectory.set(layout.buildDirectory.dir('distributions'))
+  from layout.buildDirectory.dir('generatedConfig')
 }
 
 tasks.register('tarDistribution', Tar) {
-    dependsOn 'generateRunScripts'
-    archiveBaseName.set(configSet)
-    archiveVersion.set("${projectVersion}-${starterBuildVersion.get()}")
-    compression = Compression.GZIP
-    destinationDirectory.set(layout.buildDirectory.dir('distributions'))
-    from layout.buildDirectory.dir('generatedConfig')
+  dependsOn 'generateRunScripts'
+  archiveBaseName.set(configSet)
+  archiveVersion.set("${projectVersion}-${starterBuildVersion.get()}")
+  compression = Compression.GZIP
+  destinationDirectory.set(layout.buildDirectory.dir('distributions'))
+  from layout.buildDirectory.dir('generatedConfig')
 }

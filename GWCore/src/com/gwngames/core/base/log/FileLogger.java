@@ -1,6 +1,8 @@
 package com.gwngames.core.base.log;
 
 import com.gwngames.core.base.BaseComponent;
+import com.gwngames.core.data.LogFiles;
+
 import java.util.Arrays;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,7 +24,11 @@ public class FileLogger {
     private final String logFilePath;
 
     private FileLogger(String logFilePath) {
-        this.logFilePath = logFilePath;
+        if (isRunningTests()){
+            this.logFilePath = LogFiles.TEST;
+        } else {
+            this.logFilePath = logFilePath;
+        }
     }
 
     public static FileLogger get(String logFilePath){ return new FileLogger(logFilePath); }

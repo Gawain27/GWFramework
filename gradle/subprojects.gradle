@@ -3,8 +3,31 @@ import java.security.MessageDigest
 /* =========================================================================
  * Common sub-project convention (plugins, Java version, JAR naming)
  * ========================================================================= */
+
+static String normName(Object o) {
+  return o == null ? null : o.toString().trim().toLowerCase(Locale.ROOT)
+}
+
+final Set<String> included = (includedProjectNames ?: [])
+  .collect { normName(it) }
+  .findAll { it }
+  .toSet()
+
 subprojects { Project subproj ->
-  if (!includedProjectNames.contains(subproj.name)) return
+  if (!included.contains(normName(subproj.name))) return
+
+  def isRemoteAssetsConfigured = {
+    File propsFile = project.file('gradle.properties')
+    if (!propsFile.exists()) return false
+
+    Properties props = new Properties()
+    propsFile.withInputStream { props.load(it) }
+
+    String urlKey = "${project.name.toLowerCase(Locale.ROOT)}_url"
+    String remoteUrl = (props.getProperty(urlKey) ?: '').trim()
+
+    return remoteUrl && remoteUrl != 'null'
+  }
 
   apply plugin: 'java'
   apply plugin: 'java-library'
@@ -46,37 +69,43 @@ subprojects { Project subproj ->
   }
 
   /* ────────────────────────────────────────────────────────────────────────────
-  *  Keep <subproject>/resources in sync with the ZIP produced by a OneDrive
-  *  folder link stored in ROOT gradle.properties as <subproject>_url.
-  * ──────────────────────────────────────────────────────────────────────────── */
+   * Keep <subproject>/resources in sync with the ZIP produced by a Dropbox
+   * link stored in THIS subproject gradle.properties as <subproject>_url.
+   * ──────────────────────────────────────────────────────────────────────────── */
   tasks.register('updateResources') {
     group       = 'build'
-    description = 'Sync <subproject>/resources with the Dropbox archive defined in root gradle.properties'
+    description = 'Sync <subproject>/resources with the Dropbox archive defined in this subproject gradle.properties'
 
-    /* ---------- shared gradle.properties at repo root ---------------------- */
-    File       rootPropsFile = rootProject.file('gradle.properties')
-    Properties rootProps     = new Properties().tap { rootPropsFile.withInputStream { load(it) } }
+    // per-subproject gradle.properties (NOT root)
+    File       propsFile = project.file('gradle.properties')
+    Properties props     = new Properties()
 
-    String urlKey  = "${project.name.toLowerCase()}_url"
-    String hashKey = "${project.name.toLowerCase()}_hash"
+    if (!propsFile.exists()) {
+      throw new GradleException("Missing ${project.path} gradle.properties at: ${propsFile}")
+    }
+    propsFile.withInputStream { props.load(it) }
 
-    /* ---------- ensure the keys exist -------------------------------------- */
+    String urlKey  = "${project.name.toLowerCase(Locale.ROOT)}_url"
+    String hashKey = "${project.name.toLowerCase(Locale.ROOT)}_hash"
+
+    // ensure keys exist in the SUBPROJECT properties file
     boolean mutated = false
-    if (!rootProps.containsKey(urlKey))  { rootProps[urlKey]  = 'null'; mutated = true }
-    if (!rootProps.containsKey(hashKey)) { rootProps[hashKey] = '';     mutated = true }
-    if (mutated) rootPropsFile.withOutputStream { rootProps.store(it, null) }
+    if (!props.containsKey(urlKey))  { props[urlKey]  = 'null'; mutated = true }
+    if (!props.containsKey(hashKey)) { props[hashKey] = '';     mutated = true }
+    if (mutated) propsFile.withOutputStream { props.store(it, null) }
 
-    String remoteUrl = rootProps[urlKey]
+    String remoteUrl = props[urlKey]
     if (!remoteUrl || remoteUrl == 'null') {
       logger.lifecycle("No ${urlKey} configured – skipping download for ${project.path}")
       return
     }
 
-    /* ---------- make the task serialisable for parallel builds ------------- */
-    outputs.file(rootPropsFile)   // Gradle serialises tasks touching this file
+    // serialize tasks touching this module’s properties file (safe for parallel)
+    inputs.file(propsFile)
+    outputs.file(propsFile)
 
     String remoteHash = fetchRemoteHash(remoteUrl)
-    String localHash  = rootProps[hashKey]
+    String localHash  = props[hashKey]
 
     if (remoteHash && remoteHash == localHash) {
       logger.lifecycle("Resources for ${project.path} already up to date (hash $remoteHash)")
@@ -89,7 +118,7 @@ subprojects { Project subproj ->
     logger.lifecycle("Downloading updated resources for ${project.path} …")
 
     new URL(remoteUrl).withInputStream { ins ->
-      archive.withOutputStream { out -> out << ins }        //  ◄─  Groovy-style copy
+      archive.withOutputStream { out -> out << ins }
     }
 
     /* ---------- compute fallback SHA-256 if server gave no hash ------------ */
@@ -106,10 +135,8 @@ subprojects { Project subproj ->
     File tmpDir = file("$buildDir/tmp/${project.name}-resources")
     tmpDir.deleteDir(); tmpDir.mkdirs()
 
-    // Use Ant – it’s tolerant of weird encodings & huge ZIPs
     ant.unzip(src: archive, dest: tmpDir, overwrite: 'true')
 
-    // Try <tmp>/resources first; if absent, look one level deeper
     File srcRoot = new File(tmpDir, 'resources')
     if (!srcRoot.exists()) {
       File maybe = tmpDir.listFiles()
@@ -133,12 +160,11 @@ subprojects { Project subproj ->
     }
     tmpDir.deleteDir()
 
-    /* ---------- persist the new hash back to root gradle.properties ------- */
-    rootProps[hashKey] = remoteHash
-    rootPropsFile.withOutputStream { rootProps.store(it, null) }
+    /* ---------- persist the new hash back to SUBPROJECT gradle.properties --- */
+    props[hashKey] = remoteHash
+    propsFile.withOutputStream { props.store(it, null) }
 
     logger.lifecycle("✓  Synced resources for ${project.path}; stored hash ${remoteHash.take(10)}…")
-
   }
 
   /* ------------------------------------------------------------ */
@@ -148,6 +174,8 @@ subprojects { Project subproj ->
     group       = 'build'
     description = 'List all files under resources into assets.txt'
     dependsOn tasks.named('updateResources')
+
+    onlyIf { isRemoteAssetsConfigured() }
 
     inputs.files(sourceSets.main.resources)
     outputs.file("${projectDir}/resources/assets.txt")
@@ -176,19 +204,23 @@ subprojects { Project subproj ->
   /* ------------------------------------------------------------ */
   tasks.register('generateAssetEnums') {
     group       = 'build'
-    description = 'Create enum classes that mirror the resources tree, ' +
-      'collapsing locale variants into a single constant'
+    description = 'Create enum classes that mirror the resources tree, collapsing locale variants into a single constant'
     dependsOn   tasks.named('generateAssetsTxt')
+
+    onlyIf { isRemoteAssetsConfigured() }
 
     final File srcRoot = file("$projectDir/src/com/gwngames/assets")
 
     /* ---- locale set ------------------------------------------------------- */
     Properties p = new Properties()
-    p.load(file("$projectDir/gradle.properties").newInputStream())
-    Set<String> supportedLocales = new HashSet<>(p.getProperty('supportedLocales', '')
-      .tokenize(','))
+    File localPropsFile = file("$projectDir/gradle.properties")
+    if (localPropsFile.exists()) {
+      p.load(localPropsFile.newInputStream())
+    }
+    Set<String> supportedLocales = new HashSet<>(
+      (p.getProperty('supportedLocales', '')).tokenize(',')
+    )
 
-    /* ---- inputs & outputs ------------------------------------------------- */
     inputs.file  "${projectDir}/resources/assets.txt"
     outputs.dir  srcRoot
 
@@ -197,6 +229,13 @@ subprojects { Project subproj ->
     }
 
     doLast {
+      // also protect against empty/missing assets.txt
+      File assetsTxt = file("${projectDir}/resources/assets.txt")
+      if (!assetsTxt.exists() || assetsTxt.text.trim().isEmpty()) {
+        logger.lifecycle("ℹ️  No assets.txt entries for ${project.path}, skipping asset enum generation.")
+        return
+      }
+
       srcRoot.mkdirs()
 
       /* key = [pkgSuffix, clsName, baseFileName] */
@@ -208,12 +247,12 @@ subprojects { Project subproj ->
         String filePart= slash > -1 ? rel.substring(slash + 1) : rel
 
         /* -------- locale detection ------------------------------------ */
-        String locale    = null
-        String basePart  = filePart
+        String locale   = null
+        String basePart = filePart
         supportedLocales.each { loc ->
           if (filePart.startsWith(loc + '_')) {
             locale   = loc
-            basePart = filePart.substring(loc.length() + 1)   // strip "<loc>_"
+            basePart = filePart.substring(loc.length() + 1)
           }
         }
 
@@ -222,15 +261,16 @@ subprojects { Project subproj ->
         String pkgSuffix     = dirPart ? '.' + dirPart.replace('/', '.') : ''
         String cls           = toPascal(project.name) + toPascal(baseName) + 'Assets'
 
-        buckets.computeIfAbsent([pkgSuffix, cls, basePart]) { [] }
-          << [dir: dirPart,
-              file: filePart,
-              base: basePart,
-              locale: locale]
+        buckets.computeIfAbsent([pkgSuffix, cls, basePart]) { [] } << [
+          dir   : dirPart,
+          file  : filePart,
+          base  : basePart,
+          locale: locale
+        ]
       }
 
       /* -------- emit one enum per bucket --------------------------------- */
-      buckets.groupBy { it.key[0..1] }      // group by [pkgSuffix, cls]
+      buckets.groupBy { it.key[0..1] }
         .each { pcKey, groups ->
 
           String pkgSuffix = pcKey[0].replace('-', '')
@@ -241,16 +281,15 @@ subprojects { Project subproj ->
           File javaFile = new File(outDir, "${cls}.java")
 
           String enumConstants = groups.collect { entry ->
-            List<Map> items   = entry.value
-            String constName  = entry.key[2].replaceAll('[^A-Za-z0-9]','_')
-              .toUpperCase()
+            List<Map> items  = entry.value
+            String constName = entry.key[2].replaceAll('[^A-Za-z0-9]','_').toUpperCase()
 
-            if (items*.locale.findAll().size() > 0) {         // at least one locale
+            if (items*.locale.findAll().size() > 0) {
               String locMap = items.collect { i ->
                 "\"${i.locale ?: 'default'}\", \"${i.dir ? i.dir + '/' : ''}${i.file}\""
               }.join(", ")
               return """    ${constName}(\"${items[0].base}\", java.util.Map.of(${locMap}))"""
-            } else {                                          // non-localised
+            } else {
               String path = "${items[0].dir ? items[0].dir + '/' : ''}${items[0].file}"
               return "    ${constName}(\"${path}\")"
             }
@@ -299,23 +338,20 @@ ${enumConstants};
     }
   }
 
-
   /* ------------------------------------------------------------ */
   /* 3)  Wire tasks into the build                               */
   /* ------------------------------------------------------------ */
-  tasks.named('compileJava')    { dependsOn tasks.named('generateAssetEnums') }
-  tasks.named('processResources').configure {
-    dependsOn tasks.named('generateAssetsTxt')
-  }
+  tasks.named('compileJava') { dependsOn tasks.named('generateAssetEnums') }
+  tasks.named('processResources').configure { dependsOn tasks.named('generateAssetsTxt') }
 }
 
 /* ---- helpers ----------------------------------------------------------- */
 static String toPascal(String s) {
   s.split(/[^A-Za-z0-9]+/)
-    .findAll { it }                              // drop empties
+    .findAll { it }
     .collect { tok ->
       if (tok.length() <= 2 || tok =~ /[0-9]/ || tok == tok.toUpperCase()) {
-        tok.toUpperCase()                   // keep acronyms & things with digits
+        tok.toUpperCase()
       } else {
         tok[0].toUpperCase() + tok.substring(1).toLowerCase()
       }
@@ -328,7 +364,7 @@ String fetchRemoteHash(String url, int depth = 0) {
   if (depth > 5) throw new GradleException("Too many redirects for $url")
 
   HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection()
-  c.instanceFollowRedirects = false      // we handle redirects manually
+  c.instanceFollowRedirects = false
   c.requestMethod  = 'HEAD'
   c.connectTimeout = 15_000
   c.readTimeout    = 15_000

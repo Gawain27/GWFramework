@@ -12,15 +12,25 @@ void openInBrowser(File html) {
 
 /* -------------------------------------------------------------------- */
 tasks.register('translationEditor', JavaExec) {
-    group       = 'i18n'
-    description = 'Run the desktop Translation Editor (Java FX)'
-    dependsOn project(':tools:translation-editor').tasks.named('run')
-    doFirst {
-        Project ed = project(':tools:translation-editor')
-        mainClass.set('com.gw.editor.EditorApp')
-        classpath  = ed.sourceSets.main.runtimeClasspath
-        workingDir = rootDir
+  group       = 'i18n'
+  description = 'Run the desktop Translation Editor (Java FX)'
+
+  // string path: doesn't require project to exist at configuration time
+  dependsOn ':tools:translation-editor:run'
+
+  doFirst {
+    Project ed = findProject(':tools:translation-editor')
+    if (ed == null) {
+      throw new GradleException(
+        "Translation editor project is not included. Run `gradlew translationEditor` " +
+          "so settings.gradle includes it, or include ':tools:translation-editor' explicitly."
+      )
     }
+
+    mainClass.set('com.gw.editor.EditorApp')
+    classpath  = ed.sourceSets.main.runtimeClasspath
+    workingDir = rootDir
+  }
 }
 
 tasks.register('TemplateEditor') {

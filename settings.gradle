@@ -32,19 +32,35 @@ def parsed = new JsonSlurper().parse(cfgFile) as Map
 def gameType = (parsed.gameType ?: '').toString()
 
 // fixed modules we always include first
-def fixed = ['tools:translation-editor', 'gwstarter']
+def fixed = ['gwstarter']
 
 // collect projects from JSON (keep order, de-dupe)
 def configNames = ((parsed.projects ?: [])*.name)
-  .findAll { it } // non-empty
+  .findAll { it }
   .collect { it.toString() }
   .unique()
 
-def includes = fixed + configNames
+// detect whether translation editor is requested
+def wantTranslationEditor = gradle.startParameter.taskNames.any { t ->
+  t == 'translationEditor' ||
+    t.endsWith(':translationEditor') ||
+    t == ':tools:translation-editor:run' ||
+    t.endsWith(':tools:translation-editor:run')
+}
+
+def includes = (fixed + configNames)
+  .collect { it.toString().toLowerCase(Locale.ROOT) }   // force lowercase
+  .unique()
+
+if (wantTranslationEditor) {
+  includes += 'tools:translation-editor'
+  println "🧩 settings: translation editor requested -> including tools:translation-editor"
+} else {
+  println "🧩 settings: translation editor not requested -> skipping tools:translation-editor"
+}
 
 println "📦 settings: including -> ${includes} (gameType='${gameType}')"
-
-// ----- actually include them -----
 include(*includes as String[])
 
+// any hardcoded includes should be lowercase too
 include 'tools:2d-map-editor'

@@ -2,6 +2,9 @@
   "gameType": "needle-of-silver",
   "projects": [
     {
+      "name": "gwarchive"
+    },
+    {
       "name": "gwcore"
     },
     {

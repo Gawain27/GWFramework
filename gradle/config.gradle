@@ -1,6 +1,6 @@
 /* =========================================================================
-* Read  configSet  + expose root-wide ext & helpers
-* ========================================================================= */
+ * Read configSet + expose root-wide ext & helpers
+ * ========================================================================= */
 import groovy.json.JsonSlurper
 import groovy.transform.Field
 import org.apache.groovy.json.internal.LazyMap
@@ -8,40 +8,52 @@ import org.apache.groovy.json.internal.LazyMap
 @Field final String CONFIG_INI    = 'config.ini'
 @Field final String CONFIG_FOLDER = 'configs'
 
-String configSet = project.findProperty('configSet') as String
+static String norm(Object o) { o == null ? null : o.toString().trim() }
+static String normLower(Object o) { def s = norm(o); s ? s.toLowerCase(Locale.ROOT) : null }
+
+// ----- locate configSet -----
+String configSet = norm(project.findProperty('configSet'))
 if (!configSet) {
   File ini = file(CONFIG_INI)
   if (ini.exists()) {
     Properties p = new Properties()
     ini.withReader { p.load(it) }
-    configSet = p.getProperty('config_set')
+    configSet = norm(p.getProperty('config_set'))
   }
 }
 if (!configSet) throw new GradleException('❌ Pass -PconfigSet=<game> or define config.ini')
 
-File cfgFile = file("$CONFIG_FOLDER" + "/" + "$configSet" + ".json")
+// (optional) enforce lowercase configSet if your filenames are lowercase
+// configSet = configSet.toLowerCase(Locale.ROOT)
+
+// ----- parse config -----
+File cfgFile = file("${CONFIG_FOLDER}/${configSet}.json")
 if (!cfgFile.exists()) throw new GradleException("❌ No such file $cfgFile")
 Map parsedConfig = new JsonSlurper().parse(cfgFile) as Map
 
-/*  ---- collect module handles (incl. gwstarter) ------------------- */
-List<Project> includedProjects = parsedConfig.projects.collect { project(":${it.name}") } +
-  project(':gwstarter')
+// ----- collect included modules (lowercase) -----
+List<String> projectNames = (parsedConfig.projects ?: [])
+  .collect { normLower(it.name) }
+  .findAll { it }
+
+List<Project> includedProjects = projectNames.collect { project(":${it}") } + project(':gwstarter')
+
 ext.includedProjects      = includedProjects
-ext.includedProjectNames  = includedProjects*.name as Set<String>
+ext.includedProjectNames  = (includedProjects*.name).collect { it.toString().toLowerCase(Locale.ROOT) }.toSet()
 ext.parsedConfig          = parsedConfig as LazyMap
 ext.configSet             = configSet
 ext.translationKeysGlobal = [:]          // Map<String, String>
 ext.projectLevels         = [:]
 
-/* ---- internationalisation locale list ---------------------------- */
+// ----- internationalisation locale list -----
 String rawLocales = rootProject.findProperty('supportedLocales') ?: 'en_US'
 ext.supportedLocales = rawLocales.split(',')*.trim() as List<String>
 println "🌐 Supported locales: ${supportedLocales}"
 
-project(':tools:2d-map-editor') {
-
-  // configure root for map tools
-  tasks.matching { it.name in ['run', 'runMap', 'runWorld'] }.configureEach { t ->
+// ----- tool wiring (guarded) -----
+def mapEditor = findProject(':tools:2d-map-editor')
+if (mapEditor != null) {
+  mapEditor.tasks.matching { it.name in ['run', 'runMap', 'runWorld'] }.configureEach { t ->
     if (t instanceof JavaExec) {
       File binDir = rootProject.layout.buildDirectory
         .dir("generatedConfig/${configSet}-${projectVersion}/bin")

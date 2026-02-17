@@ -14,9 +14,7 @@ apply from: "$rootDir/gradle/misc.gradle"
 // If someone runs `gradlew run` at the root, only execute the root :run task.
 // Prevents :tools:translation-editor:run (and any other :run) from also firing.
 gradle.taskGraph.whenReady {
-  // Was a "run" selector used from the root?
   if (gradle.startParameter.taskNames.any { it == 'run' || it.endsWith(':run') }) {
-    // Disable every run task except the root one
     allprojects {
       tasks.matching { it.name == 'run' && it.path != ':run' }.configureEach {
         enabled = false
@@ -59,10 +57,18 @@ tasks.register('testAll') {
 
 tasks.register('run', Exec) {
   dependsOn classTasks, 'generateRunScripts'
-  //mustRunAfter 'zipDistribution', 'tarDistribution'
 
   doFirst {
-    File binDir   = file("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin")
+    // By depending on generateRunScripts we expect the bin dir to exist now.
+    File binDir = file("$buildDir/generatedConfig/${configSet}-${projectVersion}/bin")
+    if (!binDir.exists()) {
+      throw new GradleException(
+        "Expected runtime folder not found: ${binDir}\n" +
+          "Something prevented the distribution scripts from being generated. " +
+          "Try running ':generateRunScripts' (or ':build') with --info."
+      )
+    }
+
     File launcher = org.gradle.internal.os.OperatingSystem.current().isWindows()
       ? new File(binDir, 'run.bat')
       : new File(binDir, 'run.sh')
@@ -88,7 +94,7 @@ tasks.register('run', Exec) {
   // Don’t fail the task if the game exits with non-zero (window closed, etc.)
   ignoreExitValue = true
 
-  // (Optional) stream child output into Gradle’s console
+  // stream child output into Gradle’s console
   standardOutput = System.out
   errorOutput    = System.err
 
@@ -118,55 +124,43 @@ tasks.register('clean', Delete) {
 // ===================================================================
 tasks.register('resetAssetHashes') {
   group = 'build'
-  description = 'Set all *_hash properties in gradle.properties to 0.'
-
-  // Adjust if your properties file lives elsewhere
-  def propsFile = rootProject.file('gradle.properties')
-
-  inputs.file(propsFile)
-  outputs.file(propsFile)
+  description = 'Set all *_hash properties in each included subproject gradle.properties to 0.'
 
   doLast {
-    if (!propsFile.exists()) {
-      throw new GradleException("gradle.properties not found at: ${propsFile}")
-    }
+    includedProjects.each { p ->
+      File propsFile = p.file('gradle.properties')
+      if (!propsFile.exists()) return
 
-    def original = propsFile.getText('UTF-8')
-    def updated = original
-    // Replace lines like: something_hash=12345   (preserve key, keep comments on same line)
-      .replaceAll(/(?m)^(\s*[A-Za-z0-9_.-]+_hash)\s*=\s*([^\r\n#]*)(\s*(#.*)?)$/) { all, key, val, tail ->
+      def original = propsFile.getText('UTF-8')
+      def updated = original.replaceAll(/(?m)^(\s*[A-Za-z0-9_.-]+_hash)\s*=\s*([^\r\n#]*)(\s*(#.*)?)$/) { all, key, val, tail ->
         "${key}=0${tail ?: ''}"
       }
 
-    if (updated != original) {
-      propsFile.setText(updated, 'UTF-8')
-      logger.lifecycle("✅ Set *_hash properties to 0 in ${propsFile}")
-    } else {
-      logger.lifecycle("ℹ️ No *_hash properties found to update in ${propsFile}")
+      if (updated != original) {
+        propsFile.setText(updated, 'UTF-8')
+        logger.lifecycle("✅ Set *_hash to 0 in ${p.path}/${propsFile.name}")
+      }
     }
   }
 }
 
 // ===================================================================
-//  🔄  refreshAssets – download & regenerate asset meta only
+//  🔄 refreshAssets – download & regenerate asset meta only
 // ===================================================================
-tasks.named('refreshAssets').configure {
-  // collect the tasks (TaskCollection is fine as dependsOn input)
-  def updates = subprojects.collectMany { p -> p.tasks.matching { it.name == 'updateResources' } }
-  def txts    = subprojects.collectMany { p -> p.tasks.matching { it.name == 'generateAssetsTxt' } }
-  def enums   = subprojects.collectMany { p -> p.tasks.matching { it.name == 'generateAssetEnums' } }
+tasks.register('refreshAssets') {
+  group       = 'build'
+  description = 'Download remote resource ZIPs and regenerate assets.txt + enum classes.'
 
-  // First zero the hashes, then run updateResources, then regenerate metadata
   dependsOn tasks.named('resetAssetHashes')
-  dependsOn updates
-  dependsOn txts
-  dependsOn enums
 
-  // Enforce ordering: resetAssetHashes -> updateResources -> generators
-  updates.each { it.mustRunAfter(tasks.named('resetAssetHashes')) }
-  txts.each    { it.mustRunAfter(updates) }
-  enums.each   { it.mustRunAfter(txts) }
+  // Just run the top-of-pipeline task per subproject
+  def enumTasks = includedProjects.collectMany { p ->
+    p.tasks.matching { it.name == 'generateAssetEnums' }
+  }
+  dependsOn enumTasks
+
+  // Ordering: hashes must be reset before any module updates
+  enumTasks.each { it.mustRunAfter(tasks.named('resetAssetHashes')) }
 }
-
 
 println '✅  root build.gradle loaded – high-level tasks configured'

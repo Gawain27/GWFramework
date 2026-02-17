@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------
-// development/build.gradle : Level 3 library (your game core)
+// development/build.gradle : Level 10 library (let's be real, we'll never have 9+ modules... right?)
 // ---------------------------------------------------------------------
 
 ext.projectLevel = 10

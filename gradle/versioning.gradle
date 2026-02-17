@@ -3,44 +3,76 @@
  * ========================================================================= */
 import java.util.Properties
 
-Map<String, Integer> projectBuildVersions = [:]      // ext is implicit
-ext.isShippingBuild = gradle.startParameter.taskNames.any {
-    it.equalsIgnoreCase('build') || it.equalsIgnoreCase('delivery')
+static String normName(Object o) {
+  return o == null ? null : o.toString().trim().toLowerCase(Locale.ROOT)
+}
+
+Map<String, Integer> projectBuildVersions = [:]   // ext is implicit
+
+// "build" is no longer a shipping build; delivery (and archive tasks) are.
+ext.isShippingBuild = gradle.startParameter.taskNames.any { String t ->
+  def n = (t ?: '').toLowerCase(Locale.ROOT)
+  n == 'delivery' || n.endsWith(':delivery') ||
+    n == 'zipdistribution' || n.endsWith(':zipdistribution') ||
+    n == 'tardistribution' || n.endsWith(':tardistribution')
 }
 
 tasks.register('bumpBuildVersions') {
-    doLast {
-        println '🔼  bumpBuildVersions …'
-        includedProjects.each { Project prj ->
-            File propsFile = prj.file('gradle.properties')
-            Properties props = new Properties()
-            propsFile.withInputStream { props.load(it) }
+  doLast {
+    println '🔼  bumpBuildVersions …'
 
-            int buildVer = (props.getProperty('buildVersion') ?: '0').toInteger()
-            File srcDir  = prj.file('src')
-            long latest  = srcDir.exists() ? prj.fileTree(srcDir).files.max { it.lastModified() }?.lastModified() ?: 0L : 0L
+    includedProjects.each { Project prj ->
+      String key = normName(prj.name)
 
-            File stamp   = prj.file('.lastVersionCheck')
-            long previous = stamp.exists() ? stamp.text.toLong() : 0L
+      File propsFile = prj.file('gradle.properties')
+      if (!propsFile.exists()) {
+        // If a module has no gradle.properties, treat as buildVersion=0 and skip bumping.
+        projectBuildVersions[key] = 0
+        return
+      }
 
-            if (latest > previous) {
-                buildVer++
-                props['buildVersion'] = buildVer.toString()
-                propsFile.withOutputStream { props.store(it, null) }
-                stamp.text = latest.toString()
-                println "   • ${prj.name} → buildVersion = $buildVer"
-            }
-            projectBuildVersions[prj.name] = buildVer
-        }
+      Properties props = new Properties()
+      propsFile.withInputStream { props.load(it) }
+
+      int buildVer = (props.getProperty('buildVersion') ?: '0').toInteger()
+
+      File srcDir = prj.file('src')
+      long latest = 0L
+      if (srcDir.exists()) {
+        def files = prj.fileTree(srcDir).files
+        latest = files ? (files.max { it.lastModified() }?.lastModified() ?: 0L) : 0L
+      }
+
+      File stamp = prj.file('.lastVersionCheck')
+      long previous = stamp.exists() ? (stamp.text.trim() ? stamp.text.trim().toLong() : 0L) : 0L
+
+      if (latest > previous) {
+        buildVer++
+        props['buildVersion'] = buildVer.toString()
+        propsFile.withOutputStream { props.store(it, null) }
+        stamp.text = latest.toString()
+        println "   • ${prj.name} → buildVersion = $buildVer"
+      }
+
+      projectBuildVersions[key] = buildVer
     }
+  }
 }
 
 /* helper so other scripts can ask for the current buildVersion --------- */
 ext.buildVerOf = { String prjName ->
-    projectBuildVersions[prjName] ?:
-            new Properties().with { props ->
-                file("${project(":$prjName").projectDir}/gradle.properties")
-                        .withInputStream { props.load(it) }
-                props.getProperty('buildVersion').toInteger()
-            }
+  String key = normName(prjName)
+
+  Integer cached = projectBuildVersions[key]
+  if (cached != null) return cached
+
+  Properties props = new Properties()
+
+  // Use normalized project path to match lowercased includes
+  Project p = project(":${key}")
+  File propsFile = new File(p.projectDir, 'gradle.properties')
+  if (!propsFile.exists()) return 0
+
+  propsFile.withInputStream { props.load(it) }
+  return (props.getProperty('buildVersion') ?: '0').toInteger()
 }

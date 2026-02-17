@@ -2,6 +2,9 @@
   "gameType": "development",
   "projects": [
     {
+      "name": "gwarchive"
+    },
+    {
       "name": "gwcore"
     },
     {

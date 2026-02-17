@@ -1,26 +1,45 @@
 /* =========================================================================
-* Level-based  implementation()  wiring between included modules
-* ========================================================================= */
-Map<String, Integer> projectLevels = [:]
-ext.projectLevels = projectLevels      // share with i18n script
-
-subprojects { Project sp ->
-  if (!includedProjectNames.contains(sp.name)) return
-  sp.afterEvaluate {
-    Integer lvl = (sp.findProperty('projectLevel') ?: 0).toInteger()
-    projectLevels[sp.name] = lvl
-  }
+ * Level-based implementation() wiring between included modules
+ * ========================================================================= */
+static String normName(Object o) {
+  return o == null ? null : o.toString().trim().toLowerCase(Locale.ROOT)
 }
+
+Map<String, Integer> projectLevels = [:]
+ext.projectLevels = projectLevels   // shared with other scripts
+
+// Cache normalized included names once
+Set<String> included = (includedProjectNames ?: [])
+  .collect { normName(it) }
+  .findAll { it }
+  .toSet()
 
 /* wire after all projects are evaluated */
 gradle.projectsEvaluated {
+  // 1) collect levels for included projects (normalized keys)
   subprojects { Project sp ->
-    if (!includedProjectNames.contains(sp.name)) return
-    int myLevel = projectLevels[sp.name] ?: 0
-    includedProjectNames.each { String other ->
-      if (other == sp.name) return
-      if (myLevel >= (projectLevels[other] ?: 0)) {
-        sp.dependencies { implementation project(":$other") }
+    String me = normName(sp.name)
+    if (!included.contains(me)) return
+
+    int lvl = ((sp.findProperty('projectLevel') ?: 0) as String).toInteger()
+    projectLevels[me] = lvl
+  }
+
+  // 2) apply dependencies based on levels
+  subprojects { Project sp ->
+    String me = normName(sp.name)
+    if (!included.contains(me)) return
+
+    int myLevel = projectLevels[me] ?: 0
+
+    included.each { String other ->
+      if (other == me) return
+
+      int otherLevel = projectLevels[other] ?: 0
+      if (myLevel >= otherLevel) {
+        sp.dependencies {
+          implementation project(":$other")  // ✅ other is already normalized
+        }
       }
     }
   }

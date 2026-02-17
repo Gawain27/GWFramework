@@ -1,18 +1,41 @@
 /* =========================================================================
  *  ... JUnit-Jupiter & per-project Test task setup
  * ========================================================================= */
+static String normName(Object o) {
+  return o == null ? null : o.toString().trim().toLowerCase(Locale.ROOT)
+}
+
+Set<String> included = (includedProjectNames ?: [])
+  .collect { normName(it) }
+  .findAll { it }
+  .toSet()
+
 subprojects { Project sp ->
-  if (!includedProjectNames.contains(sp.name)) return
+  String name = normName(sp.name)
+  if (!included.contains(name)) return
 
-  dependencies { testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2' }
+  dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+  }
 
-  tasks.named('test', Test) { Test t ->
+  tasks.named('test', Test).configure { Test t ->
+    // Ensure the distribution-like runtime exists for tests
     dependsOn rootProject.tasks.named('assembleTestRuntime')
+
     File binDir = rootProject.layout.buildDirectory
-      .dir("generatedConfig/${configSet}-${projectVersion}/bin")
+      .dir("generatedConfig/${rootProject.configSet}-${rootProject.projectVersion}/bin")
       .get().asFile
+
+    // Framework runtime properties for tests
     systemProperty 'gw.bin.dir', binDir.absolutePath
+    systemProperty 'configSet', rootProject.configSet
+    systemProperty 'gw.rootDir', rootProject.projectDir.absolutePath
+
+    // ✅ test-mode flag (for FileLogger redirect etc.)
+    systemProperty 'gw.tests', 'true'
+
     workingDir = binDir
+
     useJUnitPlatform()
     testLogging { events 'passed', 'skipped', 'failed' }
   }

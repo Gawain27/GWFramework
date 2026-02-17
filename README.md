@@ -69,22 +69,38 @@ Below is a functional overview of each major task, with a focus on behavior rath
 
 ### `build`
 
-Primary project build task.
+Primary **developer build** task (fast, no verification/packaging).
 
 This task:
 
 - Builds all included subprojects
 - Assembles the changelog
 - Generates runtime scripts
-- Produces distributable archives (ZIP and TAR)
 
-Use this when preparing a full release build.
+It **does not**:
+
+- Run tests
+- Produce distributable archives (ZIP/TAR)
+
+Use this during day-to-day development when you want a quick build.
+
+---
+
+### `testAll`
+
+Runs tests across the whole workspace.
+
+This task:
+
+- Runs tests for all included subprojects
+
+Use this for verification without packaging.
 
 ---
 
 ### `run`
 
-Runs the game using generated distribution scripts.
+Runs the game using generated runtime scripts.
 
 Behavior:
 
@@ -92,11 +108,11 @@ Behavior:
 - Generates runtime scripts
 - Executes the platform-specific launcher
 - Runs from the generated `bin` directory
-- Does not fail the build if the game exits normally
+- Does not fail the build if the game exits with non-zero (window closed, etc.)
 
 This task ensures that the runtime environment mirrors the packaged distribution structure. It avoids triggering other subproject `run` tasks unintentionally.
 
-Use this for local execution of the game through the distribution layer.
+Use this for local execution of the game through the distribution-style launcher.
 
 ---
 
@@ -106,7 +122,7 @@ Release-oriented task.
 
 This task:
 
-- Runs all tests
+- Runs all tests (via `testAll`)
 - Assembles the changelog
 - Builds ZIP and TAR distribution archives
 
@@ -226,10 +242,9 @@ The framework supports automated distribution packaging.
 
 When running:
 
-- `build`
 - `delivery`
 
-The system generates:
+the system generates:
 
 - Platform-specific run scripts
 - Structured distribution directories
@@ -258,7 +273,8 @@ Configuration switching is handled via Gradle properties and applied consistentl
 Testing is integrated into the lifecycle:
 
 - Subprojects define their own tests
-- The `delivery` task runs all test suites before packaging
+- The `testAll` task runs all test suites across included subprojects
+- The `delivery` task runs tests before packaging
 
 This enforces release discipline and ensures artifact reliability.
 
@@ -302,6 +318,7 @@ It is particularly well-suited for projects that require:
 3. Use Gradle wrapper commands:
 
     - `./gradlew build`
+    - `./gradlew testAll`
     - `./gradlew run`
     - `./gradlew delivery`
 

@@ -1,8 +1,8 @@
 package com.gwngames.core.event.cond.base;
 
+import com.gwngames.core.CoreModule;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.event.IConditionPolicy;
-import com.gwngames.core.data.ModuleNames;
 
 /**
  * Determines how the engine interprets a {@link ConditionResult}.
@@ -14,7 +14,7 @@ import com.gwngames.core.data.ModuleNames;
  *       condition returns {@link ConditionResult#FALSE}.</li>
  * </ul>
  */
-@Init(module = ModuleNames.CORE)
+@Init(module = CoreModule.CORE)
 public enum ConditionPolicy implements IConditionPolicy {
     WAIT_UNTIL_TRUE,
     EXECUTE_UNLESS_FALSE

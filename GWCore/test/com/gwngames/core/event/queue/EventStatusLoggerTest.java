@@ -1,9 +1,6 @@
 package com.gwngames.core.event.queue;
 
-import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.utils.Timer;
 import com.gwngames.core.base.BaseTest;
-import com.gwngames.core.event.base.AbstractEvent;
 import com.gwngames.core.event.base.MacroEvent;
 import org.junit.jupiter.api.Assertions;
 
@@ -14,7 +11,7 @@ import java.nio.file.Path;
 /**
  * Unit-test for {@link EventStatusLogger}.
  * <p>
- * We bypass LibGDX’s background {@link Timer} and invoke the private
+ * We bypass the background timer and invoke the private
  * {@code log()} method directly via reflection; this isolates the test from
  * scheduler quirks in a head-less JVM while still verifying the file output.
  * </p>
@@ -25,11 +22,6 @@ public final class EventStatusLoggerTest extends BaseTest {
     @Override
     protected void runTest() throws Exception {
         log.debug("Test start");
-
-        /* 0) install dummy Gdx.app & files so FileLogger works */
-        if (Gdx.app == null) {
-            setupApplication();
-        }
 
         /* 1) prepare temp log path */
         Path tempDir = createTempDir("status-log");
@@ -65,9 +57,5 @@ public final class EventStatusLoggerTest extends BaseTest {
             "MacroEvent line missing in log");
         Assertions.assertTrue(txt.contains(evt.getClass().getSimpleName()),
             "Event line missing in log");
-
-        /* 5) tidy-up – clear tasks (no need to stop timer thread) */
-        Timer.instance().clear();
-        log.debug("Timer cleared – EventStatusLoggerTest finished");
     }
 }

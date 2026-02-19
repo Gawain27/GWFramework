@@ -5,6 +5,7 @@ import java.util.*;
 import com.gwngames.core.api.asset.IAssetPath;
 
 public enum DevelopmentServicesAssets implements IAssetPath {
+    COM_GWNGAMES_CORE_API_PLUGIN_LOGGINGPLUGIN_TXT("META-INF/services/com.gwngames.core.api.plugin.LoggingPlugin.txt"),
     COM_GWNGAMES_CORE_API_PLUGIN_TESTENVIRONMENTPLUGIN_TXT("META-INF/services/com.gwngames.core.api.plugin.TestEnvironmentPlugin.txt");
 
     private final String defaultPath;

@@ -1,10 +1,10 @@
 package com.gwngames.core.asset;
 
+import com.gwngames.core.CoreModule;
 import com.gwngames.core.api.asset.IFileExtension;
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.data.ModuleNames;
 
-@Init(module = ModuleNames.CORE)
+@Init(module = CoreModule.CORE)
 public enum Ext implements IFileExtension {
     MP3("mp3"), OGG("ogg"), WAV("wav"),
     PNG("png"), JPG("jpg"), JPEG("jpeg"),

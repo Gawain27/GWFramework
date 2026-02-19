@@ -1,13 +1,13 @@
 package com.gwngames.core.api.base.cfg;
 
+import com.gwngames.DefaultModule;
 import com.gwngames.core.CoreComponent;
 import com.gwngames.core.api.base.IBaseComp;
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.data.ModuleNames;
 
 import java.util.Locale;
 
-@Init(component = CoreComponent.LOCALE, module = ModuleNames.INTERFACE)
+@Init(component = CoreComponent.LOCALE, module = DefaultModule.INTERFACE)
 public interface ILocale extends IBaseComp {
     /**
      * Get the defined locale for the game<p>

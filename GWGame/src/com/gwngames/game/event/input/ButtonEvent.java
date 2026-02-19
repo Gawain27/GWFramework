@@ -1,16 +1,16 @@
 package com.gwngames.game.event.input;
 
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.api.event.input.IButtonEvent;
-import com.gwngames.core.api.input.IInputIdentifier;
-import com.gwngames.core.data.ModuleNames;
+import com.gwngames.game.GameModule;
+import com.gwngames.game.api.event.input.IButtonEvent;
+import com.gwngames.game.api.input.IInputIdentifier;
 
 /**
  * Fired when a digital or analog button / trigger changes state.
  * For game-controller triggers you can use {@code pressure} to
  * convey the analog value (0‥1).  Keyboard keys simply use 0 or 1.
  */
-@Init(module = ModuleNames.CORE)
+@Init(module = GameModule.GAME)
 public class ButtonEvent extends InputEvent implements IButtonEvent {
 
     /** Which physical control generated the event. */

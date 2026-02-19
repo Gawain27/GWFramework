@@ -33,11 +33,6 @@ public final class CoreSubComponent {
     // ---------------------------------------------------------------------
     // Queues
     // ---------------------------------------------------------------------
-    public static final String SYSTEM_QUEUE = "SYSTEM_QUEUE";
-
-    // ---------------------------------------------------------------------
-    // Queues
-    // ---------------------------------------------------------------------
     public static final String SYSTEM_QUEUE  = "SYSTEM_QUEUE";
     public static final String COMM_QUEUE  = "COMM_QUEUE";
 

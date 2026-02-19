@@ -1,17 +1,17 @@
 package com.gwngames.game.input.action;
 
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.api.input.IInputIdentifier;
-import com.gwngames.core.api.input.action.IInputHistory;
-import com.gwngames.core.api.input.buffer.IInputChain;
-import com.gwngames.core.api.input.buffer.IInputCombo;
 import com.gwngames.core.base.BaseComponent;
-import com.gwngames.core.data.ModuleNames;
+import com.gwngames.game.GameModule;
+import com.gwngames.game.api.input.IInputIdentifier;
+import com.gwngames.game.api.input.action.IInputHistory;
+import com.gwngames.game.api.input.buffer.IInputChain;
+import com.gwngames.game.api.input.buffer.IInputCombo;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Init(module = ModuleNames.CORE)
+@Init(module = GameModule.GAME)
 public class InputHistory extends BaseComponent implements IInputHistory {
 
     private final Map<IInputIdentifier, Long> idHits     = new ConcurrentHashMap<>();

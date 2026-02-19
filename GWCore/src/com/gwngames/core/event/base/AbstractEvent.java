@@ -1,6 +1,5 @@
 package com.gwngames.core.event.base;
 
-import com.badlogic.gdx.utils.Array;
 import com.gwngames.core.api.event.IEventStatus;
 import com.gwngames.core.api.event.IMacroEvent;
 import com.gwngames.core.data.event.EventStatus;
@@ -8,12 +7,15 @@ import com.gwngames.core.api.event.IEvent;
 import com.gwngames.core.api.event.IExecutionCondition;
 import com.gwngames.core.base.BaseComponent;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public abstract class AbstractEvent extends BaseComponent implements IEvent {
     private IMacroEvent macroEvent;
     private IEventStatus status = EventStatus.WAITING;
     private long executionStartTime;
     private long executionDuration;
-    private final Array<IExecutionCondition> conditions = new Array<>();
+    private final List<IExecutionCondition> conditions = new ArrayList<>();
 
     @Override
     public IMacroEvent getMacroEvent() { return macroEvent; }

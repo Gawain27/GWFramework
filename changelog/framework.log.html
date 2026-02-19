@@ -11,7 +11,21 @@
 
 <table>
     <tr><th style="width:110px">Version</th><th style="width:160px">Date</th><th>Highlights</th></tr>
-    <!-- ---------- 0.0.17P -------------------------------------------------- -->
+    <!-- ---------- 0.0.18Q -------------------------------------------------- -->
+<tr>
+    <td>
+        <span class="tag" style="color:var(--v5)">0.0.18&nbsp;Q</span>
+    </td>
+    <td>19&nbsp;February&nbsp;2026</td>
+    <td>
+        Build orchestration cleanup (separate <code>build</code>/<code>testAll</code>/<code>delivery</code>, smarter <code>run</code> bootstrap),
+        asset pipeline optimisations (subproject-scoped <code>*_url</code>/<code>*_hash</code>, optimized <code>refreshAssets</code>, skip asset enum generation when no remote URL),
+        modular plugin system (<code>PluginRegistry</code> with priority override + test-time overrides),
+        test infrastructure upgrades (BaseTest forcing test logs, stable LibGDX stubs via plugins),
+        and loader modernisation groundwork (lowercased module ids + safer priority lookup strategy).
+    </td>
+</tr>
+<!-- ---------- 0.0.17P -------------------------------------------------- -->
 <tr>
     <td>
         <span class="tag" style="color:var(--v3)">0.0.17&nbsp;P</span>
@@ -145,6 +159,105 @@
     <td>24&nbsp;May&nbsp;2025</td>
     <td>First public “starter” release.</td></tr>      <!--  🡐 Gradle drops rows here -->
 </table>
+
+<!-- ---------- 0.0.18Q -------------------------------------------------- -->
+<details>
+    <summary style="color:var(--v5)">
+        <span class="tag" style="color:var(--v5)">0.0.18&nbsp;Q</span>
+        <em style="flex:1">“Build&nbsp;Orchestration&nbsp;&amp;&nbsp;Pluginised&nbsp;Runtime&nbsp;Support” – released&nbsp;19&nbsp;February&nbsp;2026</em>
+    </summary>
+    <div class="entry-body">
+
+        <h3>🧰 Build Orchestration: Clear Lifecycle Tasks</h3>
+        <ul>
+            <li><strong>Build task split</strong>:
+                root <code>build</code> now builds all included modules <em>without</em> running tests and <em>without</em> producing distribution archives.</li>
+            <li><strong>Dedicated test umbrella</strong>:
+                added <code>testAll</code> to run all included subproject tests in one command.</li>
+            <li><strong>Delivery is release-oriented</strong>:
+                <code>delivery</code> runs <code>testAll</code> and produces ZIP/TAR archives for distribution.</li>
+            <li><strong>Run task bootstrap</strong>:
+                root <code>run</code> now ensures distribution runtime is prepared; if <code>build/generatedConfig</code> is missing,
+                it triggers the root <code>build</code> first before launching.</li>
+            <li><strong>Cleaner cleaning</strong>:
+                consolidated root clean behavior and kept module cleans wired through umbrella execution.</li>
+        </ul>
+
+        <h3>📦 Asset Pipeline: Subproject-Scoped Config + Optimised Refresh</h3>
+        <ul>
+            <li><strong>Per-module resource sync configuration</strong>:
+                <code>*_url</code> and <code>*_hash</code> are now read from and written to each module’s
+                <code>gradle.properties</code> (not root), avoiding cross-module contention.</li>
+            <li><strong>Reset hashes per-module</strong>:
+                <code>resetAssetHashes</code> now applies to included subprojects’ <code>gradle.properties</code> only.</li>
+            <li><strong>Optimised refreshAssets pipeline</strong>:
+                root <code>refreshAssets</code> now depends only on the top-of-chain generator task per module
+                (e.g., <code>generateAssetEnums</code>) instead of wiring every intermediate task redundantly.</li>
+            <li><strong>Skip generation when no remote URL</strong>:
+                if a module has no configured resource URL, asset enum generation is skipped so empty invalid enums are not emitted.</li>
+            <li><strong>Generated enum name hygiene</strong>:
+                improved module naming normalization work (lowercase ids) to reduce inconsistencies across config and packaging paths.</li>
+        </ul>
+
+        <h3>🧩 Modular Constants &amp; Annotation Wiring Improvements</h3>
+        <ul>
+            <li><strong>Constants structure cleanup</strong>:
+                reorganised the “Special / framework internals” constants into clearer groupings,
+                reducing the “one giant list” maintenance burden.</li>
+            <li><strong>Consistent categorisation for naming enums</strong>:
+                applied the same structured grouping approach to <code>SubComponentNames</code> and improved overall readability.</li>
+            <li><strong>Module name taxonomy</strong>:
+                categorised <code>ModuleNames</code> into clearer tiers (framework / project / tooling / test)
+                while retaining priority semantics.</li>
+            <li><strong>Init annotation direction</strong>:
+                moved toward modular definition sources (string keys) and introduced stronger mechanisms
+                to keep module/component/subcomponent/platform identifiers consistent across modules.</li>
+        </ul>
+
+        <h3>🔌 Plugin System: Overridable Behaviour Across Modules</h3>
+        <ul>
+            <li><strong>Introduced <code>Plugin</code> pattern</strong>:
+                core behavior is now provided via pluggable interfaces so higher-level modules can override lower-level defaults.</li>
+            <li><strong>Priority-based selection</strong>:
+                <code>PluginRegistry</code> loads implementations (via <code>ServiceLoader</code>) and selects the highest-priority plugin.</li>
+            <li><strong>Test overrides</strong>:
+                <code>PluginRegistry.override()</code> allows explicit per-test (or bootstrapping) plugin injection.</li>
+            <li><strong>Logging as a plugin</strong>:
+                <code>FileLogger</code> now obtains its <code>IApplicationLogger</code> through a <code>LoggingPlugin</code>,
+                allowing gwcore to remain free of LibGDX runtime dependencies.</li>
+        </ul>
+
+        <h3>🧪 Testing Infrastructure: Cleaner BaseTest &amp; Test Logging</h3>
+        <ul>
+            <li><strong>Forced test log routing</strong>:
+                tests can force all logging into <code>LogFiles.TEST</code> (including heuristic detection + explicit override flag).</li>
+            <li><strong>LibGDX-free core direction</strong>:
+                began decoupling test scaffolding from LibGDX by planning plugin-provided environment setup,
+                enabling gwcore to remain framework-only while gwgame supplies runtime stubs when needed.</li>
+            <li><strong>Unified test wrapper</strong>:
+                BaseTest retains a single annotated entry-point and delegates to <code>runTest()</code>, preventing boilerplate in subclasses.</li>
+        </ul>
+
+        <h3>🧭 Loader &amp; Priority Resolution Groundwork</h3>
+        <ul>
+            <li><strong>Lowercase module identifiers</strong>:
+                config-driven project id handling is normalised to lowercase to reduce mismatches between
+                config JSON, Gradle project paths, and generated distribution descriptors.</li>
+            <li><strong>Priority lookup strategy</strong>:
+                introduced the approach of a <code>ModulePriorityRegistry</code> that can exist as a dummy runtime implementation
+                and be overwritten by a processor-generated version later, preventing boot issues when generation is absent.</li>
+        </ul>
+
+        <h3>✅ Outcome</h3>
+        <ul>
+            <li>Build tasks are now explicitly scoped: build-only, test-only, and delivery packaging, with a more resilient run workflow.</li>
+            <li>Assets/resource syncing is safer and more scalable by keeping remote URL/hash state within each module.</li>
+            <li>Plugins provide a clean override story so gwcore stays lightweight while gwgame can supply runtime-heavy behavior.</li>
+            <li>Tests can reliably force log routing and prepare runtime scaffolding without hard coupling to platform modules.</li>
+        </ul>
+
+    </div>
+</details>
 
 <!-- ---------- 0.0.17P -------------------------------------------------- -->
 <details>

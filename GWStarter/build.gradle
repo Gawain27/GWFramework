@@ -50,7 +50,10 @@ application {
 // Dependencies
 // ---------------------------------------------------------------------
 dependencies {
+  // TODO generate this based on config
   implementation project(path: ':gwcore', configuration: 'testOutput')
+  implementation project(path: ':gwgame', configuration: 'testOutput')
+
   annotationProcessor project(':gwcore')
 
   implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"

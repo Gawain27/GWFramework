@@ -29,13 +29,13 @@ public final class InitAnnotationProcessorTest extends BaseTest {
                     package com.example;
 
                     import com.gwngames.core.api.build.Init;
-                    import com.gwngames.core.data.ModuleNames;
+                    import com.gwngames.core.CoreModule;
                     import com.gwngames.core.CoreComponent;
                     import com.gwngames.core.CoreSubComponent;
                     import com.gwngames.starter.Platform;
 
                     @Init(
-                      module = ModuleNames.CORE,
+                      module = CoreModule.CORE,
                       component = CoreComponent.NONE,
                       subComp = CoreSubComponent.NONE,
                       platform = Platform.ALL
@@ -55,10 +55,10 @@ public final class InitAnnotationProcessorTest extends BaseTest {
                     package com.example;
 
                     import com.gwngames.core.api.build.Init;
-                    import com.gwngames.core.data.ModuleNames;
+                    import com.gwngames.core.CoreModule;
 
                     @Init(
-                      module = ModuleNames.CORE,
+                      module = CoreModule.CORE,
                       component = "NOT_A_REAL_COMPONENT",
                       subComp = "NOT_A_REAL_SUBCOMP",
                       platform = "NOT_A_REAL_PLATFORM"

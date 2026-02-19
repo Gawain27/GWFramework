@@ -1,12 +1,12 @@
 package com.gwngames.game.input.buffer;
 
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.api.input.buffer.IInputBuffer;
-import com.gwngames.core.api.input.buffer.IInputCombo;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.LogFiles;
-import com.gwngames.core.data.ModuleNames;
+import com.gwngames.game.GameModule;
+import com.gwngames.game.api.input.buffer.IInputBuffer;
+import com.gwngames.game.api.input.buffer.IInputCombo;
 
 import java.util.*;
 
@@ -14,7 +14,7 @@ import java.util.*;
  * Size-bounded, auto-expiring ring of {@link IInputCombo}s for one adapter
  * slot.  Every stored element keeps the frame number when it was created.
  */
-@Init(module = ModuleNames.CORE)
+@Init(module = GameModule.GAME)
 public class SmartInputBuffer extends BaseComponent implements IInputBuffer {
 
     /* ── logging ─────────────────────────────────────────────────── */

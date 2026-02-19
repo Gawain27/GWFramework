@@ -1,6 +1,9 @@
 package com.gwngames.core.base.log;
 
+import com.gwngames.core.api.base.cfg.IApplicationLogger;
+import com.gwngames.core.api.plugin.LoggingPlugin;
 import com.gwngames.core.base.BaseComponent;
+import com.gwngames.core.base.cfg.PluginRegistry;
 import com.gwngames.core.data.LogFiles;
 
 import java.util.Arrays;
@@ -8,7 +11,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class FileLogger {
-    private final FileApplicationLogger logger = new FileApplicationLogger();
+    private IApplicationLogger logger;
     public static final int ERROR_LEVEL = 0;
     public static final int INFO_LEVEL  = 1;
     public static final int DEBUG_LEVEL = 2;
@@ -24,10 +27,23 @@ public class FileLogger {
     private final String logFilePath;
 
     private FileLogger(String logFilePath) {
-        if (isRunningTests()){
-            this.logFilePath = LogFiles.TEST;
-        } else {
-            this.logFilePath = logFilePath;
+        this.logFilePath = isRunningTests() ? LogFiles.TEST : logFilePath;
+    }
+
+    private IApplicationLogger logger() {
+        IApplicationLogger l = logger;
+        if (l != null) return l;
+
+        synchronized (this) {
+
+            LoggingPlugin lg = PluginRegistry.get(LoggingPlugin.class);
+            if (lg == null) {
+                // Fallback that won't crash tests. Replace with your simplest impl.
+                logger = new StdErrApplicationLogger();
+            } else {
+                logger = lg.createApplicationLogger();
+            }
+            return logger;
         }
     }
 
@@ -41,42 +57,42 @@ public class FileLogger {
 
     public void info(String message, Object... args) {
         if (enabled_level >= INFO_LEVEL) {
-            logger.log(logFilePath, message, args);
+            logger().log(logFilePath, message, args);
             dashTap(LogBus.Level.INFO, message, null, args);
         }
     }
 
     public void info(String message, Throwable exception, Object... args) {
         if (enabled_level >= INFO_LEVEL) {
-            logger.log(logFilePath, message, exception, args);
+            logger().log(logFilePath, message, exception, args);
             dashTap(LogBus.Level.INFO, message, exception, args);
         }
     }
 
     public void error(String message, Object... args) {
         if (enabled_level >= ERROR_LEVEL) {
-            logger.error(logFilePath, message, args);
+            logger().error(logFilePath, message, args);
             dashTap(LogBus.Level.ERROR, message, null, args);
         }
     }
 
     public void error(String message, Throwable exception, Object... args) {
         if (enabled_level >= ERROR_LEVEL) {
-            logger.error(logFilePath, message, exception, args);
+            logger().error(logFilePath, message, exception, args);
             dashTap(LogBus.Level.ERROR, message, exception, args);
         }
     }
 
     public void debug(String message, Object... args) {
         if (enabled_level >= DEBUG_LEVEL) {
-            logger.debug(logFilePath, message, args);
+            logger().debug(logFilePath, message, args);
             dashTap(LogBus.Level.DEBUG, message, null, args);
         }
     }
 
     public void debug(String message, Throwable exception, Object... args) {
         if (enabled_level >= DEBUG_LEVEL) {
-            logger.debug(logFilePath, message, exception, args);
+            logger().debug(logFilePath, message, exception, args);
             dashTap(LogBus.Level.DEBUG, message, exception, args);
         }
     }

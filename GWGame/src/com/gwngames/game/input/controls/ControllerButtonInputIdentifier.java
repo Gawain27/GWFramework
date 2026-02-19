@@ -2,11 +2,11 @@ package com.gwngames.game.input.controls;
 
 import com.badlogic.gdx.controllers.Controller;
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.api.input.IButtonIdentifier;
-import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.util.ControllerMappingUtil;
+import com.gwngames.game.GameModule;
+import com.gwngames.game.api.input.IButtonIdentifier;
 
-@Init(module = ModuleNames.CORE)
+@Init(module = GameModule.GAME)
 public class ControllerButtonInputIdentifier extends BaseInputIdentifier implements IButtonIdentifier {
     private Controller controller;
     private int buttonCode;

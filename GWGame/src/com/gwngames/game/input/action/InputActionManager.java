@@ -1,13 +1,14 @@
 package com.gwngames.game.input.action;
 
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.api.input.action.IInputAction;
-import com.gwngames.core.api.input.action.IInputActionManager;
-import com.gwngames.core.api.input.action.IInputMapper;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.LogFiles;
-import com.gwngames.core.data.ModuleNames;
+import com.gwngames.game.GameModule;
+import com.gwngames.game.api.input.IInputAdapter;
+import com.gwngames.game.api.input.action.IInputAction;
+import com.gwngames.game.api.input.action.IInputActionManager;
+import com.gwngames.game.api.input.action.IInputMapper;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -21,7 +22,7 @@ import java.util.function.Supplier;
  *       {@link IInputAdapter} (slot)</li>
  * </ol>
  */
-@Init(module = ModuleNames.CORE)
+@Init(module = GameModule.GAME)
 public class InputActionManager extends BaseComponent implements IInputActionManager {
 
     private static final FileLogger log = FileLogger.get(LogFiles.INPUT);

@@ -1,12 +1,17 @@
 package com.gwngames.game.input.action;
 
 import com.gwngames.core.api.build.Inject;
-import com.gwngames.core.api.event.input.IAxisEvent;
-import com.gwngames.core.api.event.input.IButtonEvent;
-import com.gwngames.core.api.event.input.IInputEvent;
-import com.gwngames.core.api.event.input.ITouchEvent;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.log.FileLogger;
+import com.gwngames.game.api.event.input.IAxisEvent;
+import com.gwngames.game.api.event.input.IButtonEvent;
+import com.gwngames.game.api.event.input.IInputEvent;
+import com.gwngames.game.api.event.input.ITouchEvent;
+import com.gwngames.game.api.input.*;
+import com.gwngames.game.api.input.action.IInputAction;
+import com.gwngames.game.api.input.action.IInputMapper;
+import com.gwngames.game.api.input.buffer.IInputChain;
+import com.gwngames.game.api.input.buffer.IInputCoordinator;
 import com.gwngames.game.data.input.InputContext;
 import com.gwngames.core.data.LogFiles;
 
@@ -58,7 +63,7 @@ public abstract class BaseInputMapper extends BaseComponent implements IInputMap
         new HashMap<>();
 
     protected void map(IInputChain chain, Set<InputContext> vis, IInputAction action){
-        EnumMap<InputContext,IInputAction> m =
+        EnumMap<InputContext, IInputAction> m =
             chainMap.computeIfAbsent(chain, c -> new EnumMap<>(InputContext.class));
         if (vis.isEmpty()) vis = EnumSet.allOf(InputContext.class);
         for (InputContext v : vis) m.put(v, action);
@@ -91,8 +96,8 @@ public abstract class BaseInputMapper extends BaseComponent implements IInputMap
 
         IInputIdentifier id = switch (evt){
             case IButtonEvent be -> be.getControl();
-            case IAxisEvent   ae -> ae.getControl();
-            case ITouchEvent  te -> te.getControl();
+            case IAxisEvent ae -> ae.getControl();
+            case ITouchEvent te -> te.getControl();
             default              -> null;
         };
         if (id == null) return;

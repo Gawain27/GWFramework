@@ -1,9 +1,9 @@
 package com.gwngames.game.event.input;
 
-import com.gwngames.core.api.event.input.IInputEvent;
-import com.gwngames.core.api.input.IInputAdapter;
+import com.gwngames.game.api.event.input.IInputEvent;
+import com.gwngames.game.api.input.IInputAdapter;
+import com.gwngames.game.api.input.action.IInputAction;
 import com.gwngames.game.data.input.InputType;
-import com.gwngames.core.api.input.action.IInputAction;
 import com.gwngames.core.event.base.AbstractEvent;
 
 public abstract class InputEvent extends AbstractEvent implements IInputEvent {

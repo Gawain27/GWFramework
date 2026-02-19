@@ -1,14 +1,14 @@
 package com.gwngames.core.event.trigger;
 
+import com.gwngames.core.CoreModule;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.event.IEvent;
 import com.gwngames.core.api.event.trigger.IManualTrigger;
-import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.event.base.AbstractEventTrigger;
 import com.gwngames.core.event.base.MacroEvent;
 
 /** Fires only when {@link #fire()} is called. */
-@Init(module = ModuleNames.CORE)
+@Init(module = CoreModule.CORE)
 public class ManualTrigger extends AbstractEventTrigger implements IManualTrigger {
 
     private MacroEvent macroPayload;

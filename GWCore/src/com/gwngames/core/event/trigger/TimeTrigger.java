@@ -1,18 +1,17 @@
 package com.gwngames.core.event.trigger;
 
-import com.badlogic.gdx.utils.TimeUtils;
+import com.gwngames.core.CoreModule;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.event.IEvent;
 import com.gwngames.core.api.event.IMacroEvent;
 import com.gwngames.core.api.event.trigger.ITimeTrigger;
-import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.event.base.AbstractEventTrigger;
 
 /**
  * Fires at fixed time intervals (in milliseconds).
  * If {@code repeat} is {@code false} it behaves like a one-shot timer.
  */
-@Init(module = ModuleNames.CORE)
+@Init(module = CoreModule.CORE)
 public class TimeTrigger extends AbstractEventTrigger implements ITimeTrigger {
 
     private long intervalMs;
@@ -26,7 +25,7 @@ public class TimeTrigger extends AbstractEventTrigger implements ITimeTrigger {
 
         if (!isEnabled()) return false;
 
-        long now = TimeUtils.millis();
+        long now = System.currentTimeMillis();
         if (now < nextFireAt) return false;
 
         /* -- enqueue payload -- */

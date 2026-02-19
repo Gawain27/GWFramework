@@ -4,10 +4,7 @@ import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.assets.loaders.resolvers.AbsoluteFileHandleResolver;
 import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.utils.Disposable;
-import com.gwngames.core.api.asset.IAssetManager;
 import com.gwngames.core.api.asset.IAssetPath;
-import com.gwngames.core.api.asset.IAssetSubType;
-import com.gwngames.core.api.asset.IAssetSubTypeRegistry;
 import com.gwngames.core.api.base.cfg.ILocale;
 import com.gwngames.core.api.build.IPathResolver;
 import com.gwngames.core.api.build.Init;
@@ -17,8 +14,11 @@ import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.cfg.ModuleClassLoader;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.LogFiles;
-import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.util.StringUtils;
+import com.gwngames.game.GameModule;
+import com.gwngames.game.api.asset.IAssetManager;
+import com.gwngames.game.api.asset.IAssetSubType;
+import com.gwngames.game.api.asset.IAssetSubTypeRegistry;
 import com.gwngames.game.data.asset.AssetCategory;
 
 import java.io.BufferedReader;
@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Init(module = ModuleNames.CORE)
+@Init(module = GameModule.GAME)
 public final class ModularAssetManager extends BaseComponent implements IAssetManager, Disposable {
 
     // TODO: to config

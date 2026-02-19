@@ -4,13 +4,13 @@ import com.gwngames.core.api.base.cfg.IConfig;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.api.build.PostInject;
-import com.gwngames.core.api.input.IInputIdentifier;
-import com.gwngames.core.api.input.buffer.IInputCombo;
-import com.gwngames.core.api.input.buffer.IInputComboManager;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.LogFiles;
-import com.gwngames.core.data.ModuleNames;
+import com.gwngames.game.GameModule;
+import com.gwngames.game.api.input.IInputIdentifier;
+import com.gwngames.game.api.input.buffer.IInputCombo;
+import com.gwngames.game.api.input.buffer.IInputComboManager;
 import com.gwngames.game.data.input.ComboDefinition;
 import com.gwngames.game.data.input.InputParameters;
 
@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
  *  - an inverted index keyed by a semantic fingerprint (not object identity)
  *  - greedy selection by (priority desc, size desc, name asc) with no overlap.
  */
-@Init(module = ModuleNames.CORE)
+@Init(module = GameModule.GAME)
 public final class FastComboManager extends BaseComponent implements IInputComboManager {
     private static final FileLogger log = FileLogger.get(LogFiles.INPUT);
 

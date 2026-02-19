@@ -1,18 +1,18 @@
 package com.gwngames.game.input.buffer;
 
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.api.input.buffer.IInputChain;
-import com.gwngames.core.api.input.buffer.IInputChainManager;
-import com.gwngames.core.api.input.buffer.IInputCombo;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.LogFiles;
-import com.gwngames.core.data.ModuleNames;
+import com.gwngames.game.GameModule;
+import com.gwngames.game.api.input.buffer.IInputChain;
+import com.gwngames.game.api.input.buffer.IInputChainManager;
+import com.gwngames.game.api.input.buffer.IInputCombo;
 import com.gwngames.game.data.input.InputContext;
 
 import java.util.*;
 
-@Init(module = ModuleNames.CORE)
+@Init(module = GameModule.GAME)
 public class FastInputChainManager extends BaseComponent implements IInputChainManager {
 
     private static final FileLogger log = FileLogger.get(LogFiles.INPUT);

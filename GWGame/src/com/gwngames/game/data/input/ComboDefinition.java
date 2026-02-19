@@ -1,10 +1,10 @@
 package com.gwngames.game.data.input;
 
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.api.input.IInputIdentifier;
-import com.gwngames.core.api.input.buffer.IInputCombo;
-import com.gwngames.core.api.input.buffer.IInputComboManager;
-import com.gwngames.core.data.ModuleNames;
+import com.gwngames.game.GameModule;
+import com.gwngames.game.api.input.IInputIdentifier;
+import com.gwngames.game.api.input.buffer.IInputCombo;
+import com.gwngames.game.api.input.buffer.IInputComboManager;
 
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
  * - If constructed with (ids, prio) → uses a dynamic default TTL loaded from config.
  * - If constructed with (ids, ttl, prio) → uses that explicit ttl and ignores the default.
  */
-@Init(module = ModuleNames.CORE)
+@Init(module = GameModule.GAME)
 public enum ComboDefinition implements IInputCombo {
 
     /* ─────── movement ─────── */

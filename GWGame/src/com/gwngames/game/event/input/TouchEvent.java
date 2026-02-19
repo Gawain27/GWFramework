@@ -2,17 +2,17 @@ package com.gwngames.game.event.input;
 
 import com.badlogic.gdx.math.Vector2;
 import com.gwngames.core.api.build.Init;
-import com.gwngames.core.api.event.input.ITouchEvent;
-import com.gwngames.core.api.input.IInputIdentifier;
-import com.gwngames.core.data.ModuleNames;
+import com.gwngames.game.GameModule;
+import com.gwngames.game.api.event.input.ITouchEvent;
+import com.gwngames.game.api.input.IInputIdentifier;
 
 /**
  * A rich event representing any touchscreen pointer activity
  * (down, up, drag).  It carries a pointer-specific identifier
  * plus absolute screen coordinates and optional pressure.
  */
-@Init(module = ModuleNames.CORE)
-public final class TouchEvent extends InputEvent implements ITouchEvent {
+@Init(module = GameModule.GAME)
+public class TouchEvent extends InputEvent implements ITouchEvent {
 
     /** Which logical pointer (0‥N) this event came from. */
     private IInputIdentifier control;

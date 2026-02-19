@@ -11,11 +11,17 @@ import com.gwngames.game.plugin.gdx.DummyInput;
  * Installs libGDX stubs for tests.
  * Lives in gwgame so gwcore doesn't depend on libGDX.
  */
-public final class GdxTestEnvironmentPlugin implements TestEnvironmentPlugin {
+public class GdxTestEnvironmentPlugin implements TestEnvironmentPlugin {
 
-    @Override public String id() { return "test-env"; }
+    @Override
+    public String id() {
+        return "test-env";
+    }
 
-    @Override public String module() { return GameModule.GAME; } // string constant
+    @Override
+    public String module() {
+        return GameModule.GAME;
+    }
 
     @Override
     public void install() {

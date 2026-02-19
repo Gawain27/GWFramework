@@ -20,17 +20,20 @@ public final class PluginRegistry {
         IPlugin cached = SELECTED.get(type);
         if (cached != null) return type.cast(cached);
 
-        List<IPlugin> found = new ArrayList<>();
-        ServiceLoader.load(type).forEach(found::add);
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        ServiceLoader<T> loader = ServiceLoader.load(type, cl);
+
+        List<T> found = new ArrayList<>();
+        loader.forEach(found::add);
 
         found.sort(Comparator.comparingInt(IPlugin::priority).reversed());
         ALL.put(type, List.copyOf(found));
 
         if (found.isEmpty()) return null;
 
-        IPlugin best = found.getFirst();
+        T best = found.get(0);
         SELECTED.put(type, best);
-        return type.cast(best);
+        return best;
     }
 
     /** For diagnostics/tests. Sorted DESC by priority. */
@@ -38,6 +41,7 @@ public final class PluginRegistry {
     public static <T extends IPlugin> List<T> list(Class<T> type) {
         return (List<T>) (List<?>) ALL.getOrDefault(type, List.of());
     }
+
 
     /** Hard override for tests or bootstrapping. */
     public static synchronized <T extends IPlugin> void override(Class<T> type, T instance) {

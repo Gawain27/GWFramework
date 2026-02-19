@@ -1,7 +1,7 @@
 package com.gwngames.game.input.controls;
 
-import com.gwngames.core.api.input.IInputIdentifier;
 import com.gwngames.core.base.BaseComponent;
+import com.gwngames.game.api.input.IInputIdentifier;
 
 public abstract class BaseInputIdentifier extends BaseComponent implements IInputIdentifier {
     private boolean recordWhilePressed;

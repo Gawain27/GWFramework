@@ -1,9 +1,9 @@
 package com.gwngames.core.build;
 
+import com.gwngames.core.CoreModule;
 import com.gwngames.core.api.build.IPathResolver;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseComponent;
-import com.gwngames.core.data.ModuleNames;
 
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -13,7 +13,7 @@ import java.util.Locale;
 /**
  * Default path resolver. Works in IDE and packaged JAR deployments.
  */
-@Init(module = ModuleNames.CORE)
+@Init(module = CoreModule.CORE)
 public final class CorePathResolver extends BaseComponent implements IPathResolver {
     private final Path execDir;
     private final Path workingDir;

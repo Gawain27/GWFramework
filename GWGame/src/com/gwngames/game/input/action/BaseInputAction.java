@@ -1,10 +1,10 @@
 package com.gwngames.game.input.action;
 
-import com.gwngames.core.api.event.input.IInputEvent;
-import com.gwngames.core.api.input.action.IInputAction;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.log.FileLogger;
 import com.gwngames.core.data.LogFiles;
+import com.gwngames.game.api.event.input.IInputEvent;
+import com.gwngames.game.api.input.action.IInputAction;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

@@ -24,14 +24,13 @@ import com.badlogic.gdx.utils.ScreenUtils;
 import com.gwngames.game.api.build.IGameLauncher;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseComponent;
-import com.gwngames.core.data.ModuleNames;
 
 /** Super Mario Brothers-like very basic platformer, using a tile map built using <a href="https://www.mapeditor.org/">Tiled</a> and a
  * tileset and sprites by <a href="http://www.vickiwenderlich.com/">Vicky Wenderlich</a></p>
  *
  * Shows simple platformer collision detection as well as on-the-fly map modifications through destructible blocks!
  * @author mzechner */
-@Init(module = ModuleNames.DEVELOPMENT)
+@Init(module = DevelopmentModule.DEVELOPMENT)
 public class DevelopmentLauncher extends BaseComponent implements IGameLauncher {
     @Override
     public String getLauncherName() {

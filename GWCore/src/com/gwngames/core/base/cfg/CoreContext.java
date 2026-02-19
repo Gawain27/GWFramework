@@ -1,9 +1,9 @@
 package com.gwngames.core.base.cfg;
 
+import com.gwngames.core.CoreModule;
 import com.gwngames.core.api.base.cfg.IContext;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.base.BaseComponent;
-import com.gwngames.core.data.ModuleNames;
 import com.gwngames.core.data.cfg.ContextKey;
 
 import java.util.Map;
@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 /** Simple, thread-safe implementation of {@link IContext}. */
-@Init(module = ModuleNames.CORE)
+@Init(module = CoreModule.CORE)
 public class CoreContext extends BaseComponent implements IContext {
 
     // Values win over providers; providers compute once on first read.

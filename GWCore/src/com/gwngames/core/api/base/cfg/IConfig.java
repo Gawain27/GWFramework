@@ -38,6 +38,8 @@ public interface IConfig extends IBaseComp {
 
     @SuppressWarnings("unchecked")
     default <T> T get(IParam<T> key) {
+        if (_values.isEmpty())
+            registerParameters();
         Object v = _values.get(key);
         if (v == null) {
             if (key.nullable()) return null;
@@ -55,6 +57,8 @@ public interface IConfig extends IBaseComp {
 
     @SuppressWarnings("unchecked")
     default <T> T getNullable(IParam<T> key) {
+        if (_values.isEmpty())
+            registerParameters();
         Object v = _values.get(key);
         if (v == null) return null;
         if (!key.type().isInstance(v))
@@ -62,8 +66,15 @@ public interface IConfig extends IBaseComp {
         return (T) v;
     }
 
-    default boolean has(IParam<?> key) { return _values.containsKey(key); }
-    default Map<IParam<?>, Object> snapshotAll() { return Collections.unmodifiableMap(_values); }
+    default boolean has(IParam<?> key) {
+        if (_values.isEmpty())
+            registerParameters();
+        return _values.containsKey(key);
+    }
+
+    default Map<IParam<?>, Object> snapshotAll() {
+        return Collections.unmodifiableMap(_values);
+    }
 
     /** Call after {@link #registerParameters()} to enforce required params. */
     default void validateAllParamsFilled() {

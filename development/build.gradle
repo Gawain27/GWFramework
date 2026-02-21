@@ -2,6 +2,14 @@
 // development/build.gradle : Level 10 library (let's be real, we'll never have 9+ modules... right?)
 // ---------------------------------------------------------------------
 
+plugins {
+  id 'java-library'
+}
+
+java {
+  toolchain { languageVersion = JavaLanguageVersion.of(21) }
+}
+
 ext.projectLevel = 10
 
 dependencies {

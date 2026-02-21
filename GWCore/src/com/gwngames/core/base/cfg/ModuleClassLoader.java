@@ -3,9 +3,10 @@ package com.gwngames.core.base.cfg;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.google.gson.stream.JsonReader;
-import com.gwngames.core.CoreComponent;
+import com.gwngames.core.CoreModule;
 import com.gwngames.core.CoreSubComponent;
 import com.gwngames.core.api.base.IBaseComp;
+import com.gwngames.core.api.base.cfg.IApplicationLogger;
 import com.gwngames.core.api.base.cfg.IClassLoader;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.ex.ErrorPopupException;
@@ -30,17 +31,23 @@ import java.util.jar.JarFile;
  * Keys are formed as: "component#subComp" (subComp can be NONE).
  * Module priority is resolved via {@link ModulePriorityRegistry#priorityOf(String)}.
  */
-@Init(module = CoreComponent.CLASS_LOADER) // or DefaultModule.CORE if accessible from core
+@Init(module = CoreModule.CORE) // or DefaultModule.CORE if accessible from core
 public class ModuleClassLoader extends ClassLoader implements IClassLoader {
-
+    private static FileLogger log;
     /* ───────────────────────── static members ───────────────────────── */
-    private static final FileLogger log = FileLogger.get(LogFiles.SYSTEM);
-
     /** Interfaces annotated with @Init(module=INTERFACE) (you filter by IBaseComp). */
     private static final List<Class<?>> interfaceTypes = new ArrayList<>();
     /** Concrete classes kept after duplicate-pruning. */
     private static final List<Class<?>> concreteTypes  = new ArrayList<>();
 
+    private static FileLogger log() {
+        if (log == null) {
+            log = FileLogger.get(LogFiles.SYSTEM, true);
+        } else {
+            log.setForceDefaultLog(false);
+        }
+        return log;
+    }
     /**
      * All candidates per key "component#sub" (sub can be NONE), sorted by priority DESC.
      * Used for "next lower" selection.
@@ -67,12 +74,12 @@ public class ModuleClassLoader extends ClassLoader implements IClassLoader {
     public static synchronized ModuleClassLoader getInstance() {
         if (INSTANCE == null) {
             try {
-                log.info("Initializing ModuleClassLoader singleton...");
+                log().info("Initializing ModuleClassLoader singleton...");
                 INSTANCE = new ModuleClassLoader();
                 INSTANCE.ensureTypesLoaded();
-                log.info("ModuleClassLoader initialized successfully.");
+                log().info("ModuleClassLoader initialized successfully.");
             } catch (ErrorPopupException e) {
-                log.error("Failed to initialize ModuleClassLoader", e);
+                log().error("Failed to initialize ModuleClassLoader", e);
                 throw new RuntimeException(e);
             }
         }
@@ -81,10 +88,10 @@ public class ModuleClassLoader extends ClassLoader implements IClassLoader {
 
     private ModuleClassLoader() throws ErrorPopupException {
         super(ModuleClassLoader.class.getClassLoader());
-        log.debug("ModuleClassLoader created with parent ClassLoader: {}", getParent());
+        log().debug("ModuleClassLoader created with parent ClassLoader: {}", getParent());
         initLoaders();
         initJars();
-        log.info("ModuleClassLoader setup completed with {} class loaders and {} JARs.",
+        log().info("ModuleClassLoader setup completed with {} class loaders and {} JARs.",
             loaders.size(), jars.size());
     }
 
@@ -119,7 +126,7 @@ public class ModuleClassLoader extends ClassLoader implements IClassLoader {
     private void initLoaders() throws ErrorPopupException {
         String forcedBin = System.getProperty("gw.bin.dir");
         if (forcedBin != null) {
-            log.info("Using forced binary directory: {}", forcedBin);
+            log().info("Using forced binary directory: {}", forcedBin);
             useBinDir(new File(forcedBin));
             return;
         }
@@ -128,10 +135,10 @@ public class ModuleClassLoader extends ClassLoader implements IClassLoader {
         try {
             URL src = getClass().getProtectionDomain().getCodeSource().getLocation();
             whereAmI = new File(src.toURI());
-            log.debug("ModuleClassLoader source location: {}", src);
+            log().debug("ModuleClassLoader source location: {}", src);
             if (whereAmI.isFile()) whereAmI = whereAmI.getParentFile();
         } catch (Exception e) {
-            log.error("Executable location not found.", e);
+            log().error("Executable location not found.", e);
             throw new ErrorPopupException(CoreTranslation.EXE_NOT_FOUND);
         }
 
@@ -141,11 +148,11 @@ public class ModuleClassLoader extends ClassLoader implements IClassLoader {
         } else if ("lib".equals(whereAmI.getName())) {
             binDir = new File(whereAmI.getParentFile(), "bin");
         } else {
-            log.error("Binary directory not found near: {}", whereAmI);
+            log().error("Binary directory not found near: {}", whereAmI);
             throw new ErrorPopupException(CoreTranslation.BIN_NOT_FOUND, whereAmI.toString());
         }
 
-        log.info("Using binary directory: {}", binDir);
+        log().info("Using binary directory: {}", binDir);
         useBinDir(binDir);
     }
 
@@ -154,17 +161,17 @@ public class ModuleClassLoader extends ClassLoader implements IClassLoader {
         Map<String, Object> cfg;
         File cfgFile = new File(binDir, "config.json");
         try (JsonReader r = new JsonReader(new FileReader(cfgFile))) {
-            log.debug("Reading configuration from {}", cfgFile);
+            log().debug("Reading configuration from {}", cfgFile);
             cfg = new Gson().fromJson(r, new TypeToken<Map<String,Object>>(){}.getType());
         } catch (Exception e) {
-            log.error("Configuration file not found: {}", cfgFile, e);
+            log().error("Configuration file not found: {}", cfgFile, e);
             throw new ErrorPopupException(CoreTranslation.CONFIG_NOT_FOUND);
         }
 
         String gameType = (String) cfg.get("gameType");
         List<Map<String,Object>> projects = (List<Map<String,Object>>) cfg.get("projects");
         if (projects == null || projects.isEmpty()) {
-            log.error("No projects found in configuration.");
+            log().error("No projects found in configuration.");
             throw new ErrorPopupException(CoreTranslation.PROJECTS_NOT_FOUND);
         }
 
@@ -194,13 +201,13 @@ public class ModuleClassLoader extends ClassLoader implements IClassLoader {
                 classLoaders.add(new ProjectLoader(cl, level));
                 loaderCount++;
             } catch (MalformedURLException e) {
-                log.error("JAR not found: {}", jar, e);
+                log().error("JAR not found: {}", jar, e);
                 throw new ErrorPopupException(CoreTranslation.JAR_NOT_FOUND, jar.toString());
             }
         }
 
         loaders.sort(Comparator.comparing(ClassLoader::getName));
-        log.info("{} project class loaders initialized.", loaderCount);
+        log().info("{} project class loaders initialized.", loaderCount);
     }
 
     private void initJars() {
@@ -216,12 +223,12 @@ public class ModuleClassLoader extends ClassLoader implements IClassLoader {
                         jars.put(l, new JarFile(f));
                         jarCount++;
                     } catch (IOException e) {
-                        log.error("Error opening JAR file {}", f, e);
+                        log().error("Error opening JAR file {}", f, e);
                     }
                 }
             }
         }
-        log.info("Initialized {} JAR files and {} class directories.", jarCount, dirCount);
+        log().info("Initialized {} JAR files and {} class directories.", jarCount, dirCount);
     }
 
     /* ==================================================================== */
@@ -242,7 +249,7 @@ public class ModuleClassLoader extends ClassLoader implements IClassLoader {
 
                 Class<?> c = Class.forName(name, false, l);
                 resolved.put(name, c);
-                log.debug("Class {} loaded by {}", name, l.getName());
+                log().debug("Class {} loaded by {}", name, l.getName());
                 return c;
             } catch (ClassNotFoundException ignore) {
                 // try next
@@ -250,7 +257,7 @@ public class ModuleClassLoader extends ClassLoader implements IClassLoader {
         }
 
         misses.add(name);
-        log.error("Class {} not found.", name);
+        log().error("Class {} not found.", name);
         throw new ClassNotFoundException(name);
     }
 
@@ -261,9 +268,9 @@ public class ModuleClassLoader extends ClassLoader implements IClassLoader {
     private synchronized void ensureTypesLoaded() {
         if (!interfaceTypes.isEmpty() || !concreteTypes.isEmpty()) return;
 
-        log.info("Scanning for @Init-annotated types …");
+        log().info("Scanning for @Init-annotated types …");
         List<Class<?>> found = scanForAnnotated(Init.class);
-        log.info("Found {} @Init-annotated classes.", found.size());
+        log().info("Found {} @Init-annotated classes.", found.size());
 
         Map<String, Class<?>> bestMulti = new HashMap<>();
         Map<String, List<Class<?>>> allByKeyTmp = new HashMap<>();
@@ -275,7 +282,7 @@ public class ModuleClassLoader extends ClassLoader implements IClassLoader {
                 if (IBaseComp.class.isAssignableFrom(c)) {
                     interfaceTypes.add(c);
                 } else {
-                    log.debug("Skipping interface {} – does not extend IBaseComp", c.getName());
+                    log().debug("Skipping interface {} – does not extend IBaseComp", c.getName());
                 }
                 continue;
             }
@@ -303,7 +310,7 @@ public class ModuleClassLoader extends ClassLoader implements IClassLoader {
         }
 
         concreteTypes.addAll(bestMulti.values());
-        log.info("{} interface types and {} concrete types registered.", interfaceTypes.size(), concreteTypes.size());
+        log().info("{} interface types and {} concrete types registered.", interfaceTypes.size(), concreteTypes.size());
 
         // Sort & freeze the all-candidates index by module priority DESC
         for (Map.Entry<String, List<Class<?>>> e : allByKeyTmp.entrySet()) {
@@ -317,7 +324,7 @@ public class ModuleClassLoader extends ClassLoader implements IClassLoader {
         for (Class<?> c : concreteTypes) {
             if (c.isEnum()) {
                 instancesOf(c);
-                log.debug("Added enum: {}", c.getSimpleName());
+                log().debug("Added enum: {}", c.getSimpleName());
             }
         }
     }
@@ -486,7 +493,7 @@ public class ModuleClassLoader extends ClassLoader implements IClassLoader {
     public <T> T tryCreate(String componentId, Object... args) {
         try { return firstInstanceOf(_findClass(componentId), args); }
         catch (ClassNotFoundException e) {
-            log.error(e.getMessage());
+            log().error(e.getMessage());
             return null;
         }
     }
@@ -495,7 +502,7 @@ public class ModuleClassLoader extends ClassLoader implements IClassLoader {
         try {
             T obj = firstInstanceOf(findSubComponent(componentId, subCompId), args);
             if (obj instanceof IBaseComp bc) {
-                log.debug("Created {} id={}", bc.getClass().getSimpleName(), bc.getMultId());
+                log().debug("Created {} id={}", bc.getClass().getSimpleName(), bc.getMultId());
             }
             return obj;
         } catch (ClassNotFoundException e) {
@@ -648,7 +655,7 @@ public class ModuleClassLoader extends ClassLoader implements IClassLoader {
             final Init meta = IClassLoader.resolvedInit(candidate);
             final int p = ModulePriorityRegistry.priorityOf(meta.module());
             if (p < currentPriority) {
-                log.debug("findNextLowerFor({}, {}, prio={}): {} (prio={})",
+                log().debug("findNextLowerFor({}, {}, prio={}): {} (prio={})",
                     componentId, subCompId, currentPriority, candidate.getName(), p);
                 return candidate;
             }

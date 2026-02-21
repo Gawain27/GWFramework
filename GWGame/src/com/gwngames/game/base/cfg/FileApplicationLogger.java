@@ -3,6 +3,7 @@ package com.gwngames.game.base.cfg;
 import com.badlogic.gdx.ApplicationLogger;
 import com.gwngames.core.api.base.cfg.IApplicationLogger;
 import com.gwngames.core.data.LogFiles;
+import com.gwngames.core.util.StringUtils;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -39,7 +40,7 @@ public class FileApplicationLogger implements ApplicationLogger, IApplicationLog
                 Files.newBufferedWriter(resolvedPath, StandardOpenOption.CREATE, StandardOpenOption.APPEND))) {
 
                 // Substitute `{}` placeholders
-                String formattedMessage = String.format(message.replace("{}", "%s"), args);
+                String formattedMessage = StringUtils.formatBraces(message, args);
 
                 // Caller & context info
                 String timestamp  = dateFormat.format(new Date());

@@ -31,7 +31,7 @@ subprojects { Project sp ->
     systemProperty 'configSet', rootProject.configSet
     systemProperty 'gw.rootDir', rootProject.projectDir.absolutePath
 
-    // ✅ test-mode flag (for FileLogger redirect etc.)
+    // test-mode flag (for FileLogger redirect etc.)
     systemProperty 'gw.tests', 'true'
 
     workingDir = binDir

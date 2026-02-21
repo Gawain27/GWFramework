@@ -19,6 +19,7 @@ public class CoreConfiguration extends BaseComponent implements IConfig {
         setDefault(BuildParameters.LOG_LEVEL, FileLogger.DEBUG_LEVEL);
         setDefault(BuildParameters.DASHBOARD_PORT, 10_707);
 
+        setDefault(EventParameters.STATUS_LOG_SECONDS_PER_LOG, 60f);
         setDefault(EventParameters.COMM_EVENT_MAX_THREAD, 1);
         setDefault(EventParameters.SYSTEM_EVENT_MAX_THREAD, 4);
     }

@@ -22,43 +22,90 @@ public final class InitAnnotationProcessorTest extends BaseTest {
     protected void runTest() throws Exception {
         setupApplication();
 
-        // --- 1) should PASS: all strings exist in catalog constants ---
+        // --- 1) should PASS: strings exist in catalog constants ---
         CompilationResult ok = compile(
-            Map.of(
-                "com.example.OkInit", """
+            Map.ofEntries(
+                // Minimal catalogs visible to the processor in this in-memory compilation
+                Map.entry("com.example.catalogs.TestModuleCatalog", """
+                    package com.example.catalogs;
+
+                    import com.gwngames.core.api.build.catalog.ModuleCatalog;
+
+                    @ModuleCatalog
+                    public final class TestModuleCatalog {
+                        private TestModuleCatalog() {}
+                        public static final String CORE = "core";
+                    }
+                """),
+                Map.entry("com.example.catalogs.TestComponentCatalog", """
+                    package com.example.catalogs;
+
+                    import com.gwngames.core.api.build.catalog.ComponentCatalog;
+
+                    @ComponentCatalog
+                    public final class TestComponentCatalog {
+                        private TestComponentCatalog() {}
+                        public static final String NONE = "NONE";
+                    }
+                """),
+                Map.entry("com.example.catalogs.TestSubComponentCatalog", """
+                    package com.example.catalogs;
+
+                    import com.gwngames.core.api.build.catalog.SubComponentCatalog;
+
+                    @SubComponentCatalog
+                    public final class TestSubComponentCatalog {
+                        private TestSubComponentCatalog() {}
+                        public static final String NONE = "NONE";
+                        public static final String SIMPLE_EVENT = "SIMPLE_EVENT";
+                    }
+                """),
+                Map.entry("com.example.catalogs.TestPlatformCatalog", """
+                    package com.example.catalogs;
+
+                    import com.gwngames.core.api.build.catalog.PlatformCatalog;
+
+                    @PlatformCatalog
+                    public final class TestPlatformCatalog {
+                        private TestPlatformCatalog() {}
+                        public static final String ALL = "ALL";
+                    }
+                """),
+
+                // The class under test
+                Map.entry("com.example.OkInit", """
                     package com.example;
 
                     import com.gwngames.core.api.build.Init;
-                    import com.gwngames.core.CoreModule;
-                    import com.gwngames.core.CoreComponent;
-                    import com.gwngames.core.CoreSubComponent;
-                    import com.gwngames.starter.Platform;
+                    import com.example.catalogs.TestModuleCatalog;
+                    import com.example.catalogs.TestComponentCatalog;
+                    import com.example.catalogs.TestSubComponentCatalog;
+                    import com.example.catalogs.TestPlatformCatalog;
 
                     @Init(
-                      module = CoreModule.CORE,
-                      component = CoreComponent.NONE,
-                      subComp = CoreSubComponent.NONE,
-                      platform = Platform.ALL
+                      module = TestModuleCatalog.CORE,
+                      component = TestComponentCatalog.NONE,
+                      subComp = TestSubComponentCatalog.NONE,
+                      platform = TestPlatformCatalog.ALL
                     )
                     public final class OkInit {}
-                """
+                """)
             ),
             /*strict*/ true
         );
 
         Assertions.assertTrue(ok.success, () -> "Expected compilation success, got diagnostics:\n" + ok.diagnosticsText);
 
-        // --- 2) should FAIL: invalid component string ---
+        // --- 2) should FAIL: invalid strings ---
         CompilationResult bad = compile(
             Map.of(
                 "com.example.BadInit", """
                     package com.example;
 
                     import com.gwngames.core.api.build.Init;
-                    import com.gwngames.core.CoreModule;
 
                     @Init(
-                      module = CoreModule.CORE,
+                      module = "nope",
                       component = "NOT_A_REAL_COMPONENT",
                       subComp = "NOT_A_REAL_SUBCOMP",
                       platform = "NOT_A_REAL_PLATFORM"
@@ -71,11 +118,8 @@ public final class InitAnnotationProcessorTest extends BaseTest {
 
         Assertions.assertFalse(bad.success, "Expected compilation failure but compilation succeeded.");
 
-        // Check processor message (match something stable)
         Assertions.assertTrue(
-            bad.diagnosticsText.contains("@Init.component=\"NOT_A_REAL_COMPONENT\"")
-                || bad.diagnosticsText.contains("Init.component")
-                || bad.diagnosticsText.contains("NOT_A_REAL_COMPONENT"),
+            bad.diagnosticsText.contains("NOT_A_REAL_COMPONENT") || bad.diagnosticsText.contains("@Init.component"),
             () -> "Expected error mentioning invalid component, got:\n" + bad.diagnosticsText
         );
 
@@ -89,6 +133,11 @@ public final class InitAnnotationProcessorTest extends BaseTest {
             () -> "Expected error mentioning invalid platform, got:\n" + bad.diagnosticsText
         );
 
+        Assertions.assertTrue(
+            bad.diagnosticsText.contains("module") || bad.diagnosticsText.contains("@Init.module") || bad.diagnosticsText.contains("nope"),
+            () -> "Expected error mentioning invalid module, got:\n" + bad.diagnosticsText
+        );
+
         log.info("✅ Init annotation processor compile-time validation test passed.");
     }
 
@@ -96,37 +145,33 @@ public final class InitAnnotationProcessorTest extends BaseTest {
      * In-memory compilation harness
      * ======================================================================= */
 
-    private record CompilationResult(boolean success, String diagnosticsText) {
-    }
+    private record CompilationResult(boolean success, String diagnosticsText) {}
 
     private static CompilationResult compile(Map<String, String> fqnToSource, boolean strict) {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
-            // This happens if tests run on a JRE not a JDK.
             return new CompilationResult(false, "No system JavaCompiler available. Tests must run on a JDK.");
         }
 
         DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
-        StandardJavaFileManager stdManager = compiler.getStandardFileManager(diagnostics, Locale.ROOT, StandardCharsets.UTF_8);
+        StandardJavaFileManager stdManager =
+            compiler.getStandardFileManager(diagnostics, Locale.ROOT, StandardCharsets.UTF_8);
 
-        // In-memory sources
         List<JavaFileObject> sources = new ArrayList<>();
         for (Map.Entry<String, String> e : fqnToSource.entrySet()) {
             sources.add(new StringJavaFileObject(e.getKey(), e.getValue()));
         }
 
-        // Use current test classpath so catalog classes + Init are visible
         String classpath = System.getProperty("java.class.path");
 
         List<String> options = new ArrayList<>(List.of(
             "-classpath", classpath,
-            "-proc:only" // only run annotation processing (no class output needed)
+            "-proc:only"
         ));
         if (strict) {
             options.add("-Agw.init.strict=true");
         }
 
-        // Attach the processor directly (no service loading needed)
         Iterable<? extends Processor> processors = List.of(new InitStringValidatorProcessor());
 
         JavaCompiler.CompilationTask task =
@@ -135,7 +180,6 @@ public final class InitAnnotationProcessorTest extends BaseTest {
 
         boolean success = Boolean.TRUE.equals(task.call());
 
-        // Render diagnostics
         StringBuilder sb = new StringBuilder();
         for (Diagnostic<? extends JavaFileObject> d : diagnostics.getDiagnostics()) {
             sb.append(d.getKind())

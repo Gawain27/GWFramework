@@ -15,7 +15,13 @@ buildscript {
 
 plugins {
   id 'application'
+  id 'java-library'
 }
+
+java {
+  toolchain { languageVersion = JavaLanguageVersion.of(21) }
+}
+
 // If you keep the application plugin for dist tasks, just disable its run
 tasks.named('run').configure { enabled = false }
 
@@ -50,10 +56,11 @@ application {
 // Dependencies
 // ---------------------------------------------------------------------
 dependencies {
-  // TODO generate this based on config
+  // TODO investigate the potential utility of a generated version of this
   implementation project(path: ':gwcore', configuration: 'testOutput')
   implementation project(path: ':gwgame', configuration: 'testOutput')
 
+  // TODO yep, this has to be generated for each project... or maybe just hardcode it in each file?
   annotationProcessor project(':gwcore')
 
   implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"

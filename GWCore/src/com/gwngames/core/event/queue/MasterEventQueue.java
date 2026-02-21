@@ -127,24 +127,57 @@ public class MasterEventQueue extends BaseComponent implements IMasterEventQueue
 
     @Override
     public void process(float delta) {
-
-        /*  let every trigger decide if it fires this frame */
         triggers.values().forEach(t -> t.pollAndFire(delta));
 
-        /*  move macro-events’ inner events to their sub-queues */
         synchronized (this) {
-            for (IMacroEvent macro : macroQueue)
+            for (IMacroEvent macro : macroQueue) {
                 for (IEvent e : macro.getEvents()) {
                     log.info("Queues: {}", subQueues.keySet().stream().map(Class::getSimpleName).toList());
                     log.info("q class: {}", e.getClass().getSimpleName());
-                    IEventQueue q = subQueues.get(e.getClass());
-                    q.enqueue(e); // pass master
+
+                    IEventQueue q = resolveQueueFor(e);
+                    if (q == null) {
+                        throw new IllegalStateException(
+                            "No queue registered for event type " + e.getClass().getName()
+                                + " (known queue tokens: " + subQueues.keySet().stream().map(Class::getName).toList() + ")"
+                        );
+                    }
+                    q.enqueue(e);
                 }
+            }
             macroQueue.clear();
         }
-
-        /* ask each sub-queue to execute what is now eligible */
         subQueues.values().forEach(ConcurrentSubQueue::processAllEligible);
+    }
+
+    /** Cache event-class -> queue mapping (after assignability resolution). */
+    protected final Map<Class<?>, IEventQueue> routeCache = new ConcurrentHashMap<>();
+
+    protected IEventQueue resolveQueueFor(IEvent e) {
+        Class<?> ec = e.getClass();
+
+        // cached?
+        IEventQueue cached = routeCache.get(ec);
+        if (cached != null) return cached;
+
+        // exact key match?
+        IEventQueue exact = subQueues.get(ec);
+        if (exact != null) {
+            routeCache.put(ec, exact);
+            return exact;
+        }
+
+        // assignability match (interfaces / base types)
+        for (Map.Entry<Class<? extends IEvent>, ConcurrentSubQueue<? extends IEvent>> en : subQueues.entrySet()) {
+            Class<? extends IEvent> token = en.getKey();
+            if (token.isAssignableFrom(ec)) {
+                IEventQueue q = en.getValue();
+                routeCache.put(ec, q);
+                return q;
+            }
+        }
+
+        return null;
     }
 
     @Override

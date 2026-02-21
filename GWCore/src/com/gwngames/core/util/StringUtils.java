@@ -104,4 +104,56 @@ public class StringUtils {
             return false;
         }
     }
+
+    /**
+     * Very small SLF4J-style formatter:
+     * - Replaces unescaped "{}" with next arg (String.valueOf(arg))
+     * - "\{}" is treated as literal "{}" (does not consume an arg)
+     * - Extra args are appended: " [a, b]"
+     */
+    public static String formatBraces(String pattern, Object... args) {
+        if (pattern == null) return "null";
+        if (args == null || args.length == 0) return pattern;
+
+        StringBuilder out = new StringBuilder(pattern.length() + 16);
+        int argIndex = 0;
+
+        for (int i = 0; i < pattern.length(); i++) {
+            char c = pattern.charAt(i);
+
+            // Handle escaped placeholder: \{}
+            if (c == '\\' && i + 2 < pattern.length()
+                && pattern.charAt(i + 1) == '{'
+                && pattern.charAt(i + 2) == '}') {
+                out.append("{}");
+                i += 2;
+                continue;
+            }
+
+            // Handle placeholder: {}
+            if (c == '{' && i + 1 < pattern.length() && pattern.charAt(i + 1) == '}') {
+                if (argIndex < args.length) {
+                    out.append(String.valueOf(args[argIndex++]));
+                } else {
+                    out.append("{}"); // not enough args
+                }
+                i++; // skip '}'
+                continue;
+            }
+
+            out.append(c);
+        }
+
+        // Append leftover args (like SLF4J does) so nothing is silently dropped
+        if (argIndex < args.length) {
+            out.append(" [");
+            for (int j = argIndex; j < args.length; j++) {
+                if (j > argIndex) out.append(", ");
+                out.append(String.valueOf(args[j]));
+            }
+            out.append("]");
+        }
+
+        return out.toString();
+    }
 }

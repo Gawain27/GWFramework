@@ -108,8 +108,7 @@ public abstract class BaseComponent implements IBaseComp, IDashboardItem<BaseCom
     }
 
     /** weak-identity set to remember objects that have been wired already */
-    private static final Set<Object> WIRED =
-        java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
+    private static final Set<Object> WIRED = Collections.newSetFromMap(new WeakHashMap<>());
 
     private static boolean markWired(Object o) {
         synchronized (WIRED) {

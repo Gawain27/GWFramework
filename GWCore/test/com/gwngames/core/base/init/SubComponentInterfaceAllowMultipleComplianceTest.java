@@ -20,7 +20,7 @@ final class SubComponentInterfaceAllowMultipleComplianceTest extends BaseTest {
 
             /* only interested in multi-sub-component concretes */
             if (concrete.isInterface()) return;
-            if (ann == null || ann.subComp() == CoreSubComponent.NONE) return;
+            if (ann == null || ann.subComp().equals(CoreSubComponent.NONE)) return;
 
             boolean ok = hasAllowMultipleInterface(concrete);
 

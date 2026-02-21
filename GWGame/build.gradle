@@ -2,6 +2,14 @@
 // gwgame/build.gradle : Level 2 library (your game engine)
 // ---------------------------------------------------------------------
 
+plugins {
+  id 'java-library'
+}
+
+java {
+  toolchain { languageVersion = JavaLanguageVersion.of(21) }
+}
+
 ext.projectLevel = 2
 
 dependencies {

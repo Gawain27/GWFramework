@@ -1,6 +1,7 @@
 package com.gwngames.core.generated;
 
 import com.gwngames.catalog.ModulePriorities;
+import com.gwngames.core.util.StringUtils;
 
 import java.lang.reflect.Method;
 import java.util.*;
@@ -22,9 +23,10 @@ public final class ModulePriorityRegistry {
 
     /** Unknown -> 0. Case-insensitive. */
     public static int priorityOf(String moduleId) {
-        if (moduleId == null) return 0;
+        if (StringUtils.isEmpty(moduleId))
+            throw new IllegalStateException("null module");
         ensureInit();
-        return CACHE.getOrDefault(norm(moduleId), 0);
+        return CACHE.get(norm(moduleId));
     }
 
     /** Optional: force re-scan (useful in tests). */

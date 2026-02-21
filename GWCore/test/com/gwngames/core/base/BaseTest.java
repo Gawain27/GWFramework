@@ -4,7 +4,11 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.gwngames.core.api.base.cfg.IConfig;
 import com.gwngames.core.api.build.Init;
+import com.gwngames.core.api.build.Inject;
+import com.gwngames.core.api.event.IMasterEventQueue;
+import com.gwngames.core.api.event.system.ISystemEvent;
 import com.gwngames.core.api.plugin.TestEnvironmentPlugin;
 import com.gwngames.core.base.cfg.PluginRegistry;
 import com.gwngames.core.base.log.FileLogger;
@@ -39,6 +43,10 @@ import java.time.Instant;
 public abstract class BaseTest {
 
     protected static final FileLogger log = FileLogger.get(LogFiles.TEST);
+    @Inject
+    protected IConfig config;
+    @Inject
+    protected IMasterEventQueue master;
 
     @BeforeAll
     static void baseSetup() {
@@ -76,6 +84,7 @@ public abstract class BaseTest {
      */
     protected void setupApplication() {
         Cdi.inject(this);
+        Cdi.inject(master);
         log.debug("CDI injected into {}", getClass().getSimpleName());
     }
 
@@ -108,5 +117,5 @@ public abstract class BaseTest {
 
     /** Dummy Event stays in core (no libGDX dependency). */
     @Init(subComp = "simple_event", module = "core")
-    public static final class SimpleEvent extends AbstractEvent { }
+    public static final class SimpleEvent extends AbstractEvent implements ISystemEvent { }
 }

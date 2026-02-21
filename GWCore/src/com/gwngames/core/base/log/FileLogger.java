@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class FileLogger {
     private IApplicationLogger logger;
+    private boolean forceDefaultLog = false;
     public static final int ERROR_LEVEL = 0;
     public static final int INFO_LEVEL  = 1;
     public static final int DEBUG_LEVEL = 2;
@@ -35,18 +36,26 @@ public class FileLogger {
         if (l != null) return l;
 
         synchronized (this) {
-
-            LoggingPlugin lg = PluginRegistry.get(LoggingPlugin.class);
-            if (lg == null) {
+            if (forceDefaultLog) {
                 // Fallback that won't crash tests. Replace with your simplest impl.
                 logger = new StdErrApplicationLogger();
             } else {
-                logger = lg.createApplicationLogger();
+                LoggingPlugin lg = PluginRegistry.get(LoggingPlugin.class);
+                if (lg != null) {
+                    logger = lg.createApplicationLogger();
+                } else {
+                    logger = new StdErrApplicationLogger();
+                }
             }
             return logger;
         }
     }
 
+    public static FileLogger get(String logFilePath, boolean forceDefaultLog){
+        FileLogger lg = new FileLogger(logFilePath);
+        lg.setForceDefaultLog(forceDefaultLog);
+        return lg;
+    }
     public static FileLogger get(String logFilePath){ return new FileLogger(logFilePath); }
     public static void setLevel (int level){ enabled_level = level; }
     public static void setDashboardTap(boolean on){ tapDashboard = on; }
@@ -171,5 +180,13 @@ public class FileLogger {
             }
         }
         return false;
+    }
+
+    public boolean isForceDefaultLog() {
+        return forceDefaultLog;
+    }
+
+    public void setForceDefaultLog(boolean forceDefaultLog) {
+        this.forceDefaultLog = forceDefaultLog;
     }
 }

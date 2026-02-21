@@ -75,7 +75,7 @@ public abstract class BaseTest {
     /* ────────────────────────── convenience helpers ─────────────────────── */
 
     protected void assertTimeout(long timeoutMillis, Executable executable) {
-        Assertions.assertTimeout(Duration.ofMillis(timeoutMillis), executable);
+        Assertions.assertTimeoutPreemptively(Duration.ofMillis(timeoutMillis), executable);
     }
 
     /**

@@ -6,7 +6,19 @@ import com.gwngames.core.api.event.IEventStatus;
 
 @Init(module = CoreModule.CORE)
 public enum EventStatus implements IEventStatus {
-    WAITING,
-    EXECUTING,
-    COMPLETED;
+    WAITING(false),
+    EXECUTING(false),
+    COMPLETED(true),
+    FAILED(true);
+
+    final boolean finalState;
+
+    EventStatus(boolean finalState){
+        this.finalState = finalState;
+    }
+
+    @Override
+    public boolean isFinalState() {
+        return finalState;
+    }
 }

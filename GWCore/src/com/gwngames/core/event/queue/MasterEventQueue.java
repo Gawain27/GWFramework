@@ -101,10 +101,15 @@ public class MasterEventQueue extends BaseComponent implements IMasterEventQueue
     @Override
     public synchronized void markExecuted(IEvent event) {
         executedEvents.add(event);
-        checkMacroCompletion(event.getMacroEvent());
+
+        IMacroEvent macro = event.getMacroEvent();
+        if (macro != null) {
+            checkMacroCompletion(macro);
+        }
     }
 
     private void checkMacroCompletion(IMacroEvent macroEvent) {
+        if (macroEvent == null) return;
         for (IEvent event : macroEvent.getEvents())
             if (!executedEvents.contains(event)) return;
         completedMacros.add(macroEvent);

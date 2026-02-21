@@ -9,6 +9,8 @@ import java.util.List;
 
 @Init(module = DefaultModule.INTERFACE, component = GameComponent.INPUT_ADAPTER_MANAGER)
 public interface IInputAdapterManager extends IBaseComp {
+    void addDetector(IDeviceDetector detector);
+
     /** Slot‐based registration (0…MAX_SLOTS-1). */
     void register(int slot, IInputAdapter adapter);
     void unregister(int slot);

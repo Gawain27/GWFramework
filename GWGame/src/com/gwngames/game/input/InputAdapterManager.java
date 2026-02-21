@@ -1,6 +1,5 @@
 package com.gwngames.game.input;
 
-import com.gwngames.core.api.base.cfg.IClassLoader;
 import com.gwngames.core.api.base.cfg.IConfig;
 import com.gwngames.core.api.build.Init;
 import com.gwngames.core.api.build.Inject;
@@ -8,9 +7,7 @@ import com.gwngames.core.api.build.PostInject;
 
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.game.data.input.InputParameters;
-import com.gwngames.game.GameComponent;
 import com.gwngames.game.GameModule;
-import com.gwngames.game.GameSubComponent;
 import com.gwngames.game.api.input.IDeviceDetector;
 import com.gwngames.game.api.input.IInputAdapter;
 import com.gwngames.game.api.input.IInputAdapterManager;
@@ -22,57 +19,46 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @Init(module = GameModule.GAME)
 public class InputAdapterManager extends BaseComponent implements IInputAdapterManager, IInputDeviceListener{
     @Inject
-    private IClassLoader loader;
-    @Inject
     private IConfig config;
 
+    @Inject(loadAll = true)
+    private List<IDeviceDetector> injectedDetectors;
+
     private int MAX_SLOTS;
-    /** slot-assigned adapters (index = slot) */
     private IInputAdapter[] slots;
 
-    /** every adapter detected in the running app */
-    private final List<IInputAdapter> allAdapters = new CopyOnWriteArrayList<>();
-    /** adapters currently occupying slots */
+    private final List<IInputAdapter> allAdapters    = new CopyOnWriteArrayList<>();
     private final List<IInputAdapter> activeAdapters = new CopyOnWriteArrayList<>();
-
-    /** app-level listeners that want plug/unplug callbacks */
     private final List<IInputDeviceListener> deviceListeners = new CopyOnWriteArrayList<>();
 
-    /** registered detectors (you can add/remove more at runtime) */
+    /** Runtime mutable list (seeded from injectedDetectors). */
     private final List<IDeviceDetector> detectors = new CopyOnWriteArrayList<>();
 
-    /** –1 ⇒ no main adapter chosen yet */
     private int mainSlot = -1;
-
-    /* ───────────────────────── ctor ───────────────────────── */
-
-    public InputAdapterManager() {
-        /* Register two out-of-the-box detectors:
-           – gamepad hot-plug via LibGDX Controllers
-           – keyboard / multitouch peripherals */
-        IDeviceDetector controllerDeviceDetector = loader.tryCreate(GameComponent.DEVICE_DETECTOR, GameSubComponent.CONTROLLER_DETECTOR);
-        IDeviceDetector perifDeviceDetector = loader.tryCreate(GameComponent.DEVICE_DETECTOR, GameSubComponent.PERIPHERAL_DETECTOR);
-
-        addDetector(controllerDeviceDetector);
-        addDetector(perifDeviceDetector);   // polls keyboard/touch availability
-    }
 
     @PostInject
     void init() {
         this.MAX_SLOTS = config.get(InputParameters.INPUT_MAX_DEVICES);
-        slots = new IInputAdapter[MAX_SLOTS];
+        this.slots = new IInputAdapter[MAX_SLOTS];
+
+        // Seed runtime list from framework list and start them
+        if (injectedDetectors != null) {
+            for (IDeviceDetector d : injectedDetectors) {
+                addDetector(d);
+            }
+        }
     }
 
-    /* ───────────────────────── detector management ───────────────────────── */
-
-    /** Plug in another detector (e.g. a VR-handset detector) */
+    @Override
     public void addDetector(IDeviceDetector detector) {
+        if (detector == null) return;
         detectors.add(detector);
-        detector.addDeviceListener(this);   // we receive its callbacks
+        detector.addDeviceListener(this);
         detector.start();
     }
 
     public void removeDetector(IDeviceDetector detector) {
+        if (detector == null) return;
         detector.stop();
         detector.removeDeviceListener(this);
         detectors.remove(detector);

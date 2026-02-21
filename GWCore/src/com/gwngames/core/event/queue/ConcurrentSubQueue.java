@@ -5,6 +5,7 @@ import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.api.event.IEventQueue;
 import com.gwngames.core.api.event.IMasterEventQueue;
 import com.gwngames.core.base.BaseComponent;
+import com.gwngames.core.data.cfg.BuildParameters;
 import com.gwngames.core.data.event.EventStatus;
 import com.gwngames.core.api.event.IEvent;
 import com.gwngames.core.api.ex.EventException;

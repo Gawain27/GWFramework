@@ -2,66 +2,44 @@ package com.gwngames.core.event.trigger;
 
 import com.gwngames.core.api.build.Inject;
 import com.gwngames.core.api.event.IMasterEventQueue;
+import com.gwngames.core.api.event.IEvent;
 import com.gwngames.core.api.event.trigger.IManualTrigger;
 import com.gwngames.core.base.BaseComponent;
 import com.gwngames.core.base.BaseTest;
-import com.gwngames.core.event.queue.ConcurrentSubQueue;
+import com.gwngames.core.data.event.EventStatus;
 import com.gwngames.core.util.Cdi;
 import org.junit.jupiter.api.Assertions;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-
 /**
- * Ensures that ManualTrigger enqueues its payload exactly
- * once when {@link ManualTrigger#fire()} is called.
+ * Ensures that ManualTrigger enqueues its payload exactly once when fire() is called,
+ * and the payload reaches COMPLETED after processing.
  */
-public class ManualTriggerTest extends BaseTest {
-    @Inject
-    private IMasterEventQueue master;
+public final class ManualTriggerTest extends BaseTest {
 
     @Override
     protected void runTest() throws Exception {
         setupApplication();
+        Cdi.inject(this); // inject master + any other dependencies
 
-        CountDownLatch done = new CountDownLatch(1);
-
-        /* lightweight sub-queue that just counts down the latch */
-        ConcurrentSubQueue<SimpleEvent> subQ = new ConcurrentSubQueue<>() {
-            @Override
-            protected void processEvent(SimpleEvent e) {
-                done.countDown();
-            }
-
-            @Override
-            public Class<SimpleEvent> getType() {
-                return SimpleEvent.class;
-            }
-        };
-        Cdi.inject(subQ);
-        Method m = ConcurrentSubQueue.class.getDeclaredMethod("init");
-        m.setAccessible(true);
-        Field f = ConcurrentSubQueue.class.getDeclaredField("maxParallel");
-        f.setAccessible(true);
-        f.set(subQ, 2);
-        m.invoke(subQ);
-
-        /* ---- trigger + payload ---------------------------------------- */
+        // Create trigger via framework resolution (highest-priority impl)
         IManualTrigger trigger = BaseComponent.getInstance(IManualTrigger.class);
-        trigger.setSinglePayload(new SimpleEvent());
+
+        IEvent ev = new SimpleEvent();
+        trigger.setSinglePayload(ev);
+
         master.registerTrigger(trigger);
-        master.registerQueue(subQ);
 
-        /* ---- act ------------------------------------------------------- */
-        trigger.fire();                 // request firing on next poll
-        master.process(0f);             // one engine tick
+        trigger.fire();
 
-        /* ---- assert ---------------------------------------------------- */
-        boolean finished = done.await(200, TimeUnit.MILLISECONDS);
-        Assertions.assertTrue(finished, "ManualTrigger should have executed its event");
+        // Drive the engine until the event completes (or timeout).
+        assertTimeout(100, () -> {
+            while (ev.getStatus() != EventStatus.COMPLETED) {
+                master.process(0f);
+                Thread.sleep(5);
+            }
+        });
 
-        subQ.shutdown();
+        Assertions.assertEquals(EventStatus.COMPLETED, ev.getStatus(),
+            "ManualTrigger payload should have executed and reached COMPLETED");
     }
 }

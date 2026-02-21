@@ -161,4 +161,23 @@ public final class ClassUtils {
         }
         return null;
     }
+
+    public static String effectiveClasspath() {
+        // Prefer java.class.path if present…
+        String cp = System.getProperty("java.class.path");
+        if (cp != null && !cp.isBlank()) return cp;
+
+        // …but Gradle workers sometimes don’t populate it fully. Fallback:
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        if (cl instanceof java.net.URLClassLoader ucl) {
+            return Arrays.stream(ucl.getURLs())
+                .map(u -> new java.io.File(u.getFile()).getAbsolutePath())
+                .distinct()
+                .reduce((a, b) -> a + java.io.File.pathSeparator + b)
+                .orElse("");
+        }
+
+        // If it’s not a URLClassLoader (Java 9+), still try system cp as last resort.
+        return cp == null ? "" : cp;
+    }
 }

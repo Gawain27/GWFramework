@@ -2,6 +2,7 @@ package com.gwngames.core.base.init;
 
 import com.gwngames.core.base.BaseTest;
 import com.gwngames.core.base.cfg.InitStringValidatorProcessor;
+import com.gwngames.core.util.ClassUtils;
 import org.junit.jupiter.api.Assertions;
 
 import javax.annotation.processing.Processor;
@@ -12,9 +13,12 @@ import java.util.*;
 
 /**
  * Compile-time tests for the @Init string validator annotation processor.
- * This runs an in-memory compilation using JavaCompiler and asserts that:
- *  - Valid @Init values compile successfully.
- *  - Invalid @Init values fail compilation and emit a useful error.
+ *
+ * IMPORTANT:
+ * The processor discovers catalogs via RoundEnvironment, which only contains
+ * elements compiled in the *current* compilation task (not classpath classes).
+ * Therefore we compile the real catalogs as in-memory sources together with
+ * the @Init test types.
  */
 public final class InitAnnotationProcessorTest extends BaseTest {
 
@@ -22,123 +26,180 @@ public final class InitAnnotationProcessorTest extends BaseTest {
     protected void runTest() throws Exception {
         setupApplication();
 
-        // --- 1) should PASS: strings exist in catalog constants ---
-        CompilationResult ok = compile(
-            Map.ofEntries(
-                // Minimal catalogs visible to the processor in this in-memory compilation
-                Map.entry("com.example.catalogs.TestModuleCatalog", """
-                    package com.example.catalogs;
+        // Real catalogs must be compiled in the same in-memory compilation.
+        Map<String, String> catalogs = frameworkCatalogSources();
 
-                    import com.gwngames.core.api.build.catalog.ModuleCatalog;
+        // ------------------------------------------------------------------
+        // 1) should PASS: real framework constants exist in catalogs
+        // ------------------------------------------------------------------
+        Map<String, String> okSources = new LinkedHashMap<>(catalogs);
+        okSources.put("com.example.OkInit", """
+            package com.example;
 
-                    @ModuleCatalog
-                    public final class TestModuleCatalog {
-                        private TestModuleCatalog() {}
-                        public static final String CORE = "core";
-                    }
-                """),
-                Map.entry("com.example.catalogs.TestComponentCatalog", """
-                    package com.example.catalogs;
+            import com.gwngames.core.api.build.Init;
+            import com.gwngames.core.CoreModule;
+            import com.gwngames.core.CoreComponent;
+            import com.gwngames.core.CoreSubComponent;
+            import com.gwngames.starter.Platform;
 
-                    import com.gwngames.core.api.build.catalog.ComponentCatalog;
+            @Init(
+              module = CoreModule.CORE,
+              component = CoreComponent.NONE,
+              subComp = CoreSubComponent.NONE,
+              platform = Platform.ALL
+            )
+            public final class OkInit {}
+        """);
 
-                    @ComponentCatalog
-                    public final class TestComponentCatalog {
-                        private TestComponentCatalog() {}
-                        public static final String NONE = "NONE";
-                    }
-                """),
-                Map.entry("com.example.catalogs.TestSubComponentCatalog", """
-                    package com.example.catalogs;
-
-                    import com.gwngames.core.api.build.catalog.SubComponentCatalog;
-
-                    @SubComponentCatalog
-                    public final class TestSubComponentCatalog {
-                        private TestSubComponentCatalog() {}
-                        public static final String NONE = "NONE";
-                        public static final String SIMPLE_EVENT = "SIMPLE_EVENT";
-                    }
-                """),
-                Map.entry("com.example.catalogs.TestPlatformCatalog", """
-                    package com.example.catalogs;
-
-                    import com.gwngames.core.api.build.catalog.PlatformCatalog;
-
-                    @PlatformCatalog
-                    public final class TestPlatformCatalog {
-                        private TestPlatformCatalog() {}
-                        public static final String ALL = "ALL";
-                    }
-                """),
-
-                // The class under test
-                Map.entry("com.example.OkInit", """
-                    package com.example;
-
-                    import com.gwngames.core.api.build.Init;
-                    import com.example.catalogs.TestModuleCatalog;
-                    import com.example.catalogs.TestComponentCatalog;
-                    import com.example.catalogs.TestSubComponentCatalog;
-                    import com.example.catalogs.TestPlatformCatalog;
-
-                    @Init(
-                      module = TestModuleCatalog.CORE,
-                      component = TestComponentCatalog.NONE,
-                      subComp = TestSubComponentCatalog.NONE,
-                      platform = TestPlatformCatalog.ALL
-                    )
-                    public final class OkInit {}
-                """)
-            ),
-            /*strict*/ true
-        );
-
-        Assertions.assertTrue(ok.success, () -> "Expected compilation success, got diagnostics:\n" + ok.diagnosticsText);
-
-        // --- 2) should FAIL: invalid strings ---
-        CompilationResult bad = compile(
-            Map.of(
-                "com.example.BadInit", """
-                    package com.example;
-
-                    import com.gwngames.core.api.build.Init;
-
-                    @Init(
-                      module = "nope",
-                      component = "NOT_A_REAL_COMPONENT",
-                      subComp = "NOT_A_REAL_SUBCOMP",
-                      platform = "NOT_A_REAL_PLATFORM"
-                    )
-                    public final class BadInit {}
-                """
-            ),
-            /*strict*/ true
-        );
-
-        Assertions.assertFalse(bad.success, "Expected compilation failure but compilation succeeded.");
+        CompilationResult ok = compile(okSources, /*strict*/ true);
 
         Assertions.assertTrue(
-            bad.diagnosticsText.contains("NOT_A_REAL_COMPONENT") || bad.diagnosticsText.contains("@Init.component"),
+            ok.success,
+            () -> "Expected compilation success, got diagnostics:\n" + ok.diagnosticsText
+        );
+
+        // ------------------------------------------------------------------
+        // 2) should FAIL: invalid strings should be rejected
+        // ------------------------------------------------------------------
+        Map<String, String> badSources = new LinkedHashMap<>(catalogs);
+        badSources.put("com.example.BadInit", """
+            package com.example;
+
+            import com.gwngames.core.api.build.Init;
+
+            @Init(
+              module = "nope",
+              component = "NOT_A_REAL_COMPONENT",
+              subComp = "NOT_A_REAL_SUBCOMP",
+              platform = "NOT_A_REAL_PLATFORM"
+            )
+            public final class BadInit {}
+        """);
+
+        CompilationResult bad = compile(badSources, /*strict*/ true);
+
+        Assertions.assertFalse(
+            bad.success,
+            () -> "Expected compilation failure but compilation succeeded.\nDiagnostics:\n" + bad.diagnosticsText
+        );
+
+        // Match something stable from your processor output
+        Assertions.assertTrue(
+            containsAny(bad.diagnosticsText,
+                "@Init.component=\"NOT_A_REAL_COMPONENT\"",
+                "NOT_A_REAL_COMPONENT",
+                "@Init.component"),
             () -> "Expected error mentioning invalid component, got:\n" + bad.diagnosticsText
         );
 
         Assertions.assertTrue(
-            bad.diagnosticsText.contains("NOT_A_REAL_SUBCOMP") || bad.diagnosticsText.contains("@Init.subComp"),
+            containsAny(bad.diagnosticsText,
+                "@Init.subComp=\"NOT_A_REAL_SUBCOMP\"",
+                "NOT_A_REAL_SUBCOMP",
+                "@Init.subComp"),
             () -> "Expected error mentioning invalid subComp, got:\n" + bad.diagnosticsText
         );
 
         Assertions.assertTrue(
-            bad.diagnosticsText.contains("NOT_A_REAL_PLATFORM") || bad.diagnosticsText.contains("@Init.platform"),
+            containsAny(bad.diagnosticsText,
+                "@Init.platform=\"NOT_A_REAL_PLATFORM\"",
+                "NOT_A_REAL_PLATFORM",
+                "@Init.platform"),
             () -> "Expected error mentioning invalid platform, got:\n" + bad.diagnosticsText
         );
 
         Assertions.assertTrue(
-            bad.diagnosticsText.contains("module") || bad.diagnosticsText.contains("@Init.module") || bad.diagnosticsText.contains("nope"),
+            containsAny(bad.diagnosticsText,
+                "@Init.module=\"nope\"",
+                "nope",
+                "@Init.module",
+                "ModuleCatalog"),
             () -> "Expected error mentioning invalid module, got:\n" + bad.diagnosticsText
         );
 
         log.info("✅ Init annotation processor compile-time validation test passed.");
+    }
+
+    /**
+     * These are the *real* catalogs, as sources, so the processor can see them
+     * through RoundEnvironment during the in-memory compilation.
+     *
+     * Keep these in sync with the canonical classes in the repo.
+     * (We only need the annotations + String constants.)
+     */
+    private static Map<String, String> frameworkCatalogSources() {
+        Map<String, String> m = new LinkedHashMap<>();
+
+        m.put("com.gwngames.core.CoreComponent", """
+            package com.gwngames.core;
+
+            import com.gwngames.catalog.ComponentCatalog;
+
+            @ComponentCatalog
+            public final class CoreComponent {
+                private CoreComponent() {}
+
+                public static final String NONE = "NONE";
+                // (other constants omitted; not needed for this test)
+            }
+        """);
+
+        m.put("com.gwngames.core.CoreSubComponent", """
+            package com.gwngames.core;
+
+            import com.gwngames.catalog.SubComponentCatalog;
+
+            @SubComponentCatalog
+            public final class CoreSubComponent {
+                private CoreSubComponent() {}
+
+                public static final String NONE = "NONE";
+                public static final String SIMPLE_EVENT = "SIMPLE_EVENT";
+                public static final String SYSTEM_QUEUE  = "SYSTEM_QUEUE";
+                public static final String COMM_QUEUE    = "COMM_QUEUE";
+                public static final String EVENT_STATUS_LOGGER = "EVENT_STATUS_LOGGER";
+            }
+        """);
+
+        m.put("com.gwngames.starter.Platform", """
+            package com.gwngames.starter;
+
+            import com.gwngames.catalog.PlatformCatalog;
+
+            @PlatformCatalog
+            public final class Platform {
+                private Platform() {}
+
+                public static final String ALL = "ALL";
+                public static final String MOBILE = "MOBILE";
+                public static final String DESKTOP = "DESKTOP";
+                public static final String ANDROID = "ANDROID";
+                public static final String IOS = "IOS";
+                public static final String WEB = "WEB";
+                public static final String CONSOLE = "CONSOLE";
+            }
+        """);
+
+        m.put("com.gwngames.core.CoreModule", """
+            package com.gwngames.core;
+
+            import com.gwngames.catalog.ModuleCatalog;
+            import com.gwngames.catalog.ModulePriorities;
+
+            @ModuleCatalog
+            @ModulePriorities({
+                @ModulePriorities.Entry(id = "archive", priority = -1),
+                @ModulePriorities.Entry(id = "core", priority = 5),
+            })
+            public final class CoreModule {
+                private CoreModule() {}
+
+                public static final String ARCHIVE = "archive";
+                public static final String CORE = "core";
+            }
+        """);
+
+        return m;
     }
 
     /* =======================================================================
@@ -150,7 +211,8 @@ public final class InitAnnotationProcessorTest extends BaseTest {
     private static CompilationResult compile(Map<String, String> fqnToSource, boolean strict) {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
-            return new CompilationResult(false, "No system JavaCompiler available. Tests must run on a JDK.");
+            return new CompilationResult(false,
+                "No system JavaCompiler available. Tests must run on a JDK.");
         }
 
         DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
@@ -162,7 +224,7 @@ public final class InitAnnotationProcessorTest extends BaseTest {
             sources.add(new StringJavaFileObject(e.getKey(), e.getValue()));
         }
 
-        String classpath = System.getProperty("java.class.path");
+        String classpath = ClassUtils.effectiveClasspath();
 
         List<String> options = new ArrayList<>(List.of(
             "-classpath", classpath,
@@ -194,6 +256,14 @@ public final class InitAnnotationProcessorTest extends BaseTest {
         }
 
         return new CompilationResult(success, sb.toString());
+    }
+
+    private static boolean containsAny(String haystack, String... needles) {
+        if (haystack == null) return false;
+        for (String n : needles) {
+            if (n != null && !n.isEmpty() && haystack.contains(n)) return true;
+        }
+        return false;
     }
 
     private static final class StringJavaFileObject extends SimpleJavaFileObject {

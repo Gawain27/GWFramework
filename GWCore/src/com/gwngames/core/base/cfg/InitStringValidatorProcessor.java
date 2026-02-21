@@ -7,8 +7,6 @@ import javax.lang.model.SourceVersion;
 import javax.lang.model.element.*;
 import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
-import java.io.IOException;
-import java.io.Writer;
 import java.util.*;
 
 @AutoService(Processor.class)
@@ -18,15 +16,12 @@ public final class InitStringValidatorProcessor extends AbstractProcessor {
 
     private static final String INIT_FQN = "com.gwngames.core.api.build.Init";
 
-    private static final String COMP_CAT_FQN = "com.gwngames.core.api.build.ComponentCatalog";
-    private static final String SUB_CAT_FQN  = "com.gwngames.core.api.build.SubComponentCatalog";
-    private static final String PLAT_CAT_FQN = "com.gwngames.core.api.build.PlatformCatalog";
-    private static final String MOD_CAT_FQN  = "com.gwngames.core.api.build.ModuleCatalog";
+    private static final String COMP_CAT_FQN = "com.gwngames.catalog.ComponentCatalog";
+    private static final String SUB_CAT_FQN  = "com.gwngames.catalog.SubComponentCatalog";
+    private static final String PLAT_CAT_FQN = "com.gwngames.catalog.PlatformCatalog";
+    private static final String MOD_CAT_FQN  = "com.gwngames.catalog.ModuleCatalog";
 
-    private static final String MOD_PRI_FQN  = "com.gwngames.core.api.build.ModulePriorities";
-
-    private static final String GEN_PKG = "com.gwngames.core.generated";
-    private static final String GEN_CLS = "ModulePriorityRegistry";
+    private static final String MOD_PRI_FQN  = "com.gwngames.catalog.ModulePriorities";
 
     private Messager messager;
     private Elements elements;
@@ -91,15 +86,6 @@ public final class InitStringValidatorProcessor extends AbstractProcessor {
                         null
                     );
                 }
-            }
-        }
-
-        // Only generate once, on final round
-        if (roundEnv.processingOver()) {
-            try {
-                generateRegistry(priorities);
-            } catch (IOException ex) {
-                messager.printMessage(Diagnostic.Kind.ERROR, "Failed generating " + GEN_CLS + ": " + ex);
             }
         }
 
@@ -170,46 +156,6 @@ public final class InitStringValidatorProcessor extends AbstractProcessor {
             }
         }
         return out;
-    }
-
-    private void generateRegistry(Map<String, Integer> priorities) throws IOException {
-        // Always generate; if empty, it still compiles and returns 0.
-        String qn = GEN_PKG + "." + GEN_CLS;
-
-        // Deterministic output
-        List<Map.Entry<String, Integer>> entries = new ArrayList<>(priorities.entrySet());
-        entries.sort(Map.Entry.comparingByKey());
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("package ").append(GEN_PKG).append(";\n\n")
-            .append("import java.util.*;\n\n")
-            .append("/** GENERATED: module priority lookup (id -> int). */\n")
-            .append("public final class ").append(GEN_CLS).append(" {\n")
-            .append("  private ").append(GEN_CLS).append("() {}\n\n")
-            .append("  private static final Map<String,Integer> PRIORITY = Map.ofEntries(\n");
-
-        if (entries.isEmpty()) {
-            sb.append("    Map.entry(\"unimplemented\", 0)\n"); // minimal valid Map.ofEntries
-        } else {
-            for (int i = 0; i < entries.size(); i++) {
-                var en = entries.get(i);
-                sb.append("    Map.entry(\"").append(escape(en.getKey())).append("\", ").append(en.getValue()).append(")");
-                sb.append(i == entries.size() - 1 ? "\n" : ",\n");
-            }
-        }
-
-        sb.append("  );\n\n")
-            .append("  /** Returns priority for a module id (case-insensitive). Unknown -> 0. */\n")
-            .append("  public static int priorityOf(String moduleId) {\n")
-            .append("    if (moduleId == null) return 0;\n")
-            .append("    return PRIORITY.getOrDefault(moduleId.trim().toLowerCase(Locale.ROOT), 0);\n")
-            .append("  }\n")
-            .append("}\n");
-
-        Writer w = filer.createSourceFile(qn).openWriter();
-        try (w) {
-            w.write(sb.toString());
-        }
     }
 
     private void validateString(Element where, String attr, Map<String, Object> vals, Set<String> allowed, boolean strict, String catalogName) {

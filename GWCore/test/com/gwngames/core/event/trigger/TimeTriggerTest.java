@@ -28,6 +28,7 @@ public class TimeTriggerTest extends BaseTest {
 
         /* ---- act ------------------------------------------------------- */
         master.process(0f);             // first tick — should fire
+        Thread.sleep(50);
         /* ---- assert ---------------------------------------------------- */
         Assertions.assertEquals(EventStatus.COMPLETED, triggerEvent.getStatus(), "TimeTrigger should have executed its event");
     }

@@ -132,8 +132,6 @@ public class MasterEventQueue extends BaseComponent implements IMasterEventQueue
         synchronized (this) {
             for (IMacroEvent macro : macroQueue) {
                 for (IEvent e : macro.getEvents()) {
-                    log.info("Queues: {}", subQueues.keySet().stream().map(Class::getSimpleName).toList());
-                    log.info("q class: {}", e.getClass().getSimpleName());
 
                     IEventQueue q = resolveQueueFor(e);
                     if (q == null) {

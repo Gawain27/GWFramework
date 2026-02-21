@@ -21,3 +21,11 @@ sourceSets {
     runtimeClasspath += output + compileClasspath
   }
 }
+
+configurations {
+  testOutput {
+    canBeConsumed = true
+    canBeResolved = false
+    extendsFrom implementation, api
+  }
+}

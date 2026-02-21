@@ -109,7 +109,6 @@ public final class ConcurrentSubQueueTest extends BaseTest {
             "No more than " + MAX_PARALLEL + " events ran in parallel");
         macro.getEvents().forEach(e -> Assertions.assertEquals(
             EventStatus.COMPLETED, ((AbstractEvent) e).getStatus()));
-        subQueue.shutdown();
     }
 
     /* ---------- 2) verify EventException is captured ---------- */

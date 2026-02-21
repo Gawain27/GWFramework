@@ -16,6 +16,7 @@ ext.projectLevel = 1
 // If gwcore has dependencies, list them here:
 dependencies {
   implementation project(path: ':gwarchive')
+  testImplementation project(':gwarchive')
 
   // AutoService registers the processor in META-INF/services
   compileOnly 'com.google.auto.service:auto-service-annotations:1.1.1'
@@ -39,5 +40,13 @@ sourceSets {
     resources.srcDirs = ['test-resources']
     compileClasspath += sourceSets.main.output
     runtimeClasspath += output + compileClasspath
+  }
+}
+
+configurations {
+  testOutput {
+    canBeConsumed = true
+    canBeResolved = false
+    extendsFrom implementation, api
   }
 }

@@ -93,8 +93,6 @@ dependencies {
   }
 
   implementation project(path: ':gwcore', configuration: 'testOutput')
-  annotationProcessor project(':gwcore')
-  testAnnotationProcessor project(':gwcore')
 }
 
 sourceSets {

@@ -56,9 +56,6 @@ application {
 // Dependencies
 // ---------------------------------------------------------------------
 dependencies {
-  // TODO yep, this has to be generated for each project... or maybe just hardcode it in each file?
-  annotationProcessor project(':gwcore')      // main compilation processors
-  testAnnotationProcessor project(':gwcore')
 
   implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
   implementation "com.badlogicgames.gdx-controllers:gdx-controllers-desktop:$gdxControllersVersion"

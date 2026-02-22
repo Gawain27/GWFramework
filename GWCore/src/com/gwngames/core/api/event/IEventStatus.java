@@ -7,5 +7,4 @@ import com.gwngames.core.api.build.Init;
 
 @Init(module = DefaultModule.INTERFACE, component = CoreComponent.EVENT_STATUS, isEnum = true)
 public interface IEventStatus extends IBaseComp {
-    boolean isFinalState();
 }

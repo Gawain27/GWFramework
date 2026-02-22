@@ -28,12 +28,7 @@ public abstract class ConcurrentSubQueue<T extends IEvent>
      * Concrete SubQueues should call this in their @PostInject.
      */
     protected void init() {
-        ThreadFactory tf = r -> {
-            Thread t = new Thread(r, getClass().getSimpleName() + "-worker");
-            t.setDaemon(true);
-            return t;
-        };
-        this.executor = Executors.newFixedThreadPool(maxParallel, tf);
+        this.executor = Executors.newFixedThreadPool(maxParallel);
     }
 
     /* ─────────────────── smart enqueue (front vs back) ────────────────── */
@@ -61,8 +56,6 @@ public abstract class ConcurrentSubQueue<T extends IEvent>
                         ev.setStatus(EventStatus.COMPLETED);
                         master.handleEventException(ev, ee);
                     } catch (Exception ex) {
-                        ev.setStatus(EventStatus.FAILED);
-                        //TODO: recovery and repriorization mechanism
                         master.getLogger().error("Unexpected error: " + ex.getMessage(), ex);
                     }
                 });

@@ -29,7 +29,7 @@ public abstract class AbstractEvent extends BaseComponent implements IEvent {
     public void setStatus(IEventStatus status) {
         this.status = status;
         if (status == EventStatus.EXECUTING) executionStartTime = System.currentTimeMillis();
-        else if (status.isFinalState()) executionDuration = System.currentTimeMillis() - executionStartTime;
+        else if (status == EventStatus.COMPLETED) executionDuration = System.currentTimeMillis() - executionStartTime;
     }
 
     public long getExecutionDuration() { return executionDuration; }
